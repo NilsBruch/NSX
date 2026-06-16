@@ -1,0 +1,469 @@
+/* ─── Phone styles (body.is-phone set by JS matchMedia at ≤ 767px) ────────
+   All rules here are inert on tablet/desktop — body.is-phone is never added
+   above the breakpoint.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Override JS-applied zoom so the phone renders at its native CSS pixels */
+body.is-phone .app {
+  zoom: 1 !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 100dvh;
+}
+
+/* Global phone UI simplifications */
+body.is-phone #page-title,
+body.is-phone #btn-app-settings,
+body.is-phone #screensaver,
+body.is-phone .tab-bar {
+  display: none !important;
+}
+
+body.is-phone .section-heading-controls {
+  visibility: hidden;
+}
+
+/* Hide non-essential home elements */
+body.is-phone #btn-home-profile-picker,
+body.is-phone #btn-home-cleaning,
+body.is-phone #water-section,
+body.is-phone #btn-muehlen,
+body.is-phone #btn-home-workflow-edit,
+body.is-phone .status-card-scale,
+body.is-phone .steam-card,
+body.is-phone .hotwater-card,
+body.is-phone .cleaning-card {
+  display: none !important;
+}
+
+/* Shot detail: stack notes below details */
+body.is-phone .shot-review-graph-wrap {
+  display: none !important;
+}
+
+body.is-phone .shot-review-bottom-row {
+  flex-direction: column-reverse;
+  align-items: stretch;
+  padding: 0;
+}
+
+body.is-phone .shot-review-bottom-row > .bean-field-group:first-child {
+  padding: 0 16px;
+}
+
+/* Hide non-essential recipe tab elements */
+body.is-phone .workflow-graph-area,
+body.is-phone .workflow-scale-indicator,
+body.is-phone #workflow-graph-reserve,
+body.is-phone .workflows-btn-add,
+body.is-phone .workflow-edit-btn {
+  display: none !important;
+}
+
+/* Instant panel switching — no slide animation */
+body.is-phone .panels-track {
+  transition: none !important;
+}
+
+/* Re-anchor panel height independently of .app */
+body.is-phone #panel-home,
+body.is-phone #panel-workflows,
+body.is-phone #panel-history {
+  height: var(--real-vh, 100vh);
+}
+
+/* Expand recipe list to full width */
+body.is-phone .workflows-screen {
+  --workflow-column-width: 100%;
+  padding: calc(0px + env(safe-area-inset-top)) 8px env(safe-area-inset-bottom, 0);
+}
+
+body.is-phone .workflow-list-shell {
+  border-right: none;
+  padding-right: 0;
+}
+
+body.is-phone .history-screen {
+  padding: calc(14px + env(safe-area-inset-top)) 14px 0;
+}
+
+/* Collapse the steam/hotwater utility grid */
+body.is-phone .home-utility-grid:has(.steam-card) {
+  display: none;
+}
+
+/* Home screen layout */
+body.is-phone .home-screen {
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom));
+  gap: 12px;
+}
+
+body.is-phone .home-screen > .home-top-grid,
+body.is-phone .home-screen > .home-utility-grid,
+body.is-phone .home-screen > .active-workflow-widget {
+  margin-bottom: 0;
+}
+
+body.is-phone .home-utility-grid:has(#btn-home-profile-picker) {
+  display: none;
+}
+
+/* Home top cards */
+body.is-phone .home-top-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+body.is-phone .home-top-grid .status-card {
+  min-height: 132px;
+}
+
+body.is-phone .home-top-grid .status-card.status-card-connection,
+body.is-phone .home-top-grid .status-card.status-card-scale {
+  min-height: 140px;
+}
+
+body.is-phone .machine-section {
+  padding: 10px 10px;
+  row-gap: 4px;
+}
+
+body.is-phone .machine-section .power-toggle {
+  margin-left: 0;
+}
+
+body.is-phone .status-card-scale .scale-info-col {
+  padding-right: 74px;
+}
+
+body.is-phone .scale-info-weight {
+  white-space: nowrap;
+  font-size: 38px;
+}
+
+body.is-phone .status-card-scale .scale-plate-btn {
+  right: 8px;
+  bottom: 8px;
+}
+
+body.is-phone .scale-plate-image {
+  width: 90px;
+  height: auto;
+}
+
+body.is-phone #btn-bohnen {
+  grid-column: auto;
+  min-height: 120px;
+}
+
+body.is-phone #btn-bohnen .equipment-card-image {
+  width: 86px;
+  height: 86px;
+  right: 12px;
+  bottom: 8px;
+}
+
+/* Stack home hero vertically */
+body.is-phone .home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+body.is-phone .home-hero-left,
+body.is-phone .home-status-grid {
+  width: 100%;
+}
+
+body.is-phone .machine-info {
+  display: none;
+}
+
+body.is-phone .home-status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+body.is-phone .status-card-scale {
+  order: 1;
+}
+
+body.is-phone #btn-bohnen {
+  order: 2;
+  min-height: 110px;
+}
+
+/* Schedule card: unwrap from its utility grid */
+body.is-phone .home-utility-grid:has(.schedule-card) {
+  display: contents;
+}
+
+body.is-phone .status-card.schedule-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+}
+
+body.is-phone .status-card.schedule-card .utility-card-title {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+body.is-phone .status-card.schedule-card .power-toggle {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+body.is-phone .status-card.schedule-card .schedule-times {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+body.is-phone .schedule-days {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+body.is-phone .schedule-days-row {
+  flex-wrap: wrap;
+}
+
+/* Beans modal: near full-screen on mobile */
+body.is-phone #bohnen-modal,
+body.is-phone #bohnen-create-modal {
+  padding: 4px 6px;
+}
+
+body.is-phone #bohnen-modal .modal-sheet-wide,
+body.is-phone #bohnen-create-modal .modal-sheet-wide {
+  height: calc(100dvh - 8px);
+  max-height: calc(100dvh - 8px);
+  margin-bottom: 0;
+  border-radius: 16px;
+}
+
+/* Bean tile grid: single column */
+body.is-phone .bean-tile-grid {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 12px;
+}
+
+body.is-phone .bean-tile {
+  border-radius: 16px;
+  padding: 14px 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+body.is-phone .bean-tile-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.is-phone .bean-tile-divider {
+  margin: 0;
+}
+
+body.is-phone .bean-tile-details > .bean-detail-label {
+  display: none;
+}
+
+body.is-phone .bean-tile-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 12px;
+  row-gap: 3px;
+  flex: none;
+  overflow: visible;
+}
+
+body.is-phone .bean-tile-details > *:nth-child(4n+2) {
+  grid-column: 1;
+}
+
+body.is-phone .bean-tile-details > *:nth-child(4n+4) {
+  grid-column: 2;
+}
+
+/* Collapse multi-column field lists to single column */
+body.is-phone .bean-field-list--three-col,
+body.is-phone .bean-field-list--two-col {
+  grid-template-columns: 1fr;
+}
+
+body.is-phone .bean-field-list--three-col .bean-field-row,
+body.is-phone .bean-field-list--two-col .bean-field-row {
+  border-right: none;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.07);
+}
+
+[data-theme="white"] body.is-phone .bean-field-list--three-col .bean-field-row,
+[data-theme="white"] body.is-phone .bean-field-list--two-col .bean-field-row {
+  border-bottom-color: var(--c-separator);
+}
+
+body.is-phone .bean-field-list--three-col .bean-field-row:last-child,
+body.is-phone .bean-field-list--two-col .bean-field-row:last-child {
+  border-bottom: none;
+}
+
+body.is-phone .bean-field-list--two-col .bean-field-row:last-child:nth-child(odd) {
+  grid-column: span 1;
+}
+
+/* ── Phone machine card (hidden on desktop) ── */
+
+#phone-machine-card {
+  display: none;
+}
+
+body.is-phone #phone-machine-card {
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--c-fill-1);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-bottom: 4px;
+}
+
+.phone-machine-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-label-2);
+  transition: color 0.2s;
+}
+
+.phone-machine-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.phone-machine-status[data-state="idle"],
+.phone-machine-status[data-state="flush"],
+.phone-machine-status[data-state="hotWater"],
+.phone-machine-status[data-state="steam"] {
+  color: var(--c-green, #30d158);
+}
+
+.phone-machine-status[data-state="sleeping"] {
+  color: var(--c-label-3);
+}
+
+.phone-machine-status[data-state="espresso"] {
+  color: var(--c-blue, #0a84ff);
+}
+
+.phone-machine-status[data-state="heating"],
+.phone-machine-status[data-state="preheating"] {
+  color: var(--c-orange, #ff9f0a);
+}
+
+.phone-machine-status[data-state="needsWater"],
+.phone-machine-status[data-state="error"] {
+  color: var(--c-red, #ff453a);
+}
+
+.phone-temps {
+  display: flex;
+  gap: 20px;
+}
+
+.phone-temp-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.phone-temp-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--c-label-1);
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.phone-temp-label {
+  font-size: 10px;
+  color: var(--c-label-3);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* ── Phone bottom nav bar ── */
+
+.phone-nav {
+  display: none;
+}
+
+body.is-phone .phone-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  display: flex;
+  background: rgba(var(--c-fill-1-rgb, 28, 28, 30), 0.92);
+  border-top: 0.5px solid var(--c-separator);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.phone-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--c-label-3);
+  font-size: 10px;
+  font-weight: 500;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.phone-nav-btn.is-active {
+  color: var(--c-blue, #0a84ff);
+}
+
+/* Bottom padding to clear phone nav */
+body.is-phone .home-screen {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+body.is-phone .history-screen {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* PWA standalone (saved to home screen): the temperature panel is centered
+   at top:50% of the page-header. The safe-area padding-top creates an
+   asymmetry that pushes the orbs into the notch. Shift down to compensate. */
+html.pwa-standalone body.is-phone .header-temperature-panel {
+  transform: translateX(-50%) translateY(calc(-50% + env(safe-area-inset-top, 0px) / 2)) scale(0.65);
+}

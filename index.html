@@ -1,0 +1,2410 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <script>
+      // Ensure relative asset paths resolve correctly on hosts that serve index at a directory URL.
+      (function() {
+        var path = window.location.pathname || '';
+        var looksLikeFile = /\.[a-z0-9]+$/i.test(path);
+        if (!looksLikeFile && path && !path.endsWith('/')) {
+          window.location.replace(path + '/' + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
+    <title>NSX</title>
+    <link rel="stylesheet" href="src/css/app.css?v=2" />
+    <link rel="stylesheet" href="src/css/phone.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css" />
+  </head>
+  <body>
+    <div class="app">
+
+       <!-- ── Shared page header ────────────────────────────── -->
+       <header class="page-header">
+         <h2 id="page-title" class="section-title">Home</h2>
+
+         <!-- Temperature orbs -->
+         <section class="header-temperature-panel" aria-label="Temperaturen">
+           <div class="temperature-orb-wrap">
+             <div id="temperature-orb" class="temperature-orb temperature-orb-warmup" style="--temperature-progress: 0%;">
+               <div class="temperature-orb-core">
+                 <span id="brew-temp-value" class="temperature-value">91,5</span>
+                 <span class="temperature-unit">°C</span>
+               </div>
+             </div>
+             <span class="temperature-orb-label">Group</span>
+           </div>
+           <div class="temp-gauge-wrap" id="group-temp-gauge-wrap" hidden>
+             <div class="temp-gauge-label">Group</div>
+             <div class="temp-gauge" id="group-temp-gauge">
+               <div class="temp-gauge-red-zone" id="group-temp-red-zone"></div>
+               <div class="temp-gauge-needle" id="group-temp-needle"></div>
+               <div class="temp-gauge-ticks" id="group-temp-ticks"></div>
+             </div>
+             <div class="temp-gauge-value" id="group-temp-gauge-value">—</div>
+           </div>
+           <div class="header-clock-col">
+             <span id="clock" class="nav-clock">--:--</span>
+             <div class="header-water-indicator" aria-label="Wassertank" title="Wassertank">
+               <div class="header-water-battery">
+                 <span id="header-water-gauge-fill" class="header-water-battery-fill" style="width:0%"></span>
+                 <span id="header-water-pct" class="header-water-battery-pct">–</span>
+               </div>
+               <div class="header-water-battery-tip"></div>
+             </div>
+           </div>
+           <div class="temperature-orb-wrap">
+             <div id="steam-temperature-orb" class="temperature-orb temperature-orb-cold" style="--temperature-progress: 0%;">
+               <div class="temperature-orb-core">
+                 <span id="steam-orb-temp-value" class="temperature-value">—</span>
+                 <span class="temperature-unit">°C</span>
+               </div>
+             </div>
+             <span class="temperature-orb-label">Steam</span>
+           </div>
+         </section>
+
+         <div class="section-heading-controls">
+           <button id="btn-app-settings" class="header-icon-btn" aria-label="Settings" title="Settings">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+               <circle cx="12" cy="12" r="3"/>
+               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+             </svg>
+           </button>
+           <button id="btn-sleep" class="header-icon-btn" aria-label="Maschine schlafen legen" data-i18n-aria="machine.sleep" title="Sleep">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+             </svg>
+           </button>
+         </div>
+       </header>
+
+      <!-- ── Swipeable content (4 panels) ─────────────────── -->
+      <main class="content" id="content">
+        <div class="panels-track" id="panels-track">
+
+          <!-- Home -->
+          <section id="panel-home" class="tab-panel" role="tabpanel" aria-labelledby="tabitem-home">
+            <div class="home-screen">
+
+              <!-- Phone-only machine card (hidden on desktop) -->
+              <div id="phone-machine-card" class="phone-machine-card">
+                <div class="phone-machine-status" id="phone-machine-status" data-state="idle">
+                  <span class="phone-machine-dot"></span>
+                  <span id="phone-machine-status-text">Ready</span>
+                </div>
+                <div class="phone-temps">
+                  <div class="phone-temp-block">
+                    <span class="phone-temp-value" id="phone-group-temp">—°</span>
+                    <span class="phone-temp-label">Group</span>
+                  </div>
+                  <div class="phone-temp-block">
+                    <span class="phone-temp-value" id="phone-steam-temp">—°</span>
+                    <span class="phone-temp-label">Steam</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Row 1: Machine | Scale | Grinder | Beans -->
+              <div class="home-top-grid">
+
+                <div class="status-card status-card-connection">
+                  <div class="machine-section">
+                    <h3 class="utility-card-title" data-i18n="machine.title">Maschine</h3>
+                    <label class="power-toggle" aria-label="Maschine ein/aus">
+                      <input type="checkbox" id="machine-power-toggle" class="power-toggle-input" role="switch" />
+                      <span class="power-toggle-track">
+                        <span class="power-toggle-thumb"></span>
+                      </span>
+                    </label>
+                    <span class="machine-info-item machine-connected-label">
+                      <span class="machine-info-label" data-i18n="machine.status">Status:</span>
+                      <span id="machine-status-pill" class="status-pill status-pill-sm status-pill-pending">—</span>
+                    </span>
+                    <div class="machine-status-row">
+                      <span class="machine-status-dot"></span>
+                      <strong id="machine-status-text" class="machine-status-value">unknown</strong>
+                    </div>
+                    <div class="machine-icon-area" id="machine-icon-area">
+                      <img src="src/ui/graphics/DE1_black.png" alt="" aria-hidden="true" class="machine-comic-img" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="status-card status-card-scale">
+                  <div class="scale-title-row">
+                    <span class="status-label" data-i18n="home.scale">Waage</span>
+                    <span class="utility-toggle-spacer" aria-hidden="true"></span>
+                  </div>
+                  <div class="scale-info-col">
+                    <span class="machine-info-item">
+                      <span class="machine-info-label" data-i18n="home.scaleStatus">Status:</span>
+                      <span id="scale-status-pill" class="status-pill status-pill-sm status-pill-pending">Prüfe</span>
+                    </span>
+                    <span id="scale-weight" class="scale-info-weight offline">–</span>
+                  </div>
+                  <button id="btn-scale-tare" class="scale-plate-btn" type="button" aria-label="Waage tarieren" data-i18n-aria="home.scaleTare">
+                    <span class="scale-symbol-wrap">
+                      <svg class="scale-plate-image" viewBox="0 0 110 70" aria-hidden="true" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <clipPath id="scale-oval-clip-home">
+                            <rect x="0" y="0" width="110" height="70" rx="35"/>
+                          </clipPath>
+                        </defs>
+                        <rect x="0" y="0" width="110" height="70" rx="35"/>
+                        <rect x="0" y="53" width="110" height="17" fill="rgba(0,0,0,0.35)" clip-path="url(#scale-oval-clip-home)"/>
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+
+                <button class="status-card status-card-equipment" id="btn-muehlen" type="button">
+                  <span class="status-label" data-i18n="home.grinders">Mühlen</span>
+                  <img src="src/ui/graphics/Grinder_black.png" alt="" aria-hidden="true" class="equipment-card-image" />
+                </button>
+
+                <button class="status-card status-card-equipment" id="btn-bohnen" type="button">
+                  <span class="status-label" data-i18n="home.beans">Bohnen</span>
+                  <img src="src/ui/graphics/Bean_comic.png" alt="" aria-hidden="true" class="equipment-card-image" />
+                </button>
+
+              </div>
+
+              <!-- Row 2: Steam | Hot Water -->
+              <section class="home-utility-grid" aria-label="Dampf und Heißwasser">
+                <article class="status-card steam-card" aria-labelledby="steam-widget-title">
+                  <div class="steam-card-main">
+                    <div class="utility-card-header">
+                      <h3 id="steam-widget-title" class="utility-card-title" data-i18n="steam.title">Dampf</h3>
+                      <label class="power-toggle" aria-label="Dampf ein/aus" data-i18n-aria="steam.power">
+                        <input type="checkbox" id="steam-power-toggle" class="power-toggle-input" role="switch" checked />
+                        <span class="power-toggle-track">
+                          <span class="power-toggle-thumb"></span>
+                        </span>
+                      </label>
+                      <button type="button" id="btn-steam-settings" class="utility-gear-btn" aria-label="Dampf Einstellungen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                      </button>
+                    </div>
+                    <div class="steam-presets" role="group" aria-label="Dampf Presets" data-i18n-aria="steam.presets">
+                      <button type="button" class="steam-preset-btn" data-preset="schwach">Weak</button>
+                      <button type="button" class="steam-preset-btn is-active" data-preset="normal">Normal</button>
+                      <button type="button" class="steam-preset-btn" data-preset="stark">Strong</button>
+                    </div>
+                    <div class="steam-controls">
+                      <div class="steam-control">
+                        <button type="button" class="steam-adj-btn" id="btn-steam-temp-down" aria-label="Temperatur verringern" data-i18n-aria="steam.tempDown">−</button>
+                        <div class="steam-control-center">
+                          <span class="steam-control-label" data-i18n="steam.temp">Temperatur</span>
+                          <strong id="steam-temp" class="steam-control-value">135°C</strong>
+                        </div>
+                        <button type="button" class="steam-adj-btn" id="btn-steam-temp-up" aria-label="Temperatur erhöhen" data-i18n-aria="steam.tempUp">+</button>
+                      </div>
+                      <div class="steam-control">
+                        <button type="button" class="steam-adj-btn" id="btn-steam-flow-down" aria-label="Flussrate verringern" data-i18n-aria="steam.flowDown">−</button>
+                        <div class="steam-control-center">
+                          <span class="steam-control-label" data-i18n="steam.flow">Flussrate</span>
+                          <strong id="steam-flow" class="steam-control-value">1.8 ml/s</strong>
+                        </div>
+                        <button type="button" class="steam-adj-btn" id="btn-steam-flow-up" aria-label="Flussrate erhöhen" data-i18n-aria="steam.flowUp">+</button>
+                      </div>
+                      <div class="steam-control">
+                        <button type="button" class="steam-adj-btn" id="btn-steam-dur-down" aria-label="Dauer verringern" data-i18n-aria="steam.durDown">−</button>
+                        <div class="steam-control-center">
+                          <span class="steam-control-label" data-i18n="steam.duration">Dauer</span>
+                          <strong id="steam-duration" class="steam-control-value">60 s</strong>
+                        </div>
+                        <button type="button" class="steam-adj-btn" id="btn-steam-dur-up" aria-label="Dauer erhöhen" data-i18n-aria="steam.durUp">+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- <span class="steam-card-symbol" aria-hidden="true">S</span> -->
+                </article>
+
+                <article class="status-card hotwater-card" aria-labelledby="hotwater-widget-title">
+                  <div class="steam-card-main">
+                    <div class="utility-card-header">
+                      <h3 id="hotwater-widget-title" class="utility-card-title" data-i18n="hotwater.title">Heißwasser</h3>
+                      <button type="button" id="btn-hotwater-settings" class="utility-gear-btn" aria-label="Hot water settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                      </button>
+                    </div>
+                    <div class="steam-presets" role="group" aria-label="Heißwasser Presets" data-i18n-aria="hotwater.presets">
+                      <button type="button" class="steam-preset-btn" data-preset="klein"></button>
+                      <button type="button" class="steam-preset-btn" data-preset="mittel"></button>
+                      <button type="button" class="steam-preset-btn" data-preset="gross"></button>
+                    </div>
+                    <div class="steam-controls">
+                      <div class="steam-control">
+                        <button type="button" class="steam-adj-btn" id="btn-hotwater-temp-down" aria-label="Temperatur verringern" data-i18n-aria="hotwater.tempDown">−</button>
+                        <div class="steam-control-center">
+                          <span class="steam-control-label" data-i18n="hotwater.temp">Temperatur</span>
+                          <strong id="hotwater-temp" class="steam-control-value">80°C</strong>
+                        </div>
+                        <button type="button" class="steam-adj-btn" id="btn-hotwater-temp-up" aria-label="Temperatur erhöhen" data-i18n-aria="hotwater.tempUp">+</button>
+                      </div>
+                      <div class="steam-control">
+                        <button type="button" class="steam-adj-btn" id="btn-hotwater-flow-down" aria-label="Flussrate verringern" data-i18n-aria="hotwater.flowDown">−</button>
+                        <div class="steam-control-center">
+                          <span class="steam-control-label" data-i18n="hotwater.flow">Flussrate</span>
+                          <strong id="hotwater-flow" class="steam-control-value">1.5 ml/s</strong>
+                        </div>
+                        <button type="button" class="steam-adj-btn" id="btn-hotwater-flow-up" aria-label="Flussrate erhöhen" data-i18n-aria="hotwater.flowUp">+</button>
+                      </div>
+                      <div class="steam-control">
+                        <button type="button" class="steam-adj-btn" id="btn-hotwater-vol-down" aria-label="Volumen verringern" data-i18n-aria="hotwater.volDown">−</button>
+                        <div class="steam-control-center">
+                          <span class="steam-control-label" data-i18n="hotwater.volume">Volumen</span>
+                          <strong id="hotwater-volume" class="steam-control-value">150 ml</strong>
+                        </div>
+                        <button type="button" class="steam-adj-btn" id="btn-hotwater-vol-up" aria-label="Volumen erhöhen" data-i18n-aria="hotwater.volUp">+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- <span class="hotwater-card-symbol" aria-hidden="true">W</span> -->
+                </article>
+              </section>
+
+              <!-- Active Recipe -->
+              <article class="status-card active-workflow-widget workflow-card-active" id="btn-home-workflow-edit" role="button" tabindex="0" aria-label="Aktives Rezept bearbeiten">
+                <div class="active-workflow-fields">
+                  <div class="active-workflow-field active-workflow-field--title">
+                    <span class="active-workflow-title" data-i18n="home.activeRecipe">Active Recipe</span>
+                  </div>
+                  <div class="active-workflow-field">
+                    <span class="active-workflow-label" data-i18n="home.bean">Bohne</span>
+                    <span id="home-workflow-bean" class="active-workflow-value">—</span>
+                  </div>
+                  <div class="active-workflow-field">
+                    <span class="active-workflow-label" data-i18n="home.dose">Dosis</span>
+                    <span id="home-workflow-dose" class="active-workflow-value">—</span>
+                  </div>
+                  <div class="active-workflow-field">
+                    <span class="active-workflow-label" data-i18n="home.grinder">Mühle</span>
+                    <span id="home-workflow-grinder" class="active-workflow-value">—</span>
+                  </div>
+                  <div class="active-workflow-field">
+                    <span class="active-workflow-label" data-i18n="home.grindSize">Mahlgrad</span>
+                    <span id="home-workflow-setting" class="active-workflow-value">—</span>
+                  </div>
+                  <div class="active-workflow-field">
+                    <span class="active-workflow-label" data-i18n="home.profile">Profil</span>
+                    <span id="home-workflow-profile" class="active-workflow-value">—</span>
+                  </div>
+                  <div class="active-workflow-field">
+                    <span class="active-workflow-label" data-i18n="home.temperature">Temperatur</span>
+                    <span id="home-workflow-temp" class="active-workflow-value">—</span>
+                  </div>
+                  <div class="active-workflow-field">
+                    <span class="active-workflow-label" data-i18n="home.beverage">Getränk</span>
+                    <span id="home-workflow-beverage" class="active-workflow-value">—</span>
+                  </div>
+                </div>
+              </article>
+
+              <!-- Profiles | Cleaning -->
+              <div class="home-utility-grid">
+                <button class="status-card settings-tile" id="btn-home-profile-picker" type="button" aria-label="Profile ansehen" data-i18n-aria="profile.viewAria">
+                  <div class="settings-tile-inner">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                         class="settings-tile-icon">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <span class="settings-tile-label" data-i18n="profile.title">Profile</span>
+                  </div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" class="settings-tile-chevron">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+
+                <button class="status-card settings-tile" id="btn-home-cleaning" type="button" aria-label="Reinigung starten" data-i18n-aria="machine.cleaning">
+                  <div class="settings-tile-inner">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                         class="settings-tile-icon">
+                      <path d="M3 6l9-4 9 4v6c0 5-4 9-9 10C7 21 3 17 3 12V6z"/>
+                      <path d="M9 12l2 2 4-4"/>
+                    </svg>
+                    <span class="settings-tile-label" data-i18n="cleaning.title">Reinigung</span>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Flush | Schedule -->
+              <section class="home-utility-grid" aria-label="Reinigung und Zeitplan">
+                <article class="status-card cleaning-card" aria-labelledby="cleaning-widget-title">
+                  <div class="steam-card-main">
+                    <div class="utility-card-header">
+                      <h3 id="cleaning-widget-title" class="utility-card-title" data-i18n="flush.title">Spülen</h3>
+                      <button type="button" id="btn-flush-settings" class="utility-gear-btn" aria-label="Flush settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                      </button>
+                    </div>
+                    <div class="steam-presets" role="group" aria-label="Spül-Presets" data-i18n-aria="flush.presets">
+                      <button type="button" class="steam-preset-btn" data-preset="kurz"></button>
+                      <button type="button" class="steam-preset-btn" data-preset="normal"></button>
+                      <button type="button" class="steam-preset-btn" data-preset="lang"></button>
+                    </div>
+                    <div class="steam-controls">
+                      <div class="steam-control">
+                        <button type="button" class="steam-adj-btn" id="btn-flush-flow-down" aria-label="Flussrate verringern" data-i18n-aria="flush.flowDown">−</button>
+                        <div class="steam-control-center">
+                          <span class="steam-control-label" data-i18n="flush.flow">Flussrate</span>
+                          <strong id="flush-flow" class="steam-control-value">2 ml/s</strong>
+                        </div>
+                        <button type="button" class="steam-adj-btn" id="btn-flush-flow-up" aria-label="Flussrate erhöhen" data-i18n-aria="flush.flowUp">+</button>
+                      </div>
+                      <div class="steam-control">
+                        <button type="button" class="steam-adj-btn" id="btn-flush-duration-down" aria-label="Dauer verringern" data-i18n-aria="flush.durDown">−</button>
+                        <div class="steam-control-center">
+                          <span class="steam-control-label" data-i18n="flush.duration">Dauer</span>
+                          <strong id="flush-duration" class="steam-control-value">10 s</strong>
+                        </div>
+                        <button type="button" class="steam-adj-btn" id="btn-flush-duration-up" aria-label="Dauer erhöhen" data-i18n-aria="flush.durUp">+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- <span class="cleaning-card-symbol" aria-hidden="true">F</span> -->
+                </article>
+
+                <article class="status-card schedule-card" aria-labelledby="schedule-widget-title">
+                  <h3 id="schedule-widget-title" class="utility-card-title" data-i18n="schedule.title">Zeitplan</h3>
+                  <label class="power-toggle" aria-label="Zeitplan aktivieren" data-i18n-aria="schedule.aria">
+                    <input type="checkbox" id="schedule-enabled" class="power-toggle-input" role="switch" />
+                    <span class="power-toggle-track"><span class="power-toggle-thumb"></span></span>
+                  </label>
+                  <div class="schedule-times">
+                    <div class="sch-time-row">
+                      <span class="sch-lbl" data-i18n="schedule.on">An</span>
+                      <div class="sch-controls">
+                        <button type="button" class="sch-btn" id="btn-sch-on-h-down">−</button>
+                        <span id="schedule-on-hour" class="sch-val">06</span>
+                        <button type="button" class="sch-btn" id="btn-sch-on-h-up">+</button>
+                        <span class="sch-sep">:</span>
+                        <button type="button" class="sch-btn" id="btn-sch-on-m-down">−</button>
+                        <span id="schedule-on-minute" class="sch-val">00</span>
+                        <button type="button" class="sch-btn" id="btn-sch-on-m-up">+</button>
+                      </div>
+                    </div>
+                    <div class="sch-time-row">
+                      <span class="sch-lbl" data-i18n="schedule.off">Aus</span>
+                      <div class="sch-controls">
+                        <button type="button" class="sch-btn" id="btn-sch-off-h-down">−</button>
+                        <span id="schedule-off-hour" class="sch-val">22</span>
+                        <button type="button" class="sch-btn" id="btn-sch-off-h-up">+</button>
+                        <span class="sch-sep">:</span>
+                        <button type="button" class="sch-btn" id="btn-sch-off-m-down">−</button>
+                        <span id="schedule-off-minute" class="sch-val">00</span>
+                        <button type="button" class="sch-btn" id="btn-sch-off-m-up">+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="schedule-days" role="group" aria-label="Wochentage" data-i18n-aria="schedule.daysAria">
+                    <div class="schedule-days-row">
+                      <button type="button" class="schedule-day-btn" data-day="1" data-i18n="schedule.mon">Mo</button>
+                      <button type="button" class="schedule-day-btn" data-day="2" data-i18n="schedule.tue">Di</button>
+                      <button type="button" class="schedule-day-btn" data-day="3" data-i18n="schedule.wed">Mi</button>
+                      <button type="button" class="schedule-day-btn" data-day="4" data-i18n="schedule.thu">Do</button>
+                    </div>
+                    <div class="schedule-days-row">
+                      <button type="button" class="schedule-day-btn" data-day="5" data-i18n="schedule.fri">Fr</button>
+                      <button type="button" class="schedule-day-btn" data-day="6" data-i18n="schedule.sat">Sa</button>
+                      <button type="button" class="schedule-day-btn" data-day="7" data-i18n="schedule.sun">So</button>
+                    </div>
+                  </div>
+                </article>
+              </section>
+
+
+            </div>
+          </section>
+
+          <!-- Workflows -->
+          <section id="panel-workflows" class="tab-panel" role="tabpanel" aria-labelledby="tabitem-workflows">
+            <div class="workflows-screen">
+              <div class="workflows-main">
+                <div class="workflows-action-bar">
+                  <div class="workflows-search-wrapper">
+                    <svg class="workflows-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" class="workflows-search" placeholder="Rezepte durchsuchen" data-i18n-placeholder="recipe.search" />
+                  </div>
+                  <button class="workflows-btn workflows-btn-filter" id="btn-workflow-filter" aria-label="Filter" data-i18n-aria="recipe.filterAria">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polyline>
+                    </svg>
+                  </button>
+                  <button class="workflows-btn workflows-btn-edit" id="btn-workflow-edit-active" aria-label="Aktives Rezept bearbeiten" data-i18n-aria="recipe.editAria">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M14.5 2.5a2.121 2.121 0 0 1 3 3L6 17l-4 1 1-4 11.5-11.5z"/>
+                    </svg>
+                  </button>
+                  <button class="workflows-btn workflows-btn-add" aria-label="Rezept hinzufügen" data-i18n-aria="recipe.addAria">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="workflows-body">
+                  <div id="recipe-list-shell" class="recipe-list-shell workflow-list-shell recipe-fade-bottom">
+                    <div id="recipe-list-scroll" class="recipe-list-scroll workflow-list-scroll">
+                      <ul id="workflow-list" class="recipe-list workflow-list" aria-label="Verfügbare Rezepte" data-i18n-aria="recipe.listAria"></ul>
+                    </div>
+                  </div>
+                  <aside class="workflow-graph-area">
+                    <div id="workflow-shot-graph" class="workflow-shot-graph"></div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- History -->
+          <section id="panel-history" class="tab-panel" role="tabpanel" aria-labelledby="tabitem-history">
+            <div class="history-screen">
+              <div class="history-toolbar">
+                <div class="history-search-wrap">
+                  <svg class="history-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  <input type="search" id="history-search" class="history-search-input" placeholder="Röster, Bohne, Mühle, Profil…" data-i18n-placeholder="history.search" autocomplete="off" autocorrect="off" spellcheck="false">
+                </div>
+                <button type="button" id="btn-history-filter" class="history-filter-btn" aria-label="Filter" data-i18n-aria="history.filterAria">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="history-scroll">
+                <ul id="history-accordion-list" class="history-accordion-list" aria-label="Rezept-History" data-i18n-aria="history.listAria"></ul>
+                <div id="history-load-more-wrap" class="history-load-more-wrap" hidden>
+                  <button type="button" id="btn-history-load-more" class="history-load-more-btn" data-i18n="history.loadMore">Weitere laden</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </main>
+
+      <!-- ── Scale Area (fixed, above date picker) ─── -->
+      <div class="workflow-scale-area" id="workflow-scale-area">
+        <!-- Dose scale button -->
+        <div class="workflow-dose-widget" id="workflow-dose-widget">
+          <button type="button" id="btn-dose-scale" class="workflow-sbw-btn workflow-dose-btn" aria-label="Dose from scale">
+            <img src="src/ui/graphics/coffee-beans.png" class="workflow-dose-img" alt="" aria-hidden="true" width="22" height="22">
+          </button>
+        </div>
+        <!-- Scale icon -->
+        <div class="workflow-scale-indicator">
+          <div class="workflow-scale-icon">
+            <svg class="workflow-scale-img" viewBox="0 0 110 70" aria-hidden="true" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <clipPath id="scale-oval-clip">
+                  <rect x="0" y="0" width="110" height="70" rx="35"/>
+                </clipPath>
+              </defs>
+              <rect x="0" y="0" width="110" height="70" rx="35"/>
+              <rect x="0" y="53" width="110" height="17" fill="rgba(0,0,0,0.35)" clip-path="url(#scale-oval-clip)"/>
+            </svg>
+            <span id="workflow-scale-pill" class="workflow-scale-pill"></span>
+          </div>
+        </div>
+        <!-- Steam by Weight widget -->
+        <div class="workflow-sbw-widget" id="workflow-sbw-widget" hidden>
+          <div class="sbw-pitcher-strip" id="sbw-pitcher-strip" hidden></div>
+          <button type="button" id="btn-steam-by-weight" class="workflow-sbw-btn" aria-label="Steam by Weight">
+            <img src="src/ui/graphics/steam.png" alt="" width="24" height="24" class="workflow-sbw-icon">
+          </button>
+          <span class="workflow-sbw-pitcher-name" id="sbw-pitcher-label">–</span>
+        </div>
+      </div>
+
+      <!-- ── Rezepte Date Navigator (fixed, next to tab bar) ─── -->
+      <div id="workflow-graph-reserve" class="workflow-graph-reserve" aria-hidden="true">
+        <div class="workflow-reserve-row">
+          <button id="btn-workflow-history-shortcut" class="workflow-history-shortcut-btn" type="button" aria-label="Zur History" data-i18n-aria="history.toHistory">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4z"/>
+              <line x1="8" y1="3" x2="8" y2="21"/>
+              <line x1="12" y1="8" x2="18" y2="8"/>
+              <line x1="12" y1="12" x2="18" y2="12"/>
+              <line x1="12" y1="16" x2="18" y2="16"/>
+            </svg>
+          </button>
+        </div>
+        <div id="shot-live-widget" class="shot-live-widget">
+          <div class="shot-live-metric">
+            <div id="shot-live-time" class="shot-live-value">0.0s</div>
+            <div class="shot-live-label" data-i18n="liveshot.time">Zeit</div>
+          </div>
+          <div class="shot-live-metric shot-live-metric-weight">
+            <div id="shot-live-weight" class="shot-live-value shot-live-value-amber">0.0 / — g</div>
+            <div class="shot-live-label" data-i18n="liveshot.weight">Gewicht</div>
+            <div class="shot-live-progress-track">
+              <span id="shot-live-progress" class="shot-live-progress-fill" style="width:0%"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Bottom Shell (Liquid Glass) ──────────────────── -->
+      <div class="bottom-shell">
+        <!-- Tab bar -->
+        <nav class="tab-bar" role="tablist" aria-label="Navigation">
+
+          <button id="tabitem-home" class="tab-item active"
+                  role="tab" aria-selected="true" aria-controls="panel-home" data-index="0">
+            <div class="tab-icon-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/>
+                <path d="M9 21V12h6v9"/>
+              </svg>
+            </div>
+            <span class="tab-label" data-i18n="nav.home">Home</span>
+          </button>
+
+          <button id="tabitem-workflows" class="tab-item"
+                  role="tab" aria-selected="false" aria-controls="panel-workflows" data-index="1">
+            <div class="tab-icon-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+            </div>
+            <span class="tab-label" data-i18n="nav.recipes">Rezepte</span>
+          </button>
+
+          <button id="tabitem-history" class="tab-item"
+                  role="tab" aria-selected="false" aria-controls="panel-history" data-index="2">
+            <div class="tab-icon-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+            <span class="tab-label" data-i18n="nav.history">History</span>
+          </button>
+
+        </nav>
+      </div>
+
+    </div>
+
+    <div id="espresso-fullscreen" class="espresso-fs" hidden>
+      <div class="espresso-fs-topbar">
+        <div class="espresso-fs-title-wrap">
+          <span id="espresso-fs-coffee" class="espresso-fs-coffee">Bohne</span>
+          <span class="espresso-fs-title-sep" aria-hidden="true">|</span>
+          <strong id="espresso-fs-title" class="espresso-fs-title" data-i18n="live.extraction">Extraktion</strong>
+          <span class="espresso-fs-title-sep" aria-hidden="true">|</span>
+          <span id="espresso-fs-state" class="espresso-fs-state">espresso</span>
+        </div>
+        <div id="espresso-fs-legend" class="espresso-fs-legend-host" aria-label="Graphen-Legende" data-i18n-aria="live.legend"></div>
+        <div class="espresso-fs-topstats">
+          <span id="espresso-fs-top-temp" class="espresso-fs-stat espresso-fs-stat-temp">—</span>
+          <span id="espresso-fs-top-water" class="espresso-fs-stat espresso-fs-stat-water">—</span>
+          <span id="espresso-fs-top-weight" class="espresso-fs-stat espresso-fs-stat-weight">—</span>
+          <span id="espresso-fs-top-online" class="espresso-fs-stat espresso-fs-stat-online" data-i18n="live.offline">Offline</span>
+        </div>
+      </div>
+
+      <div class="espresso-fs-chart-wrap">
+        <div id="espresso-fs-graph" class="workflow-shot-graph espresso-fs-graph"></div>
+      </div>
+
+      <div class="espresso-fs-bottom">
+        <button type="button" id="btn-espresso-fs-exit" class="espresso-fs-exit" aria-label="Extraktion beenden" data-i18n-aria="live.stopAria">←</button>
+        <div class="espresso-fs-metric">
+          <div id="espresso-fs-time" class="espresso-fs-metric-value">0.0s</div>
+          <div class="espresso-fs-metric-label">Time</div>
+        </div>
+        <div class="espresso-fs-metric">
+          <div id="espresso-fs-pressure" class="espresso-fs-metric-value espresso-fs-metric-value-green">0.0</div>
+          <div class="espresso-fs-metric-label">bar</div>
+        </div>
+        <div class="espresso-fs-metric">
+          <div id="espresso-fs-flow" class="espresso-fs-metric-value espresso-fs-metric-value-blue">0.0</div>
+          <div class="espresso-fs-metric-label">mL/s</div>
+        </div>
+        <div class="espresso-fs-metric">
+          <div id="espresso-fs-temp" class="espresso-fs-metric-value espresso-fs-metric-value-red">—</div>
+          <div class="espresso-fs-metric-label">°C</div>
+        </div>
+        <div class="espresso-fs-metric espresso-fs-metric-weight">
+          <div class="espresso-fs-weight-row">
+            <div id="espresso-fs-weight" class="espresso-fs-metric-value espresso-fs-metric-value-amber">0.0 / — g</div>
+            <button type="button" id="btn-espresso-fs-skip-step" class="espresso-fs-skip-step-btn" aria-label="Step überspringen" data-i18n-aria="live.skipAria">Skip Step</button>
+          </div>
+          <div class="espresso-fs-progress-track">
+            <span id="espresso-fs-progress" class="espresso-fs-progress-fill" style="width:0%"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <!-- Machine state notification (top) -->
+    <div id="state-toast" class="state-toast" role="status" aria-live="polite"></div>
+
+    <!-- Steam Corner Panel -->
+    <div id="steam-corner" class="modal-overlay steam-corner-overlay" hidden>
+      <div class="modal-sheet steam-corner-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <span class="modal-title" data-i18n="steam.title">Dampf</span>
+          <button type="button" id="btn-steam-corner-graph" class="steam-corner-graph-btn" aria-label="Vollbild öffnen" data-i18n-aria="steam.fullscreen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-steam-corner-stop" class="modal-btn-cancel steam-overlay-stop-btn" data-i18n="action.stop">Stop</button>
+        </div>
+        <div class="steam-corner-body">
+          <div class="steam-corner-ring-wrap">
+            <svg class="hotwater-ring" viewBox="0 0 200 200" aria-hidden="true">
+              <circle class="hotwater-ring-track" cx="100" cy="100" r="80"/>
+              <circle id="steam-corner-ring-progress" class="steam-corner-ring-progress" cx="100" cy="100" r="80"/>
+            </svg>
+            <div class="hotwater-ring-center">
+              <span id="steam-corner-elapsed" class="hotwater-dispensed">0</span>
+              <span class="hotwater-unit">s</span>
+            </div>
+          </div>
+          <div class="steam-corner-sensors">
+            <div class="steam-corner-sensor">
+              <span id="steam-corner-pressure" class="steam-corner-sensor-value">—</span>
+              <span class="steam-corner-sensor-label">bar</span>
+            </div>
+            <div class="steam-corner-sensor">
+              <span id="steam-corner-flow" class="steam-corner-sensor-value">—</span>
+              <span class="steam-corner-sensor-label">ml/s</span>
+            </div>
+            <div class="steam-corner-sensor">
+              <span id="steam-corner-temp" class="steam-corner-sensor-value">—</span>
+              <span class="steam-corner-sensor-label">°C</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Steam Overlay -->
+    <div id="steam-overlay" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-steam-overlay-back" class="modal-btn-cancel" data-i18n="steam.back">← Zurück</button>
+          <span class="modal-title" data-i18n="steam.title">Dampf</span>
+          <button type="button" id="btn-steam-overlay-stop" class="modal-btn-cancel steam-overlay-stop-btn" data-i18n="action.stop">Stop</button>
+        </div>
+        <div class="modal-body steam-overlay-body">
+          <div class="steam-overlay-timer">
+            <span id="steam-overlay-elapsed" class="steam-overlay-elapsed">00:00</span>
+            <div class="steam-overlay-progress-wrap">
+              <div id="steam-overlay-progress" class="steam-overlay-progress-bar" style="width:0%"></div>
+            </div>
+            <span id="steam-overlay-target" class="steam-overlay-target">/ 60 s</span>
+          </div>
+          <div id="steam-overlay-graph" class="workflow-shot-graph steam-overlay-graph"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hot Water Overlay -->
+    <div id="hotwater-overlay" class="modal-overlay hotwater-corner-overlay" hidden>
+      <div class="modal-sheet hotwater-overlay-sheet hotwater-corner-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <span class="modal-title" data-i18n="hotwater.title">Heißwasser</span>
+          <button type="button" id="btn-hotwater-overlay-stop" class="modal-btn-cancel hotwater-overlay-stop-btn" data-i18n="action.stop">Stop</button>
+        </div>
+        <div class="modal-body hotwater-overlay-body">
+          <div class="hotwater-ring-wrap hotwater-corner-ring-wrap">
+            <svg class="hotwater-ring" viewBox="0 0 200 200" aria-hidden="true">
+              <circle class="hotwater-ring-track" cx="100" cy="100" r="80"/>
+              <circle id="hotwater-ring-progress" class="hotwater-ring-progress" cx="100" cy="100" r="80"/>
+            </svg>
+            <div id="hotwater-ring-center" class="hotwater-ring-center">
+              <span id="hotwater-dispensed" class="hotwater-dispensed">0</span>
+              <span class="hotwater-unit">ml</span>
+              <span id="hotwater-target-label" class="hotwater-target-label">/ — ml</span>
+            </div>
+            <div id="hotwater-done-overlay" class="ring-done-overlay" hidden>
+              <svg class="ring-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Needs Water Overlay -->
+    <div id="needswater-overlay" class="modal-overlay needswater-corner-overlay" hidden>
+      <div class="modal-sheet hotwater-overlay-sheet needswater-corner-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <span class="modal-title" data-i18n="needswater.title">Wasser nachfüllen</span>
+          <button type="button" id="btn-needswater-overlay-stop" class="modal-btn-cancel needswater-overlay-stop-btn" data-i18n="action.stop">Stop</button>
+        </div>
+        <div class="modal-body hotwater-overlay-body">
+          <div class="needswater-message-container">
+            <p class="needswater-message" data-i18n="needswater.message">Der Wassertank muss nachgefüllt werden</p>
+            <p class="needswater-info" data-i18n="needswater.info">Drücke den Stop-Knopf am Gruppenkopf zum vorübergehenden Abbrechen</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flush Overlay -->
+    <div id="flush-overlay" class="modal-overlay flush-overlay-corner" hidden>
+      <div class="modal-sheet hotwater-overlay-sheet flush-corner-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <span class="modal-header-spacer"></span>
+          <span class="modal-title" data-i18n="flush.title">Spülen</span>
+          <button type="button" id="btn-flush-overlay-stop" class="modal-btn-cancel flush-overlay-stop-btn" data-i18n="action.stop">Stop</button>
+        </div>
+        <div class="modal-body hotwater-overlay-body">
+          <div class="hotwater-ring-wrap flush-ring-wrap">
+            <svg class="hotwater-ring" viewBox="0 0 200 200" aria-hidden="true">
+              <circle class="hotwater-ring-track" cx="100" cy="100" r="80"/>
+              <circle id="flush-ring-progress" class="flush-ring-progress" cx="100" cy="100" r="80"/>
+            </svg>
+            <div id="flush-ring-center" class="hotwater-ring-center">
+              <span id="flush-elapsed" class="hotwater-dispensed">0</span>
+              <span class="hotwater-unit">s</span>
+            </div>
+            <div id="flush-done-overlay" class="ring-done-overlay" hidden>
+              <svg class="ring-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert Dialog -->
+    <div id="alert-modal" class="modal-overlay modal-overlay-center confirm-modal-overlay" hidden>
+      <div class="modal-sheet confirm-sheet">
+        <p id="alert-message" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button type="button" id="btn-alert-ok" class="confirm-btn confirm-btn-cancel" data-i18n="action.ok">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Dialog -->
+    <div id="confirm-modal" class="modal-overlay modal-overlay-center confirm-modal-overlay" hidden>
+      <div class="modal-sheet confirm-sheet">
+        <div class="modal-handle"></div>
+        <p id="confirm-message" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button type="button" id="btn-confirm-cancel" class="confirm-btn confirm-btn-cancel" data-i18n="action.cancel">Abbrechen</button>
+          <button type="button" id="btn-confirm-ok" class="confirm-btn confirm-btn-ok" data-i18n="action.delete">Löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visualizer Import Dialog -->
+    <div id="visualizer-import-modal" class="modal-overlay modal-overlay-center confirm-modal-overlay" hidden>
+      <div class="modal-sheet confirm-sheet">
+        <div class="modal-handle"></div>
+        <p id="visualizer-import-label" class="confirm-message" data-i18n="profilePicker.visualizerPrompt">Visualizer Share-Code eingeben</p>
+        <input type="text" id="visualizer-import-input" class="confirm-input" placeholder="z. B. abc123" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <div class="confirm-actions">
+          <button type="button" id="btn-visualizer-import-cancel" class="confirm-btn confirm-btn-cancel" data-i18n="action.cancel">Abbrechen</button>
+          <button type="button" id="btn-visualizer-import-ok" class="confirm-btn confirm-btn-primary" data-i18n="action.import">Importieren</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Field Picker Modal -->
+    <div id="field-picker-modal" class="modal-overlay field-picker-overlay" hidden>
+      <div class="field-picker-sheet">
+        <div class="field-picker-header">
+          <button type="button" id="btn-field-picker-cancel" class="field-picker-header-btn" data-i18n="action.cancel">Abbrechen</button>
+          <button type="button" id="btn-field-picker-confirm" class="field-picker-header-btn field-picker-header-btn-confirm" data-i18n="action.confirm">Bestätigen</button>
+        </div>
+        <div class="field-picker-input-wrap">
+          <input type="text" id="field-picker-input" class="field-picker-input" autocomplete="off" />
+        </div>
+        <div id="field-picker-list" class="field-picker-list"></div>
+      </div>
+    </div>
+
+    <!-- Search Input Modal (für Suchleisten ohne Optionen-Liste) -->
+    <div id="search-input-modal" class="modal-overlay field-picker-overlay" hidden>
+      <div class="field-picker-sheet">
+        <div class="field-picker-header">
+          <button type="button" id="btn-search-input-cancel" class="field-picker-header-btn" data-i18n="action.cancel">Abbrechen</button>
+          <button type="button" id="btn-search-input-confirm" class="field-picker-header-btn field-picker-header-btn-confirm" data-i18n="action.confirm">Bestätigen</button>
+        </div>
+        <div class="field-picker-input-wrap">
+          <input type="text" id="search-input-field" class="field-picker-input" autocomplete="off" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Number Wheel Picker -->
+    <div id="number-picker-modal" class="modal-overlay number-picker-overlay" hidden>
+      <div class="number-picker-sheet">
+        <div class="number-picker-header">
+          <button type="button" id="btn-number-picker-cancel" class="number-picker-header-btn" data-i18n="action.cancel">Abbrechen</button>
+          <button type="button" id="btn-number-picker-confirm" class="number-picker-header-btn number-picker-header-btn-confirm" data-i18n="action.confirm">Bestätigen</button>
+        </div>
+        <div class="number-picker-body">
+          <div class="number-picker-mask number-picker-mask-top"></div>
+          <div class="number-picker-select-bar"></div>
+          <div class="number-picker-mask number-picker-mask-bottom"></div>
+          <div class="number-picker-drum-wrap" id="number-picker-drum-wrap">
+            <div class="number-picker-drum" id="number-picker-drum"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Text Picker Modal -->
+    <div id="text-picker-modal" class="modal-overlay number-picker-overlay" hidden>
+      <div class="number-picker-sheet text-picker-sheet">
+        <div class="number-picker-header">
+          <button type="button" id="btn-text-picker-cancel" class="number-picker-header-btn">Cancel</button>
+          <button type="button" id="btn-text-picker-confirm" class="number-picker-header-btn number-picker-header-btn-confirm">Done</button>
+        </div>
+        <div class="text-picker-body">
+          <input type="text" id="text-picker-input" class="text-picker-input" maxlength="20" autocomplete="off" autocorrect="off" spellcheck="false">
+        </div>
+      </div>
+    </div>
+
+    <!-- History Filter Modal -->
+    <div id="history-filter-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-history-filter-reset" class="modal-btn-cancel" data-i18n="filter.reset">Zurücksetzen</button>
+          <span class="modal-title" data-i18n="filter.title">Filter</span>
+          <button type="button" id="btn-history-filter-done" class="modal-btn-save" data-i18n="filter.done">Fertig</button>
+        </div>
+        <div class="modal-body filter-modal-body">
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.favorites">Favoriten</div>
+            <div class="filter-chip-row">
+              <button type="button" id="history-filter-fav-btn" class="filter-chip" data-i18n="filter.favoritesOnly">Nur Favoriten</button>
+            </div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label">
+              <span data-i18n="filter.minRating">Mindestbewertung</span>
+              <span id="history-filter-rating-val">—</span>
+            </div>
+            <input type="range" id="history-filter-rating" class="shot-review-slider" min="0" max="100" step="5" value="0">
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.roaster">Röster</div>
+            <div class="filter-chip-row" id="history-filter-chips-roaster"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.bean">Bohne</div>
+            <div class="filter-chip-row" id="history-filter-chips-bean"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.grinder">Mühle</div>
+            <div class="filter-chip-row" id="history-filter-chips-grinder"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.profile">Profil</div>
+            <div class="filter-chip-row" id="history-filter-chips-profile"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workflow Filter Modal -->
+    <div id="workflow-filter-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-filter-reset" class="modal-btn-cancel" data-i18n="filter.reset">Zurücksetzen</button>
+          <span class="modal-title" data-i18n="filter.title">Filter</span>
+          <button type="button" id="btn-filter-done" class="modal-btn-save" data-i18n="filter.done">Fertig</button>
+        </div>
+        <div class="modal-body filter-modal-body">
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.roaster">Röster</div>
+            <div class="filter-chip-row" id="filter-chips-roaster"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.bean">Bohne</div>
+            <div class="filter-chip-row" id="filter-chips-bean"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.grinder">Mühle</div>
+            <div class="filter-chip-row" id="filter-chips-grinder"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label" data-i18n="filter.profile">Profil</div>
+            <div class="filter-chip-row" id="filter-chips-profile"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workflow Edit Modal -->
+    <div id="workflow-edit-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-edit-cancel" class="modal-btn-cancel" data-i18n="action.close">Schließen</button>
+          <span class="modal-title" data-i18n="recipeEdit.title">Rezept bearbeiten</span>
+          <button type="button" id="btn-edit-save" class="modal-btn-save" data-i18n="action.save">Speichern</button>
+        </div>
+        <div class="modal-body modal-recipe-layout">
+          <div class="recipe-edit-content">
+          <div class="recipe-edit-cards-row">
+
+          <!-- ── Bean card ── -->
+          <div class="recipe-edit-card-wrap">
+            <img src="src/ui/graphics/bean_package.png" alt="" aria-hidden="true" class="recipe-edit-bean-card-img">
+            <div class="recipe-edit-tile-label" data-i18n="recipeEdit.tileBean">Coffee</div>
+            <div class="recipe-edit-card" id="edit-card-bean">
+              <button type="button" id="btn-edit-pick-bean" class="recipe-edit-bean-pick-btn" aria-label="Bean wählen">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+              </button>
+              <div class="recipe-edit-bean-spacer"></div>
+              <div class="recipe-edit-stepper-group recipe-edit-bean-info">
+                <div class="recipe-edit-bean-props">
+                  <div class="recipe-edit-bean-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="recipeEdit.roaster">Röster</span>
+                    <span id="edit-bean-display-roaster" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                  <div class="recipe-edit-bean-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="beanEditor.name">Bohne</span>
+                    <span id="edit-bean-display-name" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                  <div class="recipe-edit-bean-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="beanEditor.origin">Herkunft</span>
+                    <span id="edit-bean-display-origin" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                  <div class="recipe-edit-bean-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="beanEditor.variety">Sorte</span>
+                    <span id="edit-bean-display-variety" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                  <div class="recipe-edit-bean-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="beanEditor.process">Aufbereitung</span>
+                    <span id="edit-bean-display-process" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                  <div class="recipe-edit-bean-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="batchEditor.roastDate">Röstdatum</span>
+                    <span id="edit-bean-display-roastdate" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                </div>
+              </div>
+              <div class="recipe-edit-stepper-group">
+                <div class="recipe-edit-group-label" data-i18n="recipeEdit.dose">Dosis</div>
+                <div class="recipe-edit-stepper recipe-edit-stepper--double">
+                  <button type="button" id="btn-edit-dose-down-big" class="recipe-edit-step-btn recipe-edit-step-btn--coarse">«</button>
+                  <button type="button" id="btn-edit-dose-down" class="recipe-edit-step-btn">−</button>
+                  <span id="edit-dose-display" class="recipe-edit-step-val">18g</span>
+                  <button type="button" id="btn-edit-dose-up" class="recipe-edit-step-btn">+</button>
+                  <button type="button" id="btn-edit-dose-up-big" class="recipe-edit-step-btn recipe-edit-step-btn--coarse">»</button>
+                </div>
+                <div id="edit-bean-age-message" class="recipe-edit-input-sub recipe-edit-bean-age" hidden></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Grinder card ── -->
+          <div class="recipe-edit-card-wrap">
+            <img src="src/ui/graphics/Grinder_black.png" alt="" aria-hidden="true" class="recipe-edit-grinder-card-img">
+            <div class="recipe-edit-tile-label" data-i18n="recipeEdit.tileGrinder">Grinder</div>
+            <div class="recipe-edit-card" id="edit-card-grinder">
+              <button type="button" id="btn-edit-pick-grinder" class="recipe-edit-bean-pick-btn" aria-label="Grinder wählen">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+              </button>
+              <div class="recipe-edit-grinder-spacer"></div>
+              <div class="recipe-edit-stepper-group recipe-edit-grinder-info">
+                <div class="recipe-edit-bean-props">
+                  <div class="recipe-edit-bean-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="recipeEdit.grinder">Mühle</span>
+                    <span id="edit-grinder-display-name" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                  <div class="recipe-edit-bean-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="grinderEditor.burrSize">Burr Size</span>
+                    <span id="edit-grinder-display-burrsize" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                  <div class="recipe-edit-bean-prop recipe-edit-grinder-burrs-prop">
+                    <span class="recipe-edit-bean-prop-label" data-i18n="grinderEditor.burrs">Burr</span>
+                    <span id="edit-grinder-display-burrs" class="recipe-edit-bean-prop-value">—</span>
+                  </div>
+                </div>
+              </div>
+              <div class="recipe-edit-stepper-group">
+                <div class="recipe-edit-group-label" data-i18n="recipeEdit.grindSize">Mahlgrad</div>
+                <div class="recipe-edit-stepper recipe-edit-stepper--double">
+                  <button type="button" id="btn-edit-grind-down-big" class="recipe-edit-step-btn recipe-edit-step-btn--coarse">«</button>
+                  <button type="button" id="btn-edit-grind-down" class="recipe-edit-step-btn">−</button>
+                  <span id="edit-grind-display" class="recipe-edit-step-val">16</span>
+                  <button type="button" id="btn-edit-grind-up" class="recipe-edit-step-btn">+</button>
+                  <button type="button" id="btn-edit-grind-up-big" class="recipe-edit-step-btn recipe-edit-step-btn--coarse">»</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Machine card ── -->
+          <div class="recipe-edit-card-wrap">
+            <img src="src/ui/graphics/DE1_black.png" alt="" aria-hidden="true" class="recipe-edit-machine-card-img">
+            <div class="recipe-edit-tile-label" data-i18n="recipeEdit.tileProfile">Profile</div>
+            <div class="recipe-edit-card" id="edit-card-machine">
+              <button type="button" id="btn-edit-pick-profile" class="recipe-edit-bean-pick-btn" aria-label="Profil wählen">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+              </button>
+              <div class="recipe-edit-machine-spacer"></div>
+              <div class="recipe-edit-stepper-group recipe-edit-machine-info">
+                <span class="recipe-edit-bean-prop-label" data-i18n="recipeEdit.profile">Profil</span>
+                <div class="recipe-edit-profile-name-row">
+                  <span id="edit-profile-display" class="recipe-edit-bean-prop-value">—</span>
+                  <button type="button" id="btn-edit-profile-info" class="vs-info-btn" aria-label="Profil-Info" data-i18n-aria="recipeEdit.profileInfo">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="10" cy="10" r="8"/>
+                      <line x1="10" y1="9" x2="10" y2="14"/>
+                      <circle cx="10" cy="6.5" r="0.5" fill="currentColor" stroke="none"/>
+                    </svg>
+                  </button>
+                </div>
+                <input type="text" id="edit-profile" class="recipe-edit-input recipe-edit-input-main recipe-edit-input-pick" placeholder="Profil" autocomplete="off" readonly style="display:none">
+              </div>
+              <div class="recipe-edit-stepper-group">
+                <div class="recipe-edit-group-label" data-i18n="recipeEdit.temperature">Temperatur</div>
+                <div class="recipe-edit-stepper recipe-edit-stepper--double">
+                  <button type="button" id="btn-edit-group-temp-down-big" class="recipe-edit-step-btn recipe-edit-step-btn--coarse">«</button>
+                  <button type="button" id="btn-edit-group-temp-down" class="recipe-edit-step-btn">−</button>
+                  <span id="edit-group-temp-display" class="recipe-edit-step-val">93°C</span>
+                  <button type="button" id="btn-edit-group-temp-up" class="recipe-edit-step-btn">+</button>
+                  <button type="button" id="btn-edit-group-temp-up-big" class="recipe-edit-step-btn recipe-edit-step-btn--coarse">»</button>
+                </div>
+              </div>
+              <div class="recipe-edit-stepper-group">
+                <div class="recipe-edit-group-label" data-i18n="recipeEdit.beverage">Getränk</div>
+                <div class="recipe-edit-stepper recipe-edit-stepper--double">
+                  <button type="button" id="btn-edit-yield-down-big" class="recipe-edit-step-btn recipe-edit-step-btn--coarse">«</button>
+                  <button type="button" id="btn-edit-yield-down" class="recipe-edit-step-btn">−</button>
+                  <div class="recipe-edit-step-val-stack">
+                    <span id="edit-yield-display" class="recipe-edit-step-val">36g</span>
+                    <span id="edit-ratio-display" class="recipe-edit-step-ratio">1:2</span>
+                  </div>
+                  <button type="button" id="btn-edit-yield-up" class="recipe-edit-step-btn">+</button>
+                  <button type="button" id="btn-edit-yield-up-big" class="recipe-edit-step-btn recipe-edit-step-btn--coarse">»</button>
+                </div>
+              </div>
+            </div>
+            <!-- ── Virtual Scale ── straddling bottom boundary of card -->
+            <div class="recipe-edit-virtual-scale">
+              <span class="recipe-edit-virtual-scale-label" data-i18n="recipeEdit.virtualScale">Virtual Scale</span>
+              <button type="button" id="btn-virtual-scale-info" class="vs-info-btn" aria-label="Info">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="10" cy="10" r="8"/>
+                  <line x1="10" y1="9" x2="10" y2="14"/>
+                  <circle cx="10" cy="6.5" r="0.5" fill="currentColor" stroke="none"/>
+                </svg>
+              </button>
+              <label class="power-toggle">
+                <input type="checkbox" id="edit-volume-stop-toggle" class="power-toggle-input">
+                <span class="power-toggle-track"><span class="power-toggle-thumb"></span></span>
+              </label>
+            </div>
+          </div>
+
+          </div><!-- end cards-row -->
+
+          <!-- ── Tags ── -->
+          <div class="recipe-edit-tags-section">
+            <div class="recipe-edit-group-label" data-i18n="recipeEdit.tags">Tags</div>
+            <div id="edit-tags-chips" class="recipe-edit-tags-chips"></div>
+            <input type="text" id="edit-tags-input" class="recipe-edit-tags-input" placeholder="Add tag…" data-i18n-placeholder="recipeEdit.addTag" autocomplete="off" autocorrect="off" autocapitalize="off">
+            <div id="edit-tags-suggestions" class="recipe-edit-tags-suggestions"></div>
+          </div>
+          </div><!-- end recipe-edit-content -->
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Picker Modal -->
+    <div id="profile-picker-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-profile-picker-cancel" class="modal-btn-cancel" data-i18n="profilePicker.cancel">Abbrechen</button>
+          <span class="modal-title" data-i18n="profilePicker.title">Profile</span>
+          <button type="button" id="btn-profile-picker-use" class="modal-btn-save" data-i18n="profilePicker.use">Verwenden</button>
+        </div>
+        <div class="modal-body profile-picker-layout">
+          <section class="profile-picker-left">
+            <div class="profile-picker-toolbar">
+              <select id="profile-picker-source" class="modal-field-input profile-picker-filter" aria-label="Profilquelle" data-i18n-aria="profilePicker.source" hidden>
+                <option value="user" data-i18n="profilePicker.mine">Meine Profile</option>
+                <option value="all" data-i18n="profilePicker.all">Alle Profile</option>
+                <option value="favorites" data-i18n="profilePicker.favorites">Favoriten</option>
+                <option value="builtin">Built-in</option>
+                <option value="downloaded">Downloaded</option>
+              </select>
+              <button type="button" id="btn-profile-picker-back-my" class="profile-picker-add-btn" aria-label="Zurück" data-i18n-aria="profilePicker.backAria" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <input id="profile-picker-search" class="modal-field-input profile-picker-search" type="text" placeholder="Durchsuchen" aria-label="Durchsuchen" data-i18n-placeholder="profilePicker.search" data-i18n-aria="profilePicker.searchAria">
+              <button type="button" id="btn-profile-picker-open-add" class="profile-picker-add-btn" aria-label="Profil hinzufügen" data-i18n-aria="profilePicker.addAria"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+              <button type="button" id="btn-profile-picker-toggle-hidden" class="profile-picker-add-btn" aria-label="Versteckte Presets anzeigen" aria-pressed="false" data-i18n-aria="profilePicker.hiddenAria" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              <button type="button" id="btn-profile-picker-open-trash" class="profile-picker-add-btn" aria-label="Papierkorb" data-i18n-aria="profilePicker.trashAria"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+              <button type="button" id="btn-profile-picker-empty-trash" class="profile-picker-add-btn profile-picker-add-btn--text modal-btn-destructive" data-i18n="profilePicker.clearTrash" hidden>Papierkorb leeren</button>
+            </div>
+            <div id="profile-picker-add-menu" class="profile-picker-add-menu" hidden>
+              <button type="button" id="btn-profile-picker-new-empty" class="profile-picker-add-menu-btn" data-i18n="profilePicker.newProfile">Neues Profil</button>
+              <button type="button" id="btn-profile-picker-new-preset" class="profile-picker-add-menu-btn" data-i18n="profilePicker.fromPreset">Aus Preset erstellen</button>
+              <button type="button" id="btn-profile-picker-import-file" class="profile-picker-add-menu-btn" data-i18n="profilePicker.fromFile" hidden>Aus Datei importieren</button>
+              <button type="button" id="btn-profile-picker-import-visualizer" class="profile-picker-add-menu-btn" data-i18n="profilePicker.fromVisualizer">Von Visualizer importieren</button>
+            </div>
+            <input type="file" id="profile-import-file-input" accept=".json,application/json" hidden>
+            <div id="profile-picker-list" class="profile-picker-list" role="listbox" aria-label="Profile" data-i18n-aria="profilePicker.listAria"></div>
+          </section>
+          <aside id="profile-picker-preview" class="profile-picker-right">
+            <div class="profile-picker-placeholder" data-i18n="profilePicker.placeholder">Profil auswählen, um Vorschau zu sehen</div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Info Modal -->
+    <div id="profile-info-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-profile-info-back" class="modal-btn-cancel" data-i18n="profilePicker.back">Zurück</button>
+          <span class="modal-title"></span>
+          <button type="button" id="btn-profile-info-use" class="modal-btn-save" data-i18n="profilePicker.use2">Verwenden</button>
+        </div>
+        <div id="profile-info-body" class="modal-body profile-info-body"></div>
+      </div>
+    </div>
+
+    <!-- Grinder Picker Modal (Rezept) -->
+    <div id="grinder-picker-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-grinder-picker-cancel" class="modal-btn-cancel" data-i18n="action.close">Schließen</button>
+          <span class="modal-title" data-i18n="grinderPicker.title">Mühle wählen</span>
+          <span style="min-width:80px"></span>
+        </div>
+        <div id="grinder-picker-list" class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Bean Manager Modal (Profile-Picker Style) -->
+    <div id="bean-manager-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-bean-manager-close" class="modal-btn-cancel" data-i18n="action.close">Schließen</button>
+          <span class="modal-title" data-i18n="beanList.title">Kaffeebohnen</span>
+          <span style="min-width:80px"></span>
+        </div>
+        <div class="modal-body bean-manager-layout">
+
+          <!-- Left panel: bean list -->
+          <section class="bean-manager-left">
+            <div class="bean-manager-toolbar">
+              <input id="bean-manager-search" class="modal-field-input profile-picker-search bean-manager-search" type="text" placeholder="Durchsuchen" data-i18n-placeholder="profilePicker.search" aria-label="Durchsuchen" data-i18n-aria="profilePicker.search">
+              <label class="bean-archive-toggle bean-archive-toggle--inline" aria-label="Archivierte Bohnen anzeigen">
+                <span class="bean-archive-toggle-label">Archived</span>
+                <input type="checkbox" id="chk-bean-manager-toggle-archive" class="power-toggle-input" role="switch" />
+                <span class="power-toggle-track bean-archive-toggle-track"><span class="power-toggle-thumb bean-archive-toggle-thumb"></span></span>
+              </label>
+              <button type="button" id="btn-bean-manager-new" class="profile-picker-add-btn" aria-label="Neue Bohne">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+            <div id="bean-manager-list" class="bean-manager-list profile-picker-list" role="listbox" aria-label="Kaffeebohnen"></div>
+          </section>
+
+          <!-- Right panel: bean detail + batches -->
+          <aside id="bean-manager-right" class="bean-manager-right">
+            <div id="bean-manager-pick-banner" class="bean-manager-pick-banner" hidden data-i18n="beanManager.pickHint">Bohne auswählen, dann Packung antippen</div>
+            <div id="bean-manager-placeholder" class="profile-picker-placeholder" data-i18n="beanManager.placeholder">Bohne auswählen, um Details zu sehen</div>
+            <div id="bean-manager-detail" class="bean-manager-detail" hidden>
+              <div class="bean-manager-detail-header">
+                <span id="bean-manager-detail-title" class="bean-manager-detail-title"></span>
+                <div id="bean-manager-detail-actions" class="bean-manager-detail-actions"></div>
+              </div>
+              <div id="bean-manager-fields" class="bean-manager-fields"></div>
+              <div class="bean-manager-batches-section">
+                <div class="bean-section-header">
+                  <span class="bean-section-title" data-i18n="beanEditor.batches">Packungen</span>
+                  <div class="bean-section-header-actions">
+                    <label class="bean-archive-toggle bean-archive-toggle--inline" aria-label="Archivierte Packungen anzeigen">
+                      <span class="bean-archive-toggle-label">Done</span>
+                      <input type="checkbox" id="chk-bean-manager-batch-show-archived" class="power-toggle-input" role="switch" />
+                      <span class="power-toggle-track bean-archive-toggle-track"><span class="power-toggle-thumb bean-archive-toggle-thumb"></span></span>
+                    </label>
+                    <button type="button" id="btn-bean-manager-batch-add" class="bean-section-add-btn" aria-label="Packung hinzufügen">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="14" height="14" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div id="bean-manager-batch-list" class="bean-manager-batch-list batch-list"></div>
+              </div>
+            </div>
+          </aside>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Mühlen Modal -->
+    <div id="muehlen-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-muehlen-close" class="modal-btn-cancel" data-i18n="action.close">Schließen</button>
+          <span class="modal-title" data-i18n="grinderList.title">Mühlen</span>
+          <button type="button" id="btn-muehlen-new" class="modal-btn-save" data-i18n="grinderList.new">Neue Mühle</button>
+        </div>
+        <div class="modal-body bohnen-body">
+          <div id="muehlen-panel-list" class="bohnen-panel" role="tabpanel">
+            <div class="bohnen-empty-state" data-i18n="grinderList.empty">Keine Mühlen vorhanden</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mühlen Create Modal -->
+    <div id="muehlen-create-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-muehlen-back" class="modal-btn-cancel" data-i18n="action.back">Zurück</button>
+          <span class="modal-title" data-i18n="grinderEditor.title">Mühlendetails</span>
+          <button type="button" id="btn-muehlen-save" class="modal-btn-save" data-i18n="action.save">Speichern</button>
+        </div>
+        <div class="modal-body bean-form-body">
+
+          <div class="bean-field-group">
+            <div class="bean-field-group-title" data-i18n="grinderEditor.required">Pflichtfelder</div>
+            <div class="bean-field-list">
+              <label class="bean-field-row">
+                <span class="bean-field-label" data-i18n="grinderEditor.model">Modell</span>
+                <input type="text" id="grinder-model" class="bean-field-input" placeholder="z. B. Niche Zero" readonly />
+              </label>
+            </div>
+          </div>
+
+          <div class="bean-field-group">
+            <div class="bean-field-group-title" data-i18n="grinderEditor.burrs">Mahlwerk</div>
+            <div class="bean-field-list">
+              <label class="bean-field-row">
+                <span class="bean-field-label" data-i18n="grinderEditor.label">Bezeichnung</span>
+                <input type="text" id="grinder-burrs" class="bean-field-input" placeholder="z. B. Stock 63mm" readonly />
+              </label>
+              <label class="bean-field-row">
+                <span class="bean-field-label" data-i18n="grinderEditor.size">Größe (mm)</span>
+                <input type="number" id="grinder-burr-size" class="bean-field-input" placeholder="z. B. 63" min="0" step="0.1" readonly />
+              </label>
+              <label class="bean-field-row">
+                <span class="bean-field-label" data-i18n="grinderEditor.type">Typ</span>
+                <select id="grinder-burr-type" class="bean-field-input">
+                  <option value="">—</option>
+                  <option value="conical" data-i18n="grinderEditor.conical">Konisch</option>
+                  <option value="flat" data-i18n="grinderEditor.flat">Flach</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="bean-field-group">
+            <div class="bean-field-group-title" data-i18n="grinderEditor.settingTitle">Mahleinstellung</div>
+            <div class="bean-field-list">
+              <div class="bean-field-row grinder-type-row">
+                <span class="bean-field-label" data-i18n="grinderEditor.settingType">Typ</span>
+                <div class="grinder-setting-type-toggle" id="grinder-setting-type-toggle">
+                  <button type="button" class="grinder-toggle-btn is-active" data-type="numeric" data-i18n="grinderEditor.stepless">Stufenlos</button>
+                  <button type="button" class="grinder-toggle-btn" data-type="preset" data-i18n="grinderEditor.positions">Positionen</button>
+                </div>
+              </div>
+              <div id="grinder-numeric-fields">
+                <label class="bean-field-row">
+                  <span class="bean-field-label" data-i18n="grinderEditor.smallStep">Kleiner Schritt</span>
+                  <input type="number" id="grinder-small-step" class="bean-field-input" placeholder="z. B. 0.5" min="0" step="0.1" readonly />
+                </label>
+                <label class="bean-field-row">
+                  <span class="bean-field-label" data-i18n="grinderEditor.largeStep">Großer Schritt</span>
+                  <input type="number" id="grinder-big-step" class="bean-field-input" placeholder="z. B. 5" min="0" step="0.1" readonly />
+                </label>
+              </div>
+              <div id="grinder-preset-fields" hidden>
+                <label class="bean-field-row">
+                  <span class="bean-field-label" data-i18n="grinderEditor.positionsLabel">Positionen</span>
+                  <input type="text" id="grinder-setting-values" class="bean-field-input" placeholder="z. B. Fein, Mittel, Grob" readonly />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" id="btn-grinder-delete" class="batch-modal-delete-btn" data-i18n="grinderEditor.delete" hidden>Mühle löschen</button>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Batch Add Modal -->
+    <div id="batch-add-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-batch-cancel" class="modal-btn-cancel" data-i18n="action.cancel">Abbrechen</button>
+          <span class="modal-title" data-i18n="batchEditor.title">Packung</span>
+          <button type="button" id="btn-batch-save" class="modal-btn-save" data-i18n="action.add">Hinzufügen</button>
+        </div>
+        <div class="modal-body batch-tile-body">
+          <div class="batch-tile-grid">
+            <label class="batch-tile">
+              <span class="batch-tile-label" data-i18n="batchEditor.roastDate">Röstdatum</span>
+              <input type="text" id="batch-roast-date" class="batch-tile-input batch-date-display" placeholder="—" autocomplete="off" readonly />
+            </label>
+
+            <label class="batch-tile">
+              <span class="batch-tile-label" data-i18n="batchEditor.roastLevel">Röstgrad</span>
+              <input type="text" id="batch-roast-level" class="batch-tile-input" placeholder="—" readonly />
+            </label>
+            <label class="batch-tile">
+              <span class="batch-tile-label" data-i18n="batchEditor.qualityScore">Qualität</span>
+              <input type="text" id="batch-quality-score" class="batch-tile-input" placeholder="—" readonly />
+            </label>
+            <label class="batch-tile">
+              <span class="batch-tile-label" data-i18n="batchEditor.weight">Gewicht (g)</span>
+              <input type="text" id="batch-weight" class="batch-tile-input" placeholder="—" readonly />
+            </label>
+            <label class="batch-tile">
+              <span class="batch-tile-label" data-i18n="batchEditor.price">Preis</span>
+              <input type="text" id="batch-price" class="batch-tile-input" placeholder="—" readonly />
+            </label>
+            <label class="batch-tile">
+              <span class="batch-tile-label" data-i18n="batchEditor.currency">Währung</span>
+              <input type="text" id="batch-currency" class="batch-tile-input" placeholder="—" readonly />
+            </label>
+            <label class="batch-tile batch-tile--full">
+              <span class="batch-tile-label" data-i18n="batchEditor.notes">Notizen</span>
+              <input type="text" id="batch-notes" class="batch-tile-input" placeholder="—" readonly />
+            </label>
+          </div>
+          <button type="button" id="btn-batch-delete" class="batch-modal-delete-btn" data-i18n="batchEditor.delete" hidden>Packung löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="batch-date-picker-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-batch-date-cancel" class="modal-btn-cancel" data-i18n="action.cancel">Abbrechen</button>
+          <span class="modal-title" data-i18n="datePicker.title">Röstdatum</span>
+          <button type="button" id="btn-batch-date-apply" class="modal-btn-save" data-i18n="datePicker.apply">Übernehmen</button>
+        </div>
+        <div class="modal-body batch-date-picker-body">
+          <div id="batch-date-picker-preview" class="batch-date-picker-preview">—</div>
+          <div class="batch-date-picker-toolbar">
+            <div class="batch-date-picker-nav">
+              <span class="batch-date-picker-label" data-i18n="datePicker.month">Monat</span>
+              <div class="batch-date-picker-stepper">
+                <button type="button" id="btn-batch-date-month-down" class="sch-btn">−</button>
+                <span id="batch-date-picker-month-label" class="batch-date-picker-value batch-date-picker-value-wide">Mai</span>
+                <button type="button" id="btn-batch-date-month-up" class="sch-btn">+</button>
+              </div>
+            </div>
+            <div class="batch-date-picker-nav">
+              <span class="batch-date-picker-label" data-i18n="datePicker.year">Jahr</span>
+              <div class="batch-date-picker-stepper">
+                <button type="button" id="btn-batch-date-year-down" class="sch-btn">−</button>
+                <span id="batch-date-picker-year-label" class="batch-date-picker-value batch-date-picker-value-wide">2026</span>
+                <button type="button" id="btn-batch-date-year-up" class="sch-btn">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="batch-date-picker-weekdays" aria-hidden="true">
+            <span>Mo</span>
+            <span>Di</span>
+            <span>Mi</span>
+            <span>Do</span>
+            <span>Fr</span>
+            <span>Sa</span>
+            <span>So</span>
+          </div>
+          <div id="batch-date-picker-days" class="batch-date-picker-days" role="grid" aria-label="Kalender"></div>
+          <button type="button" id="btn-batch-date-clear" class="batch-date-picker-clear" data-i18n="datePicker.clear">Datum entfernen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shot Review Modal -->
+    <div id="shot-review-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-shot-review-close" class="modal-btn-cancel" data-i18n="action.close">Schließen</button>
+          <span class="modal-title" id="shot-review-title" data-i18n="shotReview.title">Shot</span>
+          <button type="button" id="btn-shot-review-save" class="modal-btn-save" data-i18n="action.save">Speichern</button>
+        </div>
+        <div class="shot-review-body modal-body">
+
+          <div class="shot-review-graph-wrap">
+            <div id="shot-review-graph" class="workflow-shot-graph"></div>
+          </div>
+
+          <div class="bean-field-group">
+            <div class="bean-field-group-title" data-i18n="shotReview.rating">Bewertung</div>
+            <div class="shot-review-rating-card">
+              <button type="button" id="btn-shot-review-fav" class="shot-review-fav-btn" aria-label="Favorit" data-i18n-aria="shotReview.favAria">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </button>
+              <div class="shot-review-slider-wrap">
+                <div class="shot-review-rating-display">
+                  <span id="shot-review-rating-val" class="shot-review-rating-num">50</span>
+                  <span class="shot-review-rating-max">/ 100</span>
+                </div>
+                <input type="range" id="shot-review-rating" class="shot-review-slider" min="0" max="100" step="1" value="50">
+                <div class="shot-review-slider-labels">
+                  <span>0</span>
+                  <span>100</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bean-field-group shot-review-tags-group">
+            <div class="shot-review-tags-header">
+              <div class="bean-field-group-title" data-i18n="shotReview.tags">Tags</div>
+              <button type="button" class="shot-review-tag-add-btn" id="btn-shot-review-tag-add" data-i18n="shotReview.addTag">+ Tag</button>
+            </div>
+            <div class="shot-review-tags" id="shot-review-tags"></div>
+            <div class="shot-review-tag-panel" id="shot-review-tag-panel" hidden>
+              <input type="text" id="shot-review-tag-input" class="shot-review-tag-input" placeholder="Tag eingeben..." data-i18n-placeholder="shotReview.tagPlaceholder">
+              <div class="shot-review-tag-list" id="shot-review-tag-list"></div>
+            </div>
+          </div>
+
+          <div class="bean-field-group">
+            <div class="bean-field-group-title" data-i18n="shotReview.recipe">Rezept</div>
+            <div class="bean-field-list bean-field-list--two-col">
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.roaster">Röster</span>
+                <input type="text" id="shot-review-roaster" class="bean-field-input" autocomplete="off">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.bean">Bohne</span>
+                <input type="text" id="shot-review-bean" class="bean-field-input" autocomplete="off">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.roastDate">Röstdatum</span>
+                <span id="shot-review-roast-date" class="bean-field-static">—</span>
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.grinder">Mühle</span>
+                <input type="text" id="shot-review-grinder" class="bean-field-input" autocomplete="off">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.dose">Dosis</span>
+                <input type="number" id="shot-review-dose" class="bean-field-input" min="0" step="0.1">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.grindSize">Mahlgrad</span>
+                <input type="text" id="shot-review-grind" class="bean-field-input" autocomplete="off">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.profile">Profil</span>
+                <span id="shot-review-profile" class="bean-field-static">—</span>
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.temperature">Temperatur</span>
+                <span id="shot-review-temperature" class="bean-field-static">—</span>
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.targetWeight">Ziel</span>
+                <input type="number" id="shot-review-target-weight" class="bean-field-input" min="0" step="0.1">
+              </div>
+            </div>
+          </div>
+
+          <div class="bean-field-group">
+            <div class="bean-field-group-title" data-i18n="shotReview.results">Ergebnis</div>
+            <div class="bean-field-list bean-field-list--two-col" id="shot-review-results-list">
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.time">Zeit</span>
+                <span id="shot-review-duration" class="bean-field-static">—</span>
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="shotReview.yield">Ausbeute</span>
+                <span id="shot-review-yield" class="bean-field-static">—</span>
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label">TDS %</span>
+                <input type="number" id="shot-review-tds" class="bean-field-input" min="0" max="20" step="0.01" placeholder="—">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label">EY %</span>
+                <input type="number" id="shot-review-ey" class="bean-field-input" min="0" max="30" step="0.1" placeholder="—">
+              </div>
+            </div>
+          </div>
+
+          <div class="bean-field-group">
+            <div class="bean-field-group-title" data-i18n="shotReview.notes">Notizen</div>
+            <textarea id="shot-review-notes" class="shot-review-notes" placeholder="Notizen zum Shot..." data-i18n-placeholder="shotReview.notesPlaceholder"></textarea>
+          </div>
+
+          <div class="bean-field-group shot-review-workflow-tags-group" id="shot-review-workflow-tags-group" hidden>
+            <div class="bean-field-group-title" data-i18n="shotReview.workflowTags">Rezept-Tags</div>
+            <div class="shot-review-workflow-tags" id="shot-review-workflow-tags"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Steam Settings Modal -->
+    <div id="steam-settings-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide steam-settings-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header steam-settings-header">
+          <button type="button" id="btn-steam-settings-cancel" class="modal-btn-cancel">Cancel</button>
+          <h2 class="modal-title">Steam Settings</h2>
+          <button type="button" id="btn-steam-settings-save" class="modal-btn-save">Save</button>
+        </div>
+
+        <!-- Top half: Presets -->
+        <div class="steam-settings-top">
+          <div class="steam-presets-header">
+            <h3 class="steam-settings-section-title">Steam Presets</h3>
+            <div class="grinder-setting-type-toggle steam-purge-toggle-wrap" id="steam-purge-segment">
+              <button type="button" class="grinder-toggle-btn is-active" data-mode="0">Auto Purge</button>
+              <button type="button" class="grinder-toggle-btn" data-mode="1">Two-Tap Stop</button>
+            </div>
+          </div>
+          <div class="steam-settings-presets-row">
+            <div class="steam-settings-preset" data-preset="schwach">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="temp">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Temp</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="temp" data-unit="°C"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="temp">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="duration">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Duration</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="duration" data-unit=" s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="duration">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="steam-settings-preset" data-preset="normal">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="temp">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Temp</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="temp" data-unit="°C"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="temp">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="duration">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Duration</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="duration" data-unit=" s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="duration">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="steam-settings-preset" data-preset="stark">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="temp">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Temp</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="temp" data-unit="°C"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="temp">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn steam-settings-down" data-field="duration">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Duration</span>
+                    <strong class="steam-control-value steam-settings-value" data-field="duration" data-unit=" s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn steam-settings-up" data-field="duration">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="steam-settings-divider"></div>
+
+        <!-- Bottom half: Steam by Weight -->
+        <div class="steam-settings-bottom">
+          <div class="steam-settings-section-title-row">
+            <h3 class="steam-settings-section-title">Steam by Weight</h3>
+            <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+              <button type="button" id="btn-steam-by-weight-info" class="steam-settings-info-btn" aria-label="Info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              </button>
+              <label class="power-toggle" aria-label="Steam by Weight aktivieren">
+                <input type="checkbox" id="sbw-enabled-toggle" class="power-toggle-input">
+                <span class="power-toggle-track"><span class="power-toggle-thumb"></span></span>
+              </label>
+            </div>
+          </div>
+          <div class="steam-settings-presets-row">
+            <!-- Calibration card -->
+            <div class="pitcher-preset-card pitcher-calibration-card">
+              <div class="steam-settings-name-input pitcher-calib-title">
+                Calibration
+                <button type="button" id="btn-calib-info" class="steam-settings-info-btn" aria-label="Info">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+              </div>
+              <div class="pitcher-preset-body">
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Steam Preset</span>
+                  <div id="calib-preset-btns" class="grinder-setting-type-toggle calib-preset-btns"></div>
+                </div>
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Milk Weight</span>
+                  <div class="pitcher-weight-row">
+                    <span id="calib-milk-weight" class="pitcher-weight-value">— g</span>
+                    <button type="button" id="btn-calib-measure-milk" class="pitcher-measure-btn">Measure</button>
+                  </div>
+                </div>
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Steam Time</span>
+                  <div class="calib-time-row">
+                    <div class="pitcher-weight-row">
+                      <input type="number" id="calib-steam-time" class="calib-time-input" min="1" max="300" step="1" placeholder="—">
+                      <span class="calib-time-unit">s</span>
+                    </div>
+                    <span class="calib-last-hint">Last: <span id="calib-last-steam">—</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="pitcher-preset-card" data-pitcher="1">
+              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 1" maxlength="20">
+              <div class="pitcher-preset-body">
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Steam Preset</span>
+                  <div class="grinder-setting-type-toggle pitcher-steam-preset-btns"></div>
+                </div>
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Pitcher Weight</span>
+                  <div class="pitcher-weight-row">
+                    <span class="pitcher-weight-value">— g</span>
+                    <button type="button" class="pitcher-measure-btn">Measure</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="pitcher-preset-card" data-pitcher="2">
+              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 2" maxlength="20">
+              <div class="pitcher-preset-body">
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Steam Preset</span>
+                  <div class="grinder-setting-type-toggle pitcher-steam-preset-btns"></div>
+                </div>
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Pitcher Weight</span>
+                  <div class="pitcher-weight-row">
+                    <span class="pitcher-weight-value">— g</span>
+                    <button type="button" class="pitcher-measure-btn">Measure</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="pitcher-preset-card" data-pitcher="3">
+              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 3" maxlength="20">
+              <div class="pitcher-preset-body">
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Steam Preset</span>
+                  <div class="grinder-setting-type-toggle pitcher-steam-preset-btns"></div>
+                </div>
+                <div class="pitcher-preset-row">
+                  <span class="steam-settings-label">Pitcher Weight</span>
+                  <div class="pitcher-weight-row">
+                    <span class="pitcher-weight-value">— g</span>
+                    <button type="button" class="pitcher-measure-btn">Measure</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hotwater Settings Modal -->
+    <div id="hotwater-settings-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet hotwater-settings-sheet">
+        <div class="modal-header steam-settings-header">
+          <button type="button" id="btn-hotwater-settings-cancel" class="modal-btn-cancel">Cancel</button>
+          <h2 class="modal-title">Hot Water Presets</h2>
+          <button type="button" id="btn-hotwater-settings-save" class="modal-btn-save">Save</button>
+        </div>
+        <div class="steam-settings-top hotwater-settings-top">
+          <div class="steam-settings-presets-row">
+            <div class="hotwater-settings-preset steam-settings-preset" data-preset="klein">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="temp">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Temp</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="temp" data-unit="°C"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="temp">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="volume">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Volume</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="volume" data-unit=" ml"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="volume">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="hotwater-settings-preset steam-settings-preset" data-preset="mittel">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="temp">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Temp</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="temp" data-unit="°C"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="temp">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="volume">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Volume</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="volume" data-unit=" ml"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="volume">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="hotwater-settings-preset steam-settings-preset" data-preset="gross">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="temp">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Temp</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="temp" data-unit="°C"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="temp">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn hotwater-settings-down" data-field="volume">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Volume</span>
+                    <strong class="steam-control-value hotwater-settings-value" data-field="volume" data-unit=" ml"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn hotwater-settings-up" data-field="volume">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flush Settings Modal -->
+    <div id="flush-settings-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet hotwater-settings-sheet">
+        <div class="modal-header steam-settings-header">
+          <button type="button" id="btn-flush-settings-cancel" class="modal-btn-cancel">Cancel</button>
+          <h2 class="modal-title">Flush Presets</h2>
+          <button type="button" id="btn-flush-settings-save" class="modal-btn-save">Save</button>
+        </div>
+        <div class="steam-settings-top hotwater-settings-top">
+          <div class="steam-settings-presets-row">
+            <div class="flush-settings-preset steam-settings-preset" data-preset="kurz">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn flush-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value flush-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn flush-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn flush-settings-down" data-field="duration">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Duration</span>
+                    <strong class="steam-control-value flush-settings-value" data-field="duration" data-unit=" s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn flush-settings-up" data-field="duration">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="flush-settings-preset steam-settings-preset" data-preset="normal">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn flush-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value flush-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn flush-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn flush-settings-down" data-field="duration">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Duration</span>
+                    <strong class="steam-control-value flush-settings-value" data-field="duration" data-unit=" s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn flush-settings-up" data-field="duration">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="flush-settings-preset steam-settings-preset" data-preset="lang">
+              <input type="text" class="steam-settings-name-input" placeholder="Name" maxlength="20" readonly>
+              <div class="steam-settings-controls">
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn flush-settings-down" data-field="flow">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Flow</span>
+                    <strong class="steam-control-value flush-settings-value" data-field="flow" data-unit=" ml/s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn flush-settings-up" data-field="flow">+</button>
+                </div>
+                <div class="steam-control">
+                  <button type="button" class="steam-adj-btn flush-settings-down" data-field="duration">−</button>
+                  <div class="steam-control-center">
+                    <span class="steam-control-label">Duration</span>
+                    <strong class="steam-control-value flush-settings-value" data-field="duration" data-unit=" s"></strong>
+                  </div>
+                  <button type="button" class="steam-adj-btn flush-settings-up" data-field="duration">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="steam-settings-divider"></div>
+          <div class="flush-machine-settings">
+            <div class="steam-control">
+              <button type="button" class="steam-adj-btn" id="btn-flush-temp-down">−</button>
+              <div class="steam-control-center">
+                <span class="steam-control-label">Flush Temperature</span>
+                <strong class="steam-control-value" id="flush-settings-temp">—°C</strong>
+              </div>
+              <button type="button" class="steam-adj-btn" id="btn-flush-temp-up">+</button>
+            </div>
+            <div class="steam-control">
+              <button type="button" class="steam-adj-btn" id="btn-flush-timeout-down">−</button>
+              <div class="steam-control-center">
+                <span class="steam-control-label">Flush Timeout</span>
+                <strong class="steam-control-value" id="flush-settings-timeout">— s</strong>
+              </div>
+              <button type="button" class="steam-adj-btn" id="btn-flush-timeout-up">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skin Einstellungen Modal -->
+    <div id="skin-settings-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-skin-settings-back" class="modal-btn-cancel" data-i18n="action.back">Zurück</button>
+          <span class="modal-title" data-i18n="skin.title">Skin Einstellungen</span>
+          <button type="button" id="btn-skin-settings-save" class="modal-btn-save" data-i18n="action.save">Speichern</button>
+        </div>
+        <div class="modal-body bean-form-body" id="skin-settings-body">
+          <div class="bean-field-group">
+            <div class="bean-field-group-title" data-i18n="skin.section.general">Allgemein</div>
+            <div class="bean-field-list">
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="skin.lang">Sprache</span>
+                <div class="skin-lang-toggle">
+                  <button type="button" class="skin-lang-btn" data-lang="de">DE</button>
+                  <button type="button" class="skin-lang-btn" data-lang="en">EN</button>
+                </div>
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="skin.theme">Theme</span>
+                <div class="skin-theme-toggle">
+                  <button type="button" class="skin-theme-btn" data-theme-val="dark" data-i18n="skin.theme.dark">Dark</button>
+                </div>
+              </div>
+              <div class="bean-field-row skin-brightness-row">
+                <div class="skin-brightness-header">
+                  <span class="bean-field-label" data-i18n="skin.brightness">Displayhelligkeit</span>
+                  <span id="skin-brightness-value" class="skin-brightness-value">100%</span>
+                </div>
+                <input type="range" id="skin-brightness-slider" class="skin-brightness-slider" min="0" max="100" step="1" value="100" aria-label="Displayhelligkeit">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="skin.presence">Auto-Sleep</span>
+                <div class="skin-presence-toggle" role="group" aria-label="Auto-Sleep">
+                  <button type="button" class="skin-presence-btn" data-presence-enabled="true" data-i18n="skin.presence.on">An</button>
+                  <button type="button" class="skin-presence-btn" data-presence-enabled="false" data-i18n="skin.presence.off">Aus</button>
+                </div>
+              </div>
+              <div class="bean-field-row skin-presence-timeout-row">
+                <div class="skin-presence-timeout-header">
+                  <span class="bean-field-label" data-i18n="skin.sleepTimeout">Sleep-Timeout</span>
+                  <span id="skin-presence-timeout-value" class="skin-brightness-value">30 min</span>
+                </div>
+                <input type="range" id="skin-presence-timeout-slider" class="skin-brightness-slider" min="15" max="120" step="1" value="30" aria-label="Sleep-Timeout">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="skin.homeLabel">Home-Titel</span>
+                <input type="text" id="skin-home-label-input" class="bean-field-input" maxlength="32" placeholder="Home">
+              </div>
+              <div class="bean-field-row">
+                <span class="bean-field-label" data-i18n="skin.scale">Skalierung</span>
+                <div class="skin-scale-controls">
+                  <button type="button" id="skin-scale-auto" class="skin-scale-auto-btn" data-i18n="skin.scale.auto">Auto</button>
+                  <button type="button" id="skin-scale-manual" class="skin-scale-auto-btn" data-i18n="skin.scale.manual">Manual</button>
+                  <input type="range" id="skin-scale-slider" class="skin-scale-slider" min="90" max="110" step="1" value="100" aria-label="Skalierung">
+                  <input type="number" id="skin-scale-input" class="skin-scale-input" min="90" max="110" step="1" value="100" inputmode="numeric" aria-label="Skalierung Prozent">
+                </div>
+                <div class="skin-scale-presets" aria-label="Tablet Presets">
+                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="100">P85Pro</button>
+                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="100">M50mini</button>
+                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="100">A11</button>
+                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="100">A11+</button>
+                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="98">iPad11</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workflow Delete Confirm Dialog -->
+    <div id="workflow-delete-confirm" class="modal-overlay modal-overlay-center" hidden>
+      <div class="modal-alert">
+        <div class="modal-alert-header">
+          <div class="modal-alert-title" data-i18n="recipeDelete.title">Rezept löschen?</div>
+          <div class="modal-alert-message" id="delete-confirm-message"></div>
+        </div>
+        <div class="modal-alert-actions">
+          <button type="button" id="btn-delete-cancel" class="modal-alert-btn modal-alert-cancel" data-i18n="action.cancel">Abbrechen</button>
+          <button type="button" id="btn-delete-confirm" class="modal-alert-btn modal-alert-destructive" data-i18n="action.delete">Löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Virtual Scale Info Modal -->
+    <div id="virtual-scale-info-modal" class="modal-overlay modal-overlay-center" hidden>
+      <div class="modal-alert">
+        <div class="modal-alert-header">
+          <div class="modal-alert-title" data-i18n="virtualScale.infoTitle">Virtual Scale</div>
+          <div class="modal-alert-message" id="virtual-scale-info-body"></div>
+        </div>
+        <div class="modal-alert-actions">
+          <button type="button" id="btn-virtual-scale-reset" class="modal-alert-btn modal-alert-destructive" data-i18n="virtualScale.reset">Zurücksetzen</button>
+          <button type="button" id="btn-virtual-scale-info-close" class="modal-alert-btn modal-alert-cancel" data-i18n="action.ok">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Editor Modal -->
+    <div id="profile-editor-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <button type="button" id="btn-profile-editor-cancel" class="modal-btn-cancel" data-i18n="action.cancel">Abbrechen</button>
+          <span class="modal-title profile-editor-title-wrap"><span data-i18n="profileEditor.title">Profil bearbeiten</span> <span id="profile-editor-dirty-badge" class="profile-editor-dirty-badge" data-i18n="profileEditor.unsaved" hidden>Ungespeichert</span></span>
+          <button type="button" id="btn-profile-editor-save" class="modal-btn-save" data-i18n="action.save">Speichern</button>
+        </div>
+
+        <div class="bohnen-tabs peditor-tabs" role="tablist">
+          <button type="button" class="bohnen-tab is-active" data-peditor-tab="ueberblick" role="tab" aria-selected="true" data-i18n="profileEditor.tabOverview">Überblick</button>
+          <button type="button" class="bohnen-tab" data-peditor-tab="phasen" role="tab" aria-selected="false" id="peditor-tab-btn-phasen" data-i18n="profileEditor.tabPhases">Phasen</button>
+          <button type="button" class="bohnen-tab" data-peditor-tab="einstellungen" role="tab" aria-selected="false" data-i18n="profileEditor.tabSettings">Einstellungen</button>
+        </div>
+
+        <div class="modal-body profile-editor-body">
+
+          <!-- Phasen -->
+          <div id="peditor-panel-phasen" class="peditor-panel peditor-panel--beanie" hidden>
+            <div id="profile-editor-frames" class="profile-editor-frames peditor-frames--beanie"></div>
+          </div>
+
+          <!-- Einstellungen -->
+          <div id="peditor-panel-einstellungen" class="peditor-panel" hidden>
+            <div class="bean-field-group">
+              <div class="bean-field-group-title" data-i18n="profileEditor.temperature">Temperatur</div>
+              <div class="bean-field-list">
+                <div class="profile-editor-stop-config">
+                  <div class="profile-editor-stop-row">
+                    <span class="profile-editor-stop-name" data-i18n="profileEditor.group">Gruppe</span>
+                    <div class="recipe-edit-stepper recipe-edit-stepper--double">
+                      <button type="button" class="recipe-edit-step-btn recipe-edit-step-btn--coarse" id="btn-peditor-group-temp-down-big">«</button>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-group-temp-down">−</button>
+                      <span id="peditor-group-temp-val" class="recipe-edit-step-val">93.0 °C</span>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-group-temp-up">+</button>
+                      <button type="button" class="recipe-edit-step-btn recipe-edit-step-btn--coarse" id="btn-peditor-group-temp-up-big">»</button>
+                    </div>
+                  </div>
+                  <div class="profile-editor-stop-row">
+                    <span class="profile-editor-stop-name" data-i18n="profileEditor.preheat">Wassertank vorheizen</span>
+                    <label class="power-toggle" aria-label="Wassertank vorheizen aktivieren" data-i18n-aria="profileEditor.preheatAria">
+                      <input type="checkbox" id="peditor-tank-temp-enabled" class="power-toggle-input" role="switch" />
+                      <span class="power-toggle-track"><span class="power-toggle-thumb"></span></span>
+                    </label>
+                    <div class="recipe-edit-stepper" id="peditor-tank-temp-stepper" hidden>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-tank-temp-down">−</button>
+                      <span id="peditor-tank-temp-val" class="recipe-edit-step-val">0°C</span>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-tank-temp-up">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="bean-field-group">
+              <div class="bean-field-group-title" data-i18n="profileEditor.stopGoal">Stop-Ziel</div>
+              <div class="bean-field-list">
+                <div id="profile-editor-stop-config" class="profile-editor-stop-config">
+                  <div class="profile-editor-stop-row">
+                    <span class="profile-editor-stop-name" data-i18n="profileEditor.weight">Gewicht</span>
+                    <label class="power-toggle" aria-label="Stop bei Gewicht aktivieren" data-i18n-aria="profileEditor.weightAria">
+                      <input type="checkbox" id="profile-editor-stop-weight-enabled" class="power-toggle-input" role="switch" />
+                      <span class="power-toggle-track"><span class="power-toggle-thumb"></span></span>
+                    </label>
+                    <div class="recipe-edit-stepper recipe-edit-stepper--double" id="profile-editor-stop-weight-stepper" hidden>
+                      <button type="button" class="recipe-edit-step-btn recipe-edit-step-btn--coarse" id="btn-peditor-stop-weight-down-big">«</button>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-stop-weight-down">−</button>
+                      <span id="profile-editor-stop-weight-val" class="recipe-edit-step-val">36g</span>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-stop-weight-up">+</button>
+                      <button type="button" class="recipe-edit-step-btn recipe-edit-step-btn--coarse" id="btn-peditor-stop-weight-up-big">»</button>
+                    </div>
+                  </div>
+                  <div class="profile-editor-stop-row">
+                    <span class="profile-editor-stop-name" data-i18n="profileEditor.volume">Volumen</span>
+                    <label class="power-toggle" aria-label="Stop bei Volumen aktivieren" data-i18n-aria="profileEditor.volumeAria">
+                      <input type="checkbox" id="profile-editor-stop-volume-enabled" class="power-toggle-input" role="switch" />
+                      <span class="power-toggle-track"><span class="power-toggle-thumb"></span></span>
+                    </label>
+                    <div class="recipe-edit-stepper" id="profile-editor-stop-volume-start-stepper" hidden>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-stop-volume-start-down">−</button>
+                      <span id="profile-editor-stop-volume-start-val" class="recipe-edit-step-val">ab Phase 1</span>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-stop-volume-start-up">+</button>
+                    </div>
+                    <div class="recipe-edit-stepper recipe-edit-stepper--double" id="profile-editor-stop-volume-stepper">
+                      <button type="button" class="recipe-edit-step-btn recipe-edit-step-btn--coarse" id="btn-peditor-stop-volume-down-big">«</button>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-stop-volume-down">−</button>
+                      <span id="profile-editor-stop-volume-val" class="recipe-edit-step-val">36ml</span>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-stop-volume-up">+</button>
+                      <button type="button" class="recipe-edit-step-btn recipe-edit-step-btn--coarse" id="btn-peditor-stop-volume-up-big">»</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="bean-field-group">
+              <div class="bean-field-group-title" data-i18n="profileEditor.limitRange">Limit-Bereich</div>
+              <div class="bean-field-list">
+                <div class="profile-editor-stop-config">
+                  <div class="profile-editor-stop-row">
+                    <span class="profile-editor-stop-name" data-i18n="profileEditor.flowLimitRange">Flow-Limit Bereich</span>
+                    <div class="recipe-edit-stepper">
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-limiter-flow-range-down">−</button>
+                      <span id="peditor-limiter-flow-range-val" class="recipe-edit-step-val">0.60</span>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-limiter-flow-range-up">+</button>
+                    </div>
+                  </div>
+                  <div class="profile-editor-stop-row">
+                    <span class="profile-editor-stop-name" data-i18n="profileEditor.pressLimitRange">Druck-Limit Bereich</span>
+                    <div class="recipe-edit-stepper">
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-limiter-pressure-range-down">−</button>
+                      <span id="peditor-limiter-pressure-range-val" class="recipe-edit-step-val">0.60</span>
+                      <button type="button" class="recipe-edit-step-btn" id="btn-peditor-limiter-pressure-range-up">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Überblick (Beschreibung + Review) -->
+          <div id="peditor-panel-ueberblick" class="peditor-panel">
+            <div class="bean-field-group">
+              <div class="bean-field-list">
+                <label class="bean-field-row">
+                  <span class="bean-field-label" data-i18n="profileEditor.name">Name</span>
+                  <input type="text" id="profile-editor-title" class="bean-field-input" placeholder="Profilname" autocomplete="off" />
+                </label>
+                <label class="bean-field-row">
+                  <span class="bean-field-label" data-i18n="profileEditor.author">Autor</span>
+                  <input type="text" id="profile-editor-author" class="bean-field-input" placeholder="Autor (optional)" autocomplete="off" />
+                </label>
+              </div>
+            </div>
+            <div class="peditor-review">
+              <div class="peditor-review-col">
+                <div class="peditor-review-section-title" data-i18n="profileEditor.phasesLabel">Phasen</div>
+                <div id="peditor-review-phases"></div>
+              </div>
+              <div class="peditor-review-col">
+                <div class="peditor-review-section-title" data-i18n="profileEditor.profileSettings">Profil-Einstellungen</div>
+                <ul id="peditor-review-settings" class="peditor-review-list"></ul>
+                <div class="peditor-review-section-title peditor-review-graph-title" data-i18n="profileEditor.preview">Vorschau</div>
+                <div id="profile-editor-chart" class="profile-editor-chart"></div>
+              </div>
+            </div>
+            <div class="bean-field-group">
+              <div class="bean-field-group-title" data-i18n="profileEditor.notes">Notizen</div>
+              <textarea id="profile-editor-notes" class="profile-editor-notes" placeholder="Notizen..." data-i18n-placeholder="profileEditor.notesPlaceholder"></textarea>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Screensaver / Lockscreen -->
+    <div id="screensaver" class="screensaver" hidden>
+      <div id="ss-bg-a" class="ss-bg"></div>
+      <div id="ss-bg-b" class="ss-bg" style="opacity:0"></div>
+      <div class="ss-gradient"></div>
+      <div class="ss-content" id="ss-content">
+        <div class="ss-time-wrap">
+          <div id="ss-time" class="ss-time">00:00</div>
+          <div id="ss-date" class="ss-date">Donnerstag, 1. Mai</div>
+        </div>
+        <div class="ss-slide-bar">
+          <div class="ss-slide-track" id="ss-slide-track">
+            <div class="ss-slide-fill" id="ss-slide-fill"></div>
+            <span class="ss-slide-label" data-i18n="screensaver.unlock">Zum Entsperren schieben</span>
+            <div class="ss-slide-thumb" id="ss-slide-thumb" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reinigung Modal -->
+    <div id="cleaning-modal" class="modal-overlay" hidden>
+      <div class="modal-sheet modal-sheet-wide">
+        <div class="modal-handle"></div>
+
+        <!-- Schritt 1: Anleitung -->
+        <div id="cleaning-step-1">
+          <div class="modal-header">
+            <button type="button" id="btn-cleaning-cancel" class="modal-btn-cancel" data-i18n="action.close">Schließen</button>
+            <span class="modal-title" data-i18n="cleaning.modal.title">Reinigung</span>
+            <span class="modal-header-spacer"></span>
+          </div>
+          <div class="modal-body cleaning-step-body">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" class="cleaning-step-icon">
+              <path d="M3 6l9-4 9 4v6c0 5-4 9-9 10C7 21 3 17 3 12V6z"/>
+              <path d="M9 12l2 2 4-4"/>
+            </svg>
+            <p class="cleaning-instruction-text" data-i18n="cleaning.step1.text">Reinigungspulver ins Blindsieb geben und in die Brühgruppe einsetzen.</p>
+            <button type="button" id="btn-cleaning-ready" class="cleaning-primary-btn" data-i18n="action.ready">Bereit</button>
+          </div>
+        </div>
+
+        <!-- Schritt 2: Profilauswahl -->
+        <div id="cleaning-step-2" hidden>
+          <div class="modal-header">
+            <button type="button" id="btn-cleaning-step2-back" class="modal-btn-cancel" data-i18n="action.back">Zurück</button>
+            <span class="modal-title" data-i18n="cleaning.profile.title">Reinigungsprofil</span>
+            <span class="modal-header-spacer"></span>
+          </div>
+          <div class="modal-body">
+            <div id="cleaning-profile-list" class="cleaning-profile-list"></div>
+          </div>
+        </div>
+
+        <!-- Schritt 3: GHC-Anleitung -->
+        <div id="cleaning-step-3" hidden>
+          <div class="modal-header">
+            <button type="button" id="btn-cleaning-step3-abort" class="modal-btn-cancel" data-i18n="action.cancel">Abbrechen</button>
+            <span class="modal-title" id="cleaning-step3-title" data-i18n="cleaning.running.title">Reinigung</span>
+            <span class="modal-header-spacer"></span>
+          </div>
+          <div class="modal-body cleaning-step3-body">
+            <div id="cleaning-step3-idle" class="cleaning-step-body">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                   stroke-linecap="round" stroke-linejoin="round" class="cleaning-step-icon">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <p class="cleaning-instruction-text" data-i18n="cleaning.running.text">Extraktionsbutton am<br>Group Head Controller drücken.</p>
+              <p class="cleaning-waiting-text" data-i18n="cleaning.running.wait">Warte auf Maschine…</p>
+            </div>
+            <div id="cleaning-live-graph" class="cleaning-live-graph" hidden></div>
+          </div>
+        </div>
+
+        <!-- Schritt 4: Abschluss -->
+        <div id="cleaning-step-4" hidden>
+          <div class="modal-header">
+            <span class="modal-header-spacer"></span>
+            <span class="modal-title" data-i18n="cleaning.done.title">Reinigung fertig</span>
+            <span class="modal-header-spacer"></span>
+          </div>
+          <div class="modal-body cleaning-step-body">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" class="cleaning-step-icon cleaning-step-icon-success">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="9 12 11 14 15 10"/>
+            </svg>
+            <p class="cleaning-instruction-text" data-i18n="cleaning.done.text">Reinigung abgeschlossen.<br>Auf Fertig drücken wenn du bereit bist.</p>
+            <button type="button" id="btn-cleaning-done" class="cleaning-primary-btn" data-i18n="action.done">Fertig</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- App Settings overlay (fullscreen, shown via NSXSettings.open()) -->
+    <div id="app-settings" hidden>
+      <div id="stg-inner">
+        <header class="stg-header">
+          <button id="btn-settings-close" class="stg-close-btn" aria-label="Close settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <span class="stg-header-title">Settings</span>
+        </header>
+        <div class="stg-body">
+          <nav class="stg-sidebar" id="stg-sidebar"></nav>
+          <div class="stg-main">
+            <div class="stg-page-title" id="stg-page-title"></div>
+            <div class="stg-content" id="stg-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <!-- Phone bottom navigation — must be before scripts so the DOM element exists when app.js runs -->
+  <nav id="phone-nav" class="phone-nav" hidden>
+    <button type="button" class="phone-nav-btn is-active" data-tab="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </button>
+    <button type="button" class="phone-nav-btn" data-tab="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>History</span>
+    </button>
+  </nav>
+
+    <!-- JS-Module — Dependency order: config → api → router → ui → app → settings -->
+    <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+    <script src="src/modules/config.js"></script>
+    <script src="src/modules/translations.js"></script>
+    <script src="src/modules/api.js"></script>
+    <script src="src/modules/router.js"></script>
+    <script src="src/modules/ui.js"></script>
+    <script src="src/modules/screensaver.js?v=2"></script>
+    <script src="src/modules/app.js?v=2"></script>
+    <script src="src/modules/settings.js?v=2"></script>
+
+  </body>
+</html>

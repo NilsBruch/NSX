@@ -1,0 +1,36 @@
+# Node.js
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Capacitor
+public/
+android/
+ios/
+
+# Build outputs
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Other skins (reference only)
+_otherSkins/
+
+# Dev/personal files
+.claude/
+_old/
+.github/
+AIREADME.md
