@@ -4287,6 +4287,18 @@ html, body {
   opacity: 0.75;
 }
 
+.active-workflow-empty {
+  display: none;
+  width: 100%;
+  text-align: center;
+  color: var(--c-label-3);
+  font-size: var(--fs-body);
+  padding: 8px 0;
+}
+
+.active-workflow-widget.is-empty .active-workflow-empty { display: block; }
+.active-workflow-widget.is-empty .active-workflow-fields { display: none; }
+
 .active-workflow-fields {
   display: grid;
   grid-template-columns: auto repeat(7, minmax(0, 1fr));

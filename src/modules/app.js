@@ -1780,6 +1780,8 @@ async function loadApiData() {
       if (canExecuteOperation('setWorkflow')) {
         _pushCurrentSkinStateToMachine().catch(() => {});
       }
+    } else {
+      setCurrentWorkflow(null);
     }
   } catch (e) {
     console.warn("Initialisierung fehlgeschlagen:", e.message);
@@ -2834,9 +2836,16 @@ document.getElementById('btn-home-profile-picker')?.addEventListener('click', ()
 });
 
 const homeWorkflowWidget = document.getElementById('btn-home-workflow-edit');
-homeWorkflowWidget?.addEventListener('click', () => openWorkflowEditModal(selectedWorkflowIndex));
+homeWorkflowWidget?.addEventListener('click', () => {
+  if (workflowItems.length === 0) openWorkflowCreateModal();
+  else openWorkflowEditModal(selectedWorkflowIndex);
+});
 homeWorkflowWidget?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWorkflowEditModal(selectedWorkflowIndex); }
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    if (workflowItems.length === 0) openWorkflowCreateModal();
+    else openWorkflowEditModal(selectedWorkflowIndex);
+  }
 });
 
 /* ── Reinigung Flow ─────────────────────────────────── */
@@ -3779,9 +3788,9 @@ document.getElementById('btn-steam-dur-down')?.addEventListener('click', () => {
 /* ── Hotwater State ───────────────────────────────────── */
 
 const HOTWATER_PRESET_DEFAULTS = {
-  klein:  { name: 'Klein',  temp: 80, flow: 5.0, volume: 40  },
-  mittel: { name: 'Mittel', temp: 80, flow: 5.0, volume: 100 },
-  gross:  { name: 'Groß',   temp: 80, flow: 5.0, volume: 150 },
+  klein:  { name: 'Little', temp: 80, flow: 5.0, volume: 40  },
+  mittel: { name: 'Medium', temp: 80, flow: 5.0, volume: 100 },
+  gross:  { name: 'Large',  temp: 80, flow: 5.0, volume: 150 },
 };
 
 function loadHotwaterPresets() {
@@ -4276,11 +4285,11 @@ async function hydrateUiSettingsFromStore() {
       sbwEnabled = true;
     }
 
-    if (storeSettings.nsx_ratio_dose_enabled === false) {
-      _ratioDoseEnabled = false;
+    if (storeSettings.nsx_ratio_dose_enabled === true) {
+      _ratioDoseEnabled = true;
     }
-    if (storeSettings.nsx_batch_freeze_enabled === false) {
-      _batchFreezeEnabled = false;
+    if (storeSettings.nsx_batch_freeze_enabled === true) {
+      _batchFreezeEnabled = true;
     }
 
     if (storeSettings.nsx_hotwater_presets && typeof storeSettings.nsx_hotwater_presets === 'object') {
@@ -4962,8 +4971,8 @@ function _sbwCalibFactor() {
 
 /* ── Dose Scaling ────────────────────────────────────── */
 
-let _ratioDoseEnabled = true;
-let _batchFreezeEnabled = true;
+let _ratioDoseEnabled = false;
+let _batchFreezeEnabled = false;
 let _scaledDose = null;
 let _scaledYield = null;
 

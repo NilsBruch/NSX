@@ -69,6 +69,7 @@ const TRANSLATIONS = {
     'home.beverage':       'Getränk',
     'home.currentRecipe':  'Aktuelles Rezept',
     'home.activeRecipe':   'Aktives Rezept',
+    'home.noRecipe':       'Erstes Rezept erstellen',
 
     // Profile card
     'profile.title':       'Profile',
@@ -737,6 +738,7 @@ const TRANSLATIONS = {
     'home.beverage':       'Beverage',
     'home.currentRecipe':  'Current recipe',
     'home.activeRecipe':   'Active Recipe',
+    'home.noRecipe':       'Create your first recipe',
 
     // Profile card
     'profile.title':       'Profiles',

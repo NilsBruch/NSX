@@ -340,6 +340,12 @@ function renderWorkflows(workflows, selectedIndex) {
 }
 
 function setCurrentWorkflow(workflow) {
+  const widget = document.getElementById('btn-home-workflow-edit');
+  if (!workflow) {
+    widget?.classList.add('is-empty');
+    return;
+  }
+  widget?.classList.remove('is-empty');
   if (homeWorkflowRoasterEl) homeWorkflowRoasterEl.textContent = workflow.coffeeRoaster;
   if (homeWorkflowBeanEl)    homeWorkflowBeanEl.textContent    = workflow.coffeeName;
   if (homeWorkflowGrinderEl) homeWorkflowGrinderEl.textContent = workflow.grinderModel;

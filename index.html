@@ -274,6 +274,7 @@
 
               <!-- Active Recipe -->
               <article class="status-card active-workflow-widget workflow-card-active" id="btn-home-workflow-edit" role="button" tabindex="0" aria-label="Aktives Rezept bearbeiten">
+                <span class="active-workflow-empty" data-i18n="home.noRecipe">Create your first recipe</span>
                 <div class="active-workflow-fields">
                   <div class="active-workflow-field active-workflow-field--title">
                     <span class="active-workflow-title" data-i18n="home.activeRecipe">Active Recipe</span>
@@ -506,7 +507,7 @@
       <!-- ── Scale Area (fixed, above date picker) ─── -->
       <div class="workflow-scale-area" id="workflow-scale-area">
         <!-- Dose scale button -->
-        <div class="workflow-dose-widget" id="workflow-dose-widget">
+        <div class="workflow-dose-widget" id="workflow-dose-widget" hidden>
           <button type="button" id="btn-dose-scale" class="workflow-sbw-btn workflow-dose-btn" aria-label="Dose from scale">
             <img src="src/ui/graphics/coffee-beans.png" class="workflow-dose-img" alt="" aria-hidden="true" width="22" height="22">
           </button>

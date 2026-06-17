@@ -721,9 +721,9 @@
     const sRecipes = section('Recipes');
     sRecipes.rows.append(
       row('Ratio Dose', 'Show button on recipe page to temporarily scale dose & yield from live scale weight',
-        toggle(ctrl.getRatioDoseEnabled?.() !== false, v => ctrl.setRatioDoseEnabled?.(v))),
+        toggle(ctrl.getRatioDoseEnabled?.() === true, v => ctrl.setRatioDoseEnabled?.(v))),
       row('Freeze Batches', 'Show freeze button on bean batch entries',
-        toggle(ctrl.getBatchFreezeEnabled?.() !== false, v => ctrl.setBatchFreezeEnabled?.(v))),
+        toggle(ctrl.getBatchFreezeEnabled?.() === true, v => ctrl.setBatchFreezeEnabled?.(v))),
     );
     target.appendChild(sRecipes.wrap);
 
