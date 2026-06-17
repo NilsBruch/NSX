@@ -157,7 +157,7 @@
     { id: 'connections',  label: 'Connections'  },
     { id: 'machine',      label: 'Machine'      },
     { id: 'interface',    label: 'Interface'    },
-    { id: 'plugins',      label: 'Plugins'      },
+    // { id: 'plugins',      label: 'Plugins'      },
     { id: 'maintenance',  label: 'Maintenance'  },
     { id: 'misc',         label: 'Advanced'     },
   ];
