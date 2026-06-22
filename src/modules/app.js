@@ -9297,8 +9297,8 @@ function _updateEditDirtyState() {
 
   const saveBtn = document.getElementById('btn-edit-save');
   if (saveBtn) {
-    saveBtn.textContent = anyIdentityChanged ? t('recipeEdit.newTitle') : t('action.save');
-    saveBtn.classList.toggle('modal-btn-save--fork', anyIdentityChanged);
+    saveBtn.textContent = t('action.save');
+    saveBtn.classList.remove('modal-btn-save--fork');
   }
 }
 
