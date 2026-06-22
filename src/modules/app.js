@@ -1757,6 +1757,18 @@ async function loadApiData() {
   _ensureProfilesLoaded().catch(() => {});
 
   try {
+    const schedules = await fetchSchedules();
+    const existing = Array.isArray(schedules) ? schedules[0] : schedules?.items?.[0];
+    if (existing?.id && !scheduleState.scheduleId) {
+      scheduleState.scheduleId = existing.id;
+      saveScheduleState();
+      console.log('[Schedule] Loaded existing schedule id from API:', existing.id);
+    }
+  } catch (e) {
+    console.warn('[Schedule] Could not fetch schedules on startup:', e.message);
+  }
+
+  try {
     const [storedRecipes, shotsResult] = await Promise.all([
       _loadRecipesFromStore(),
       fetchShots(200).catch(() => ({ items: [], total: 0 })),
@@ -4442,36 +4454,55 @@ function renderScheduleUI() {
 }
 
 async function syncScheduleToApi() {
+  console.log('[Schedule] syncScheduleToApi called. state:', JSON.stringify(scheduleState));
   if (!scheduleState.enabled) {
     if (scheduleState.scheduleId) {
+      console.log('[Schedule] Disabling via PUT, id:', scheduleState.scheduleId);
       try {
-        await deleteSchedule(scheduleState.scheduleId);
-        scheduleState.scheduleId = null;
-        saveScheduleState();
-      } catch {}
+        await updateSchedule(scheduleState.scheduleId, { id: scheduleState.scheduleId, enabled: false });
+        console.log('[Schedule] PUT disable succeeded');
+      } catch (err) {
+        console.warn('[Schedule] PUT disable failed:', err.message);
+      }
+    } else {
+      console.log('[Schedule] Disabled and no scheduleId — nothing to do');
     }
     return;
   }
   const days = scheduleState.days.length > 0 ? scheduleState.days : [1, 2, 3, 4, 5, 6, 7];
-  const onMins = scheduleState.onHour * 60 + scheduleState.onMinute;
-  const offMins = scheduleState.offHour * 60 + scheduleState.offMinute;
-  let keepAwakeFor = offMins - onMins;
-  if (keepAwakeFor <= 0) keepAwakeFor += 24 * 60;
-  const payload = {
-    time: `${pad2(scheduleState.onHour)}:${pad2(scheduleState.onMinute)}`,
-    daysOfWeek: days,
-    enabled: true,
-    keepAwakeFor,
-  };
-  try {
-    if (scheduleState.scheduleId) {
-      await updateSchedule(scheduleState.scheduleId, payload);
-    } else {
-      const created = await createSchedule(payload);
-      scheduleState.scheduleId = created?.id || null;
+  const time = `${pad2(scheduleState.onHour)}:${pad2(scheduleState.onMinute)}`;
+  console.log('[Schedule] Enabling. time:', time, 'days:', days, 'keepAwakeFor:', keepAwakeFor);
+  if (scheduleState.scheduleId) {
+    console.log('[Schedule] Trying PUT update, id:', scheduleState.scheduleId);
+    try {
+      await updateSchedule(scheduleState.scheduleId, {
+        id: scheduleState.scheduleId,
+        time,
+        daysOfWeek: days,
+        enabled: true,
+        keepAwakeFor: 0,
+      });
+      console.log('[Schedule] PUT update succeeded');
+      return;
+    } catch (err) {
+      console.warn('[Schedule] PUT update failed:', err.message, '— clearing id, falling back to POST');
+      scheduleState.scheduleId = null;
       saveScheduleState();
     }
+  }
+  console.log('[Schedule] Trying POST create. payload:', JSON.stringify({ time, daysOfWeek: days, enabled: true, keepAwakeFor }));
+  try {
+    const created = await createSchedule({
+      time,
+      daysOfWeek: days,
+      enabled: true,
+      keepAwakeFor: 0,
+    });
+    console.log('[Schedule] POST create succeeded. response:', JSON.stringify(created));
+    scheduleState.scheduleId = created?.id || null;
+    saveScheduleState();
   } catch (err) {
+    console.error('[Schedule] POST create failed:', err.message);
     showToast(t('toast.scheduleFailed') + ': ' + err.message);
   }
 }
