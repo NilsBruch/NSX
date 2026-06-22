@@ -98,6 +98,7 @@ const {
   updateActiveWorkflowCardHistoricalValues,
   renderHistoryAccordion,
   updateHistoryShotDuration,
+  setWorkflowSyncState,
 } = window.NSXUI || {};
 
 /* ── Translations ─────────────────────────────────────── */
@@ -1030,6 +1031,7 @@ async function pushSelectedWorkflowToMachine(workflow) {
 
   if (!canExecuteOperation('setWorkflow')) {
     showToast(t('toast.recipeStateError').replace('{state}', currentMachineState));
+    setWorkflowSyncState?.('error');
     return;
   }
 
@@ -1040,10 +1042,12 @@ async function pushSelectedWorkflowToMachine(workflow) {
     await pushWorkflow({ context: { extras: null } });
     if (nonce !== _workflowPushNonce) return;
     await pushWorkflow(payload);
+    setWorkflowSyncState?.('synced');
     showToast(`${workflow.coffeeRoaster} ${workflow.coffeeName}`);
     signalUserPresence();
   } catch (err) {
     console.warn("Rezept konnte nicht auf Maschine gesetzt werden:", err?.message || err);
+    setWorkflowSyncState?.('error');
     showToast(t('toast.recipeNotSet'));
   }
 }
@@ -1102,6 +1106,7 @@ function selectWorkflow(index) {
   setCurrentWorkflow(workflowItems[index]);
   plotWorkflowShot(workflowItems[index]);
 
+  setWorkflowSyncState?.('pending');
   clearTimeout(_pushDebounceTimer);
   _pushDebounceTimer = setTimeout(() => {
     pushSelectedWorkflowToMachine(workflowItems[selectedWorkflowIndex]);
@@ -1750,6 +1755,7 @@ async function loadApiData() {
   try {
     const wf = await fetchCurrentWorkflow();
     setCurrentWorkflow(mapApiWorkflowToDisplay(wf));
+    setWorkflowSyncState?.('synced');
   } catch (e) {
     console.warn("Aktueller Workflow konnte nicht geladen werden:", e.message);
   }
@@ -4770,6 +4776,7 @@ async function deleteWorkflowShots(workflowIndex) {
   if (workflowItems.length > 0) {
     setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
     plotWorkflowShot(workflowItems[selectedWorkflowIndex]);
+    setWorkflowSyncState?.('pending');
     clearTimeout(_pushDebounceTimer);
     _pushDebounceTimer = setTimeout(() => {
       pushSelectedWorkflowToMachine(workflowItems[selectedWorkflowIndex]);

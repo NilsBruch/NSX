@@ -4327,6 +4327,32 @@ html, body {
   min-width: 0;
 }
 
+.workflow-sync-dot {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 20px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.3s;
+}
+.workflow-sync-dot.is-synced {
+  background: var(--c-green);
+}
+.workflow-sync-dot.is-pending {
+  background: #ff9f0a;
+  animation: sync-dot-pulse 1.2s ease-in-out infinite;
+}
+.workflow-sync-dot.is-error {
+  background: var(--c-red);
+}
+@keyframes sync-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
 .active-workflow-label {
   font-size: var(--fs-card-label);
   font-weight: 400;

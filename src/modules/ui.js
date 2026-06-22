@@ -339,6 +339,13 @@ function renderWorkflows(workflows, selectedIndex) {
   updateRecipeListFade();
 }
 
+const _syncDotEl = document.getElementById('home-workflow-sync');
+function setWorkflowSyncState(state) {
+  if (!_syncDotEl) return;
+  _syncDotEl.classList.remove('is-synced', 'is-pending', 'is-error');
+  if (state) _syncDotEl.classList.add(`is-${state}`);
+}
+
 function setCurrentWorkflow(workflow) {
   const widget = document.getElementById('btn-home-workflow-edit');
   if (!workflow) {
@@ -1638,5 +1645,6 @@ window.NSXUI = {
   updateHistoryShotDuration,
   setSeriesVisibility,
   renderShotAnalysis,
+  setWorkflowSyncState,
 };
 })();
