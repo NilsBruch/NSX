@@ -4770,6 +4770,10 @@ async function deleteWorkflowShots(workflowIndex) {
   if (workflowItems.length > 0) {
     setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
     plotWorkflowShot(workflowItems[selectedWorkflowIndex]);
+    clearTimeout(_pushDebounceTimer);
+    _pushDebounceTimer = setTimeout(() => {
+      pushSelectedWorkflowToMachine(workflowItems[selectedWorkflowIndex]);
+    }, 400);
   }
 
   showToast(t('toast.recipeDeleted'));
