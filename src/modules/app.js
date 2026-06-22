@@ -1066,7 +1066,7 @@ async function _pushCurrentSkinStateToMachine(bypassStateCheck = false) {
     }
   }
   try {
-    await pushSteamSettings(steamTemp, steamFlow);
+    await pushSteamSettings(_steamEnabled ? steamTemp : 0, _steamEnabled ? steamFlow : 0);
   } catch (err) {
     console.warn('Steam-Sync fehlgeschlagen:', err?.message);
   }
