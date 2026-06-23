@@ -67,6 +67,10 @@ const TRANSLATIONS = {
     'home.profile':        'Profil',
     'home.temperature':    'Temperatur',
     'home.beverage':       'Getränk',
+    'home.inOut':          'In:Out',
+    'home.lastShot':       'Letzte Dauer',
+    'home.createRecipe':   'Erstes Rezept erstellen',
+    'home.recentRecipes':  'Letzte Rezepte',
     'home.currentRecipe':  'Aktuelles Rezept',
     'home.activeRecipe':   'Aktives Rezept',
     'home.noRecipe':       'Erstes Rezept erstellen',
@@ -537,6 +541,8 @@ const TRANSLATIONS = {
     'skin.scale':              'Skalierung',
     'skin.scale.auto':         'Auto',
     'skin.scale.manual':       'Manuell',
+    'skin.section.interface':  'Interface',
+    'skin.recentRecipeNav':    'Rezeptseite öffnen',
 
     // Cleaning
     'cleaning.modal.title':   'Reinigung',
@@ -737,6 +743,10 @@ const TRANSLATIONS = {
     'home.profile':        'Profile',
     'home.temperature':    'Temperature',
     'home.beverage':       'Beverage',
+    'home.inOut':          'In:Out',
+    'home.lastShot':       'Last Shot',
+    'home.createRecipe':   'Create your first recipe',
+    'home.recentRecipes':  'Recent Recipes',
     'home.currentRecipe':  'Current recipe',
     'home.activeRecipe':   'Active Recipe',
     'home.noRecipe':       'Create your first recipe',
@@ -1207,6 +1217,8 @@ const TRANSLATIONS = {
     'skin.scale':              'Scale',
     'skin.scale.auto':         'Auto',
     'skin.scale.manual':       'Manual',
+    'skin.section.interface':  'Interface',
+    'skin.recentRecipeNav':    'Open recipe page',
 
     // Cleaning
     'cleaning.modal.title':   'Cleaning',

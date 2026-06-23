@@ -720,6 +720,8 @@
 
     const sRecipes = section('Recipes');
     sRecipes.rows.append(
+      row('Open Recipe Page', 'Automatically navigate to the recipe page when tapping a recent recipe on the home screen',
+        toggle(ctrl.getRecentRecipeNav?.() === true, v => ctrl.setRecentRecipeNav?.(v))),
       row('Ratio Dose', 'Show button on recipe page to temporarily scale dose & yield from live scale weight',
         toggle(ctrl.getRatioDoseEnabled?.() === true, v => ctrl.setRatioDoseEnabled?.(v))),
       row('Freeze Batches', 'Show freeze button on bean batch entries',

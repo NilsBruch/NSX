@@ -341,9 +341,11 @@ function renderWorkflows(workflows, selectedIndex) {
 
 const _syncDotEl = document.getElementById('home-workflow-sync');
 function setWorkflowSyncState(state) {
-  if (!_syncDotEl) return;
-  _syncDotEl.classList.remove('is-synced', 'is-pending', 'is-error');
-  if (state) _syncDotEl.classList.add(`is-${state}`);
+  const dots = [_syncDotEl, document.querySelector('.home-rr-sync-dot')].filter(Boolean);
+  for (const dot of dots) {
+    dot.classList.remove('is-synced', 'is-pending', 'is-error');
+    if (state) dot.classList.add(`is-${state}`);
+  }
 }
 
 function setCurrentWorkflow(workflow) {

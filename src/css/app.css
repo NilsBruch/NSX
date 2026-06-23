@@ -4275,6 +4275,8 @@ html, body {
 }
 
 /* ── Active Workflow Widget ───────────────────────────── */
+.active-workflow-widget[hidden] { display: none; }
+
 .active-workflow-widget {
   flex-direction: column;
   align-items: stretch;
@@ -4351,6 +4353,116 @@ html, body {
 @keyframes sync-dot-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }
+}
+
+/* ── Recent Recipes ───────────────────────────────────── */
+.home-rr-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.home-utility-grid:has(+ .home-rr-card) {
+  margin-bottom: 8px;
+}
+
+.home-rr-header,
+.home-rr-row {
+  display: grid;
+  grid-template-columns: 24px 1.4fr 0.5fr 0.9fr 0.6fr 1.4fr 0.7fr 0.6fr 1.1fr;
+  gap: 0 6px;
+  align-items: center;
+}
+
+.home-rr-header {
+  padding: 2px 12px 4px;
+}
+
+.home-rr-header-cell {
+  font-size: var(--fs-card-label);
+  color: var(--c-label-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.home-rr-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-rr-row {
+  position: relative;
+  padding: 14px 12px;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  color: var(--c-label);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.home-rr-row:active {
+  opacity: 0.75;
+}
+
+.home-rr-row--empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-style: dashed;
+}
+
+.home-rr-empty-label {
+  font-size: var(--fs-card-value);
+  font-weight: 600;
+  color: var(--c-label-3);
+}
+
+.home-rr-row.is-selected {
+  background: rgba(10, 132, 255, 0.2);
+  border-color: rgba(10, 132, 255, 0.45);
+  color: #cfe6ff;
+}
+
+[data-theme="white"] .home-rr-row {
+  background: var(--c-bg-3);
+  border-color: var(--c-separator);
+}
+
+[data-theme="white"] .home-rr-row.is-selected {
+  background: rgba(10, 132, 255, 0.12);
+  border-color: rgba(10, 132, 255, 0.4);
+  color: var(--c-blue);
+}
+
+.home-rr-rank {
+  padding-right: 8px;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--c-label-2);
+  white-space: nowrap;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.home-rr-cell {
+  font-size: var(--fs-card-value);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  color: inherit;
+  min-width: 0;
 }
 
 .active-workflow-label {

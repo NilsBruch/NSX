@@ -1084,6 +1084,90 @@ async function _pushCurrentSkinStateToMachine(bypassStateCheck = false) {
 
 let _pushDebounceTimer = null;
 
+function renderHomeRecentRecipes() {
+  const card   = document.getElementById('home-recent-recipes');
+  const headEl = document.getElementById('home-rr-header');
+  const rowsEl = document.getElementById('home-rr-rows');
+  if (!card || !rowsEl) return;
+  if (!workflowItems || workflowItems.length === 0) {
+    card.hidden = false;
+    if (headEl) headEl.innerHTML = '';
+    rowsEl.innerHTML = `<button type="button" class="home-rr-row home-rr-row--empty">
+      <span class="home-rr-empty-label">${t('home.createRecipe')}</span>
+    </button>`;
+    rowsEl.querySelector('.home-rr-row--empty')?.addEventListener('click', () => openWorkflowCreateModal());
+    return;
+  }
+  const top3 = workflowItems
+    .map((w, i) => ({ w, i }))
+    .sort((a, b) => (b.w.lastUsed || 0) - (a.w.lastUsed || 0))
+    .slice(0, 3);
+  card.hidden = false;
+
+  if (headEl) {
+    const labels = [t('home.bean'), t('home.dose'), t('home.grinder'), t('home.grindSize'),
+                    t('home.profile'), t('home.temperature'), t('home.inOut'), t('home.lastShot')];
+    headEl.innerHTML = '<span></span>' + labels.map(l => `<span class="home-rr-header-cell">${l}</span>`).join('');
+  }
+
+  const c = v => `<span class="home-rr-cell">${v}</span>`;
+
+  const rowData = top3.map(({ w, i }, rank) => {
+    const bean     = [w.coffeeRoaster, w.coffeeName].filter(v => v && v !== '—').join(' · ') || '—';
+    const dose     = w.targetDoseWeight > 0 ? `${w.targetDoseWeight}g` : '—';
+    const grinder  = w.grinderModel || '—';
+    const setting  = w.grinderSetting || '—';
+    const profile  = w.profileTitle || '—';
+    const g        = Number(w.groupTemp);
+    const temp     = w.profileTemp || (g > 0 ? `${g}°C` : '—');
+    const ratio    = w.ratio && w.ratio !== '—' ? w.ratio : '—';
+    const lastShot = findShotsForWorkflow(w)[0];
+    const sel = i === selectedWorkflowIndex;
+    const existingDot = document.getElementById('home-workflow-sync');
+    const syncState = sel && existingDot
+      ? (['is-synced', 'is-pending', 'is-error'].find(cls => existingDot.classList.contains(cls)) ?? '')
+      : '';
+    const syncDot = sel ? `<span class="workflow-sync-dot home-rr-sync-dot${syncState ? ' ' + syncState : ''}"></span>` : '';
+    return { i, rank, lastShot, html: `<button type="button" class="home-rr-row${sel ? ' is-selected' : ''}" data-workflow-index="${i}">
+      <span class="home-rr-rank">${rank + 1}</span>
+      ${c(bean)}${c(dose)}${c(grinder)}${c(setting)}${c(profile)}${c(temp)}${c(ratio)}<span class="home-rr-cell home-rr-dur" data-rr-shot-id="${lastShot?.id || ''}">—</span>
+      ${syncDot}
+    </button>` };
+  });
+
+  rowsEl.innerHTML = rowData.map(r => r.html).join('');
+
+  rowsEl.querySelectorAll('.home-rr-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const idx = Number(row.dataset.workflowIndex);
+      row.style.transition = 'transform 100ms ease, opacity 100ms ease';
+      row.style.transform = 'scale(0.98)';
+      row.style.opacity = '0.75';
+      setTimeout(() => {
+        row.style.transform = '';
+        row.style.opacity = '';
+        row.style.transition = '';
+        selectWorkflow(idx);
+        if (storeSettings.nsx_recent_recipe_nav === true) {
+          window.NSXRouter?.setTab(1);
+        }
+      }, 120);
+    });
+  });
+
+  for (const { lastShot } of rowData) {
+    if (!lastShot?.id) continue;
+    getShotDetailsCached(lastShot.id)
+      .then(full => {
+        const secs = getShotDurationSeconds(full);
+        if (!Number.isFinite(secs)) return;
+        const span = rowsEl.querySelector(`.home-rr-dur[data-rr-shot-id="${lastShot.id}"]`);
+        if (span) span.textContent = `${Math.round(secs)}s`;
+      })
+      .catch(() => {});
+  }
+}
+
 function selectWorkflow(index) {
   if (!Number.isInteger(index) || index < 0 || index >= workflowItems.length) {
     return;
@@ -1103,6 +1187,7 @@ function selectWorkflow(index) {
   _lastRecipeId = workflowItems[index]?.id ?? null;
   patchStoreSettings({ nsx_last_recipe_id: _lastRecipeId });
   renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  renderHomeRecentRecipes();
   setCurrentWorkflow(workflowItems[index]);
   plotWorkflowShot(workflowItems[index]);
 
@@ -1791,6 +1876,7 @@ async function loadApiData() {
     }
 
     renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+    renderHomeRecentRecipes();
     renderHistory();
     if (workflowItems.length > 0) {
       setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
@@ -2598,6 +2684,7 @@ document.getElementById('btn-skin-settings')?.addEventListener('click', () => {
 
   const homeLabelInput = document.getElementById('skin-home-label-input');
   if (homeLabelInput) homeLabelInput.value = storeSettings.nsx_home_label || SKIN_DEFAULTS.homeLabel;
+
   const storedBrightness = Number(storeSettings.nsx_display_brightness);
   if (Number.isFinite(storedBrightness)) {
     _skinBrightness = _normalizeBrightness(storedBrightness);
@@ -2821,6 +2908,11 @@ window.NSXSkinControls = {
     const normalizedUnit = _normalizeWaterUnit(unit);
     patchStoreSettings({ nsx_water_unit: normalizedUnit });
     setWaterDisplayUnit?.(normalizedUnit);
+  },
+
+  getRecentRecipeNav: () => storeSettings.nsx_recent_recipe_nav === true,
+  setRecentRecipeNav(v) {
+    patchStoreSettings({ nsx_recent_recipe_nav: Boolean(v) });
   },
 
   getRatioDoseEnabled: () => _ratioDoseEnabled,
@@ -4772,6 +4864,7 @@ async function deleteWorkflowShots(workflowIndex) {
   selectedWorkflowIndex = Math.max(0, Math.min(selectedWorkflowIndex, Math.max(0, workflowItems.length - 1)));
   historySelectedRecipeIndex = Math.min(historySelectedRecipeIndex, workflowItems.length - 1);
   renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  renderHomeRecentRecipes();
   renderHistory();
   if (workflowItems.length > 0) {
     setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
@@ -9067,6 +9160,7 @@ document.getElementById('btn-edit-save')?.addEventListener('click', async () => 
   await _saveRecipesToStore(workflowItems);
 
   renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  renderHomeRecentRecipes();
   const activeIndex = isCreate ? 0 : index;
   if (activeIndex === selectedWorkflowIndex) {
     setCurrentWorkflow(workflowItems[activeIndex]);
