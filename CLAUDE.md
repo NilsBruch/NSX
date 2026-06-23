@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-NSX is a UI skin for the [Decent DE1](https://decentespresso.com/) espresso machine, built on top of the **Streamline-Bridge** gateway. It runs as a single-page web app (vanilla JS, no build step, no npm) served locally to the machine's web interface.
+NSX is a UI skin for the [Decent DE1](https://decentespresso.com/) espresso machine, built on top of the **Decent.app** gateway. It runs as a single-page web app (vanilla JS, no build step, no npm) served locally to the machine's web interface.
 
 ## Tech Stack
 
