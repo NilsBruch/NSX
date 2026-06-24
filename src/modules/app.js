@@ -826,8 +826,13 @@ function buildWorkflowItemsFromShots(shotItems) {
     const rv = Number(shot?.annotations?.enjoyment ?? shot?.metadata?.rating);
     const prevMax = existing?.ratingMax ?? null;
     const prevCount = existing?.ratingCount ?? 0;
-    const ratingCount = Number.isFinite(rv) ? prevCount + 1 : prevCount;
-    const ratingMax = Number.isFinite(rv) ? (prevMax === null ? rv : Math.max(prevMax, rv)) : prevMax;
+    // ratingCount = how many shots share the maximum rating (not total rated shots)
+    let ratingMax = prevMax;
+    let ratingCount = prevCount;
+    if (Number.isFinite(rv)) {
+      if (prevMax === null || rv > prevMax) { ratingMax = rv; ratingCount = 1; }
+      else if (rv === prevMax) { ratingCount = prevCount + 1; }
+    }
 
     if (!existing || latestTimestamp >= existing.latestTimestamp) {
       grouped.set(key, {
@@ -4966,10 +4971,13 @@ async function _loadMoreHistory() {
 const _recipeRatingCache = new Map(); // key: getWorkflowKey → { max:number|null, count:number }
 
 function _computeMaxRating(shotList) {
+  // count = how many shots share the maximum rating (not total rated shots)
   let max = null, count = 0;
   for (const s of shotList || []) {
     const r = Number(s?.annotations?.enjoyment ?? s?.metadata?.rating);
-    if (Number.isFinite(r)) { count++; if (max === null || r > max) max = r; }
+    if (!Number.isFinite(r)) continue;
+    if (max === null || r > max) { max = r; count = 1; }
+    else if (r === max) { count++; }
   }
   return { max, count };
 }
