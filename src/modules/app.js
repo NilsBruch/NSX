@@ -2041,13 +2041,36 @@ window.addEventListener("gateway:devices", (event) => {
   if (toggle) toggle.checked = scaleConnected;
 });
 
+let _lastAutoTareAt = 0;
+function _maybeAutoTareNegative(weight) {
+  if (storeSettings.nsx_tare_on_negative === false) return;
+  if (!scaleConnected || !Number.isFinite(weight) || weight >= -1.0) return;
+  // Don't interfere while the machine is actively dispensing.
+  if (['espresso', 'steam', 'hotWater', 'flush'].includes(currentMachineState)) return;
+  const now = Date.now();
+  if (now - _lastAutoTareAt < 1500) return;
+  _lastAutoTareAt = now;
+  tareScale?.().catch(() => {});
+}
+
 window.addEventListener("scale:weight", (event) => {
   const newWeight = event.detail?.weight ?? liveWeight;
   const apiRate = event.detail?.weightFlow ?? event.detail?.weight_flow;
   currentScaleRate = Number.isFinite(apiRate) && apiRate >= 0 ? apiRate : 0;
   liveWeight = newWeight;
+  _maybeAutoTareNegative(newWeight);
   const scalePill = document.getElementById('workflow-scale-pill');
   if (scalePill) scalePill.textContent = scaleConnected ? newWeight.toFixed(1) + 'g' : '';
+  const dosePill = document.getElementById('workflow-dose-pill');
+  if (dosePill) {
+    const doseWidget = document.getElementById('workflow-dose-widget');
+    if (scaleConnected && doseWidget && !doseWidget.hidden) {
+      const cup = Number(storeSettings.nsx_dosing_cup_weight) || 0;
+      dosePill.textContent = `${(newWeight - cup).toFixed(1)}g`;
+    } else {
+      dosePill.textContent = '';
+    }
+  }
   updateEspressoFullscreen();
   if (currentMachineState === 'hotWater' && !_hotWaterDone) {
     const dispensed = Math.max(0, newWeight - _hotWaterStartWeight);
@@ -2412,7 +2435,6 @@ document.getElementById('btn-app-settings')?.addEventListener('click', () => {
   window.NSXSettings?.open();
 });
 
-const skinSettingsModalEl = document.getElementById('skin-settings-modal');
 const SKIN_DEFAULTS = {
   language: 'en',
   theme: 'dark',
@@ -2439,47 +2461,14 @@ function _normalizeWaterUnit(unit) {
   return unit === 'ml' ? 'ml' : 'pct';
 }
 
-function _renderPresenceSettingsUI() {
-  document.querySelectorAll('.skin-presence-btn').forEach(btn => {
-    const isEnabledBtn = btn.dataset.presenceEnabled === 'true';
-    btn.classList.toggle('is-active', isEnabledBtn === _presenceEnabled);
-  });
-
-  const timeoutSliderEl = document.getElementById('skin-presence-timeout-slider');
-  const timeoutValueEl = document.getElementById('skin-presence-timeout-value');
-  const timeoutRowEl = timeoutSliderEl?.closest('.skin-presence-timeout-row');
-
-  if (timeoutSliderEl) {
-    timeoutSliderEl.value = String(_presenceTimeoutMinutes);
-    timeoutSliderEl.disabled = !_presenceEnabled;
-  }
-  if (timeoutValueEl) {
-    timeoutValueEl.textContent = `${_presenceTimeoutMinutes} min`;
-  }
-  if (timeoutRowEl) {
-    timeoutRowEl.classList.toggle('is-disabled', !_presenceEnabled);
-  }
-}
-
 function _normalizeBrightness(value) {
   const numericValue = Math.round(Number(value));
   if (!Number.isFinite(numericValue)) return SKIN_DEFAULTS.brightness;
   return Math.max(0, Math.min(100, numericValue));
 }
 
-function _renderSkinBrightnessUI() {
-  const sliderEl = document.getElementById('skin-brightness-slider');
-  const valueEl = document.getElementById('skin-brightness-value');
-  if (sliderEl) {
-    sliderEl.value = String(_skinBrightness);
-    sliderEl.style.setProperty('--skin-brightness-fill', `${_skinBrightness}%`);
-  }
-  if (valueEl) valueEl.textContent = `${_skinBrightness}%`;
-}
-
 function _applySkinBrightness(level, persist = true) {
   _skinBrightness = _normalizeBrightness(level);
-  _renderSkinBrightnessUI();
   if (persist) {
     patchStoreSettings({ nsx_display_brightness: _skinBrightness });
   }
@@ -2489,6 +2478,18 @@ function _applySkinBrightness(level, persist = true) {
       console.debug('Display brightness update failed:', err?.message || err);
     });
   }, 120);
+  _pushScreensaverConfig();
+}
+
+function _pushScreensaverConfig() {
+  const lvl = Number(storeSettings.nsx_screensaver_brightness);
+  window.NSXScreensaver?.setConfig?.({
+    dimEnabled:        storeSettings.nsx_screensaver_dim_enabled !== false,
+    dimLevel:          Number.isFinite(lvl) ? lvl : 50,
+    wakeLockNormal:    storeSettings.nsx_wakelock_normal !== false,
+    wakeLockLocked:    storeSettings.nsx_wakelock_locked === true,
+    restoreBrightness: _skinBrightness,
+  });
 }
 
 function _applyTheme(theme) {
@@ -2646,225 +2647,7 @@ function _applyScale(setting) {
   });
 }
 
-function _renderScaleControls() {
-  const sliderEl = document.getElementById('skin-scale-slider');
-  const inputEl = document.getElementById('skin-scale-input');
-  const autoBtn = document.getElementById('skin-scale-auto');
-  const manualBtn = document.getElementById('skin-scale-manual');
-  const isAuto = _draftScaleKey === 'auto';
-  const effectiveScale = isAuto
-    ? _normalizeScalePercent(_currentScale)
-    : _normalizeScalePercent(_draftScaleKey);
 
-  if (sliderEl) {
-    sliderEl.value = String(effectiveScale);
-    sliderEl.disabled = !_draftIsManual;
-    sliderEl.classList.toggle('is-faded', !_draftIsManual);
-  }
-  if (inputEl) {
-    inputEl.value = String(effectiveScale);
-    inputEl.disabled = !_draftIsManual;
-    inputEl.classList.toggle('is-faded', !_draftIsManual);
-  }
-  if (autoBtn) autoBtn.classList.toggle('is-active', isAuto);
-  if (manualBtn) manualBtn.classList.toggle('is-active', _draftIsManual);
-
-  document.querySelectorAll('.skin-scale-preset-btn').forEach((btn) => {
-    const presetValue = _normalizeScalePercent(btn.dataset.scalePreset);
-    const isActive = !_draftIsManual && !isAuto && presetValue === effectiveScale;
-    btn.classList.toggle('is-active', isActive);
-  });
-}
-
-function _updateLangToggleUI() {
-  document.querySelectorAll('.skin-lang-btn').forEach(btn => {
-    btn.classList.toggle('is-active', btn.dataset.lang === getLang?.());
-  });
-}
-
-function _updateThemeToggleUI() {
-  document.querySelectorAll('.skin-theme-btn').forEach(btn => {
-    btn.classList.toggle('is-active', btn.dataset.themeVal === _currentTheme);
-  });
-}
-
-document.getElementById('btn-skin-settings')?.addEventListener('click', () => {
-  if (skinSettingsModalEl) skinSettingsModalEl.hidden = false;
-  _draftScaleKey = _currentScaleKey;
-  _draftIsManual = _currentScaleKey !== 'auto' && !Object.values(DEVICE_SCALE_PRESETS).includes(_currentScaleKey);
-  _updateLangToggleUI();
-  _updateThemeToggleUI();
-  _renderScaleControls();
-  _renderSkinBrightnessUI();
-
-  if (typeof storeSettings.nsx_presence_enabled === 'boolean') {
-    _presenceEnabled = storeSettings.nsx_presence_enabled;
-  }
-  if (Number.isFinite(Number(storeSettings.nsx_sleep_timeout_minutes))) {
-    _presenceTimeoutMinutes = _normalizePresenceTimeout(storeSettings.nsx_sleep_timeout_minutes);
-  }
-  if (storeSettings.nsx_water_unit) {
-    setWaterDisplayUnit?.(storeSettings.nsx_water_unit);
-  }
-  if (storeSettings.nsx_lockscreen_enabled === false) {
-    window.NSXScreensaver?.setEnabled(false);
-    document.body.classList.add('lockscreen-disabled');
-  }
-  _renderPresenceSettingsUI();
-
-  const homeLabelInput = document.getElementById('skin-home-label-input');
-  if (homeLabelInput) homeLabelInput.value = storeSettings.nsx_home_label || SKIN_DEFAULTS.homeLabel;
-
-  const storedBrightness = Number(storeSettings.nsx_display_brightness);
-  if (Number.isFinite(storedBrightness)) {
-    _skinBrightness = _normalizeBrightness(storedBrightness);
-    _renderSkinBrightnessUI();
-  } else {
-    fetchDisplayState?.()
-      .then((state) => {
-        const displayBrightness = Number(state?.requestedBrightness ?? state?.brightness);
-        if (Number.isFinite(displayBrightness)) {
-          _skinBrightness = _normalizeBrightness(displayBrightness);
-          _renderSkinBrightnessUI();
-        }
-      })
-      .catch(() => {});
-  }
-
-  if (typeof fetchPresenceSettings === 'function') {
-    fetchPresenceSettings()
-      .then((settings) => {
-        if (typeof settings?.userPresenceEnabled === 'boolean') {
-          _presenceEnabled = settings.userPresenceEnabled;
-        }
-        if (Number.isFinite(Number(settings?.sleepTimeoutMinutes))) {
-          _presenceTimeoutMinutes = _normalizePresenceTimeout(settings.sleepTimeoutMinutes);
-        }
-        patchStoreSettings({
-          nsx_presence_enabled: _presenceEnabled,
-          nsx_sleep_timeout_minutes: _presenceTimeoutMinutes,
-        });
-        _renderPresenceSettingsUI();
-      })
-      .catch(() => {});
-  }
-});
-
-document.getElementById('btn-skin-settings-back')?.addEventListener('click', () => {
-  _draftScaleKey = _currentScaleKey;
-  if (skinSettingsModalEl) skinSettingsModalEl.hidden = true;
-});
-
-document.getElementById('btn-skin-settings-save')?.addEventListener('click', async () => {
-  const homeLabelInput = document.getElementById('skin-home-label-input');
-  const homeLabel = homeLabelInput?.value.trim() || '';
-
-  _currentScaleKey = _draftScaleKey;
-  _applyScale(_currentScaleKey === 'auto' ? 'auto' : _currentScaleKey);
-
-  patchStoreSettings({
-    nsx_home_label: homeLabel || null,
-    nsx_display_scale: _draftScaleKey,
-    nsx_presence_enabled: _presenceEnabled,
-    nsx_sleep_timeout_minutes: _presenceTimeoutMinutes,
-  });
-  patchStoreSettings({ nsx_display_brightness: _skinBrightness });
-  window.NSXRouter?.setHomeLabelOverride(homeLabel);
-
-  const presencePromise = (typeof updatePresenceSettings === 'function')
-    ? updatePresenceSettings({
-      userPresenceEnabled: _presenceEnabled,
-      sleepTimeoutMinutes: _presenceTimeoutMinutes,
-    }).catch((err) => {
-      showToast(t('toast.presenceFailed') + ': ' + err.message);
-    })
-    : Promise.resolve();
-
-  await Promise.all([
-    presencePromise,
-    setStoreValue('skin', 'lang',   getLang?.()).catch(() => {}),
-    setStoreValue('skin', 'theme',  _currentTheme).catch(() => {}),
-  ]);
-  applyTranslations();
-  if (skinSettingsModalEl) skinSettingsModalEl.hidden = true;
-});
-
-document.getElementById('skin-settings-body')?.addEventListener('click', e => {
-  const langBtn = e.target.closest('.skin-lang-btn');
-  if (langBtn) {
-    setLang?.(langBtn.dataset.lang);
-    _updateLangToggleUI();
-    return;
-  }
-  const themeBtn = e.target.closest('.skin-theme-btn');
-  if (themeBtn) {
-    const themeVal = themeBtn.dataset.themeVal;
-    _applyTheme(themeVal);
-    _updateThemeToggleUI();
-    setStoreValue('skin', 'theme', themeVal).catch(() => {});
-    return;
-  }
-  const presenceBtn = e.target.closest('.skin-presence-btn');
-  if (presenceBtn) {
-    _presenceEnabled = presenceBtn.dataset.presenceEnabled === 'true';
-    _renderPresenceSettingsUI();
-    return;
-  }
-  const autoScaleBtn = e.target.closest('#skin-scale-auto');
-  if (autoScaleBtn) {
-    _draftScaleKey = 'auto';
-    _draftIsManual = false;
-    _renderScaleControls();
-    return;
-  }
-
-  const manualScaleBtn = e.target.closest('#skin-scale-manual');
-  if (manualScaleBtn) {
-    _draftIsManual = true;
-    _renderScaleControls();
-    return;
-  }
-
-  const presetScaleBtn = e.target.closest('.skin-scale-preset-btn');
-  if (presetScaleBtn) {
-    const scalePercent = _normalizeScalePercent(presetScaleBtn.dataset.scalePreset);
-    _draftScaleKey = String(scalePercent);
-    _draftIsManual = false;
-    _renderScaleControls();
-    return;
-  }
-});
-
-document.getElementById('skin-settings-body')?.addEventListener('input', e => {
-  const brightnessSlider = e.target.closest('.skin-brightness-slider');
-  if (brightnessSlider?.id === 'skin-brightness-slider') {
-    _applySkinBrightness(brightnessSlider.value);
-    return;
-  }
-
-  const presenceTimeoutSlider = e.target.closest('#skin-presence-timeout-slider');
-  if (presenceTimeoutSlider) {
-    _presenceTimeoutMinutes = _normalizePresenceTimeout(presenceTimeoutSlider.value);
-    _renderPresenceSettingsUI();
-    return;
-  }
-
-  const scaleSlider = e.target.closest('#skin-scale-slider');
-  if (scaleSlider && _draftIsManual) {
-    const scalePercent = _normalizeScalePercent(scaleSlider.value);
-    _draftScaleKey = String(scalePercent);
-    _renderScaleControls();
-    return;
-  }
-});
-
-document.getElementById('skin-settings-body')?.addEventListener('change', e => {
-  const scaleInput = e.target.closest('#skin-scale-input');
-  if (!scaleInput || !_draftIsManual) return;
-  const scalePercent = _normalizeScalePercent(scaleInput.value);
-  _draftScaleKey = String(scalePercent);
-  _renderScaleControls();
-});
 
 window.NSXSkinControls = {
   getTheme:          () => _currentTheme,
@@ -2926,6 +2709,31 @@ window.NSXSkinControls = {
     patchStoreSettings({ nsx_wake_on_unlock: Boolean(v) });
   },
 
+  getScreensaverDimEnabled: () => storeSettings.nsx_screensaver_dim_enabled !== false,
+  setScreensaverDimEnabled(v) {
+    patchStoreSettings({ nsx_screensaver_dim_enabled: Boolean(v) });
+    _pushScreensaverConfig();
+  },
+  getScreensaverBrightness: () => {
+    const n = Number(storeSettings.nsx_screensaver_brightness);
+    return Number.isFinite(n) ? n : 50;
+  },
+  setScreensaverBrightness(v) {
+    const n = Math.max(0, Math.min(100, Math.round(Number(v))));
+    patchStoreSettings({ nsx_screensaver_brightness: Number.isFinite(n) ? n : 50 });
+    _pushScreensaverConfig();
+  },
+  getWakeLockNormal: () => storeSettings.nsx_wakelock_normal !== false,
+  setWakeLockNormal(v) {
+    patchStoreSettings({ nsx_wakelock_normal: Boolean(v) });
+    _pushScreensaverConfig();
+  },
+  getWakeLockLocked: () => storeSettings.nsx_wakelock_locked === true,
+  setWakeLockLocked(v) {
+    patchStoreSettings({ nsx_wakelock_locked: Boolean(v) });
+    _pushScreensaverConfig();
+  },
+
   getRefillLevelMm: () => refillLevelMm,
   setRefillLevelMm(v) {
     refillLevelMm = Math.min(43, Math.max(5, Math.round(Number(v))));
@@ -2943,6 +2751,26 @@ window.NSXSkinControls = {
   getRecentRecipeNav: () => storeSettings.nsx_recent_recipe_nav === true,
   setRecentRecipeNav(v) {
     patchStoreSettings({ nsx_recent_recipe_nav: Boolean(v) });
+  },
+
+  getTareOnNegative: () => storeSettings.nsx_tare_on_negative !== false,
+  setTareOnNegative(v) {
+    patchStoreSettings({ nsx_tare_on_negative: Boolean(v) });
+  },
+
+  getDosingCupWeight: () => Number(storeSettings.nsx_dosing_cup_weight) || 0,
+  setDosingCupWeight(v) {
+    const n = Math.max(0, Math.round(Number(v) * 10) / 10);
+    patchStoreSettings({ nsx_dosing_cup_weight: Number.isFinite(n) ? n : 0 });
+  },
+  measureDosingCup() {
+    if (!scaleConnected) { showToast('Scale not connected'); return null; }
+    const w = liveWeight;
+    if (!Number.isFinite(w) || w <= 0) { showToast('Place the empty cup on the scale first'); return null; }
+    const rounded = Math.round(w * 10) / 10;
+    patchStoreSettings({ nsx_dosing_cup_weight: rounded });
+    showToast(`Dosing cup weight set to ${rounded} g`);
+    return rounded;
   },
 
   getRatioDoseEnabled: () => _ratioDoseEnabled,
@@ -2967,8 +2795,6 @@ Promise.all([
   setLang?.(targetLang);
   _applyTheme(theme || SKIN_DEFAULTS.theme);
   applyTranslations();
-  _updateLangToggleUI();
-  _updateThemeToggleUI();
 });
 
 document.getElementById('btn-home-profile-picker')?.addEventListener('click', () => {
@@ -4477,7 +4303,6 @@ async function hydrateUiSettingsFromStore() {
 
       if (Number.isFinite(Number(storeSettings.nsx_display_brightness))) {
         _skinBrightness = _normalizeBrightness(storeSettings.nsx_display_brightness);
-        _renderSkinBrightnessUI();
         setDisplayBrightness?.(_skinBrightness).catch(() => {});
       }
 
@@ -4522,6 +4347,8 @@ async function hydrateUiSettingsFromStore() {
       _setSteamEnabled(storeSettings.nsx_steam_enabled, false);
     }
 
+    _pushScreensaverConfig();
+
     const steamState = steamPresets[activeSteamPreset] ?? steamPresets.normal;
     steamTemp = steamState.temp;
     steamFlow = steamState.flow;
@@ -4554,7 +4381,6 @@ async function hydrateUiSettingsFromStore() {
       _draftScaleKey = _currentScaleKey;
       const scaleValue = _currentScaleKey === 'auto' ? 'auto' : _currentScaleKey;
       _applyScale(scaleValue);
-      _renderScaleControls();
     }
   } catch (err) {
     console.debug('Store load failed:', err?.message || err);
@@ -5222,10 +5048,17 @@ function _applyDoseScale() {
     return;
   }
   if (!scaleConnected) { showAlert('Scale is not connected.'); return; }
-  if (liveWeight <= 0) { showAlert('Place beans on the scale first.'); return; }
+  const cupWeight = Number(storeSettings.nsx_dosing_cup_weight) || 0;
+  const doseWeight = Math.round((liveWeight - cupWeight) * 10) / 10;
+  if (doseWeight <= 0) {
+    showAlert(cupWeight > 0
+      ? 'Place the dosing cup with beans on the scale first.'
+      : 'Place beans on the scale first.');
+    return;
+  }
 
   const ratio = recipeYield / recipeDose;
-  _scaledDose  = Math.round(liveWeight * 10) / 10;
+  _scaledDose  = doseWeight;
   _scaledYield = Math.round(_scaledDose * ratio * 10) / 10;
 
   // Update recipe card display

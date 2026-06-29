@@ -524,26 +524,6 @@ const TRANSLATIONS = {
     'shot.stopProfile':    'Profil beendet',
     'shot.extraction':     'Extraktion',
 
-    // Skin settings
-    'skin.title':          'NSX Einstellungen',
-    'skin.section.general': 'Allgemein',
-    'skin.lang':           'Sprache',
-    'skin.theme':          'Theme',
-    'skin.brightness':     'Displayhelligkeit',
-    'skin.presence':       'Auto-Sleep',
-    'skin.presence.on':    'An',
-    'skin.presence.off':   'Aus',
-    'skin.sleepTimeout':   'Sleep-Timeout',
-    'skin.theme.dark':          'Dunkel',
-    'skin.theme.light':         'Hell',
-    'skin.theme.dark-variant':  'Streamline Dark',
-    'skin.theme.light-variant': 'Streamline Light',
-    'skin.homeLabel':           'Home-Titel',
-    'skin.scale':              'Skalierung',
-    'skin.scale.auto':         'Auto',
-    'skin.scale.manual':       'Manuell',
-    'skin.section.interface':  'Interface',
-    'skin.recentRecipeNav':    'Rezeptseite öffnen',
 
     // Cleaning
     'cleaning.modal.title':   'Reinigung',
@@ -1201,26 +1181,6 @@ const TRANSLATIONS = {
     'shot.stopProfile':    'Profile finished',
     'shot.extraction':     'Extraction',
 
-    // Skin settings
-    'skin.title':          'NSX Settings',
-    'skin.section.general': 'General',
-    'skin.lang':           'Language',
-    'skin.theme':          'Theme',
-    'skin.brightness':     'Display Brightness',
-    'skin.presence':       'Auto Sleep',
-    'skin.presence.on':    'On',
-    'skin.presence.off':   'Off',
-    'skin.sleepTimeout':   'Sleep Timeout',
-    'skin.theme.dark':          'Dark',
-    'skin.theme.light':         'Light',
-    'skin.theme.dark-variant':  'Streamline Dark',
-    'skin.theme.light-variant': 'Streamline Light',
-    'skin.homeLabel':           'Home Label',
-    'skin.scale':              'Scale',
-    'skin.scale.auto':         'Auto',
-    'skin.scale.manual':       'Manual',
-    'skin.section.interface':  'Interface',
-    'skin.recentRecipeNav':    'Open recipe page',
 
     // Cleaning
     'cleaning.modal.title':   'Cleaning',

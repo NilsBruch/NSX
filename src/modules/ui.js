@@ -400,7 +400,7 @@ function setWaterLevel(mm) {
   const smoothedMl = Math.round((waterLevelMm * ML_PER_MM) / 10) * 10;
   const fillPct = Math.min((smoothedMl / (WATER_TANK_MAX_MM * ML_PER_MM)) * 100, 100);
   if (waterGaugeFillEl) waterGaugeFillEl.style.height = `${fillPct}%`;
-  if (headerWaterGaugeFill) headerWaterGaugeFill.style.width = `${fillPct}%`;
+  if (headerWaterGaugeFill) headerWaterGaugeFill.style.height = `${fillPct}%`;
   if (headerWaterPctEl) headerWaterPctEl.textContent = _waterDisplayUnit === 'ml'
     ? `${smoothedMl} ml`
     : `${Math.round(fillPct)}%`;

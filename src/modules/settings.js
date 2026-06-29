@@ -127,9 +127,6 @@
     if (_de1Adv) _de1Adv[key] = val;
     post('/machine/settings/advanced', { [key]: val }).catch(_err);
   }
-  function saveWakeLock(on) {
-    (on ? post('/display/wakelock', {}) : del('/display/wakelock')).catch(_err);
-  }
   function savePluginEnabled(id, enabled) {
     post(`/plugins/${encodeURIComponent(id)}/${enabled ? 'enable' : 'disable'}`, {}).catch(_err);
   }
@@ -568,8 +565,6 @@
         s3.rows.append(
           colRow('Brightness', null, slider(ctrl.getBrightness(), 0, 100,
             v => ctrl.setBrightness(v))),
-          row('Wake Lock', 'Prevent screen from sleeping', toggle(true,
-            v => saveWakeLock(v))),
           row('Low Battery Brightness Limit', 'Cap brightness at 20 when battery < 30%',
             toggle(rea.lowBatteryBrightnessLimit ?? false,
               v => saveRea('lowBatteryBrightnessLimit', v))),
@@ -722,20 +717,62 @@
     sRecipes.rows.append(
       row('Open Recipe Page', 'Automatically navigate to the recipe page when tapping a recent recipe on the home screen',
         toggle(ctrl.getRecentRecipeNav?.() === true, v => ctrl.setRecentRecipeNav?.(v))),
-      row('Ratio Dose', 'Show button on recipe page to temporarily scale dose & yield from live scale weight',
-        toggle(ctrl.getRatioDoseEnabled?.() === true, v => ctrl.setRatioDoseEnabled?.(v))),
       row('Freeze Batches', 'Show freeze button on bean batch entries',
         toggle(ctrl.getBatchFreezeEnabled?.() === true, v => ctrl.setBatchFreezeEnabled?.(v))),
     );
     target.appendChild(sRecipes.wrap);
 
+    const sScale = section('Scale');
+    sScale.rows.append(
+      row('Ratio Dose', 'Show button on recipe page to temporarily scale dose & yield from live scale weight',
+        toggle(ctrl.getRatioDoseEnabled?.() === true, v => ctrl.setRatioDoseEnabled?.(v))),
+    );
+    const cupVal = h('span', 'stg-row-value');
+    const setCupLabel = (w) => { cupVal.textContent = `${w} g`; };
+    setCupLabel(ctrl.getDosingCupWeight?.() || 0);
+    const cupControl = h('div');
+    cupControl.style.cssText = 'display:flex; align-items:center; gap:8px;';
+    cupControl.append(
+      cupVal,
+      btn('Measure', null, () => { const w = ctrl.measureDosingCup?.(); if (w != null) setCupLabel(w); }),
+      btn('Clear', null, () => { ctrl.setDosingCupWeight?.(0); setCupLabel(0); }),
+    );
+    sScale.rows.append(
+      row('Dosing Cup Weight', '0 g = tare the cup first, then dose. Or set the cup weight to dose without taring — it is subtracted from the total. (Place empty cup, tap Measure.)', cupControl),
+      row('Tare on Negative', 'Automatically tare the scale when it reads negative (e.g. after removing a cup)',
+        toggle(ctrl.getTareOnNegative?.() !== false, v => ctrl.setTareOnNegative?.(v))),
+    );
+    target.appendChild(sScale.wrap);
+
     const sLock = section('Lockscreen');
+
+    const wakeUnlockRow = row('Wake on Unlock', 'Automatically turn the machine on when unlocking the lockscreen',
+      toggle(ctrl.getWakeOnUnlock?.() !== false, v => ctrl.setWakeOnUnlock?.(v)));
+    const dimLevelRow = colRow('Dim Level', null,
+      slider(ctrl.getScreensaverBrightness?.() ?? 50, 0, 100, v => ctrl.setScreensaverBrightness?.(v)));
+    const dimRow = row('Dim While Locked', 'Lower brightness while the lockscreen is showing',
+      toggle(ctrl.getScreensaverDimEnabled?.() !== false, v => { ctrl.setScreensaverDimEnabled?.(v); dimLevelRow.hidden = !v; }));
+    const keepLockedRow = row('Keep Screen On While Locked', 'Keep the screen awake showing the clock instead of letting the tablet sleep',
+      toggle(ctrl.getWakeLockLocked?.() === true, v => ctrl.setWakeLockLocked?.(v)));
+
+    const applyLockVisibility = (on) => {
+      wakeUnlockRow.hidden = !on;
+      dimRow.hidden = !on;
+      dimLevelRow.hidden = !on || ctrl.getScreensaverDimEnabled?.() === false;
+      keepLockedRow.hidden = !on;
+    };
+
     sLock.rows.append(
       row('Enable Lockscreen', 'Disable if using the device\'s own lock screen',
-        toggle(ctrl.getLockscreenEnabled?.() !== false, v => ctrl.setLockscreenEnabled?.(v))),
-      row('Wake on Unlock', 'Automatically turn the machine on when unlocking the lockscreen',
-        toggle(ctrl.getWakeOnUnlock?.() !== false, v => ctrl.setWakeOnUnlock?.(v))),
+        toggle(ctrl.getLockscreenEnabled?.() !== false, v => { ctrl.setLockscreenEnabled?.(v); applyLockVisibility(v); })),
+      wakeUnlockRow,
+      dimRow,
+      dimLevelRow,
+      keepLockedRow,
+      row('Keep Screen Awake (normal use)', 'When off, the tablet can sleep on its own — needed if you disable the lockscreen',
+        toggle(ctrl.getWakeLockNormal?.() !== false, v => ctrl.setWakeLockNormal?.(v))),
     );
+    applyLockVisibility(ctrl.getLockscreenEnabled?.() !== false);
     target.appendChild(sLock.wrap);
 
     const sReset = section('Reset');

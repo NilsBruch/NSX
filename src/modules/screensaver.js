@@ -23,6 +23,11 @@
   let ssSlideStartPos = 0;
   let scalePowerMode = "displayOff";
   let ssEnabled = true;
+  let ssDimEnabled = true;
+  let ssDimLevel = 50;
+  let ssWakeLockNormal = true;
+  let ssWakeLockLocked = false;
+  let ssRestoreBrightness = 100;
 
   let suppressSleepScreensaver = false;
   let suppressSleepScreensaverUntilWake = false;
@@ -39,6 +44,7 @@
   const ssThumbEl = document.getElementById("ss-slide-thumb");
   const ssFillEl = document.getElementById("ss-slide-fill");
   const ssTrackEl = document.getElementById("ss-slide-track");
+  const ssDimEl = document.getElementById("ss-dim");
 
   function ssUpdateClock() {
     const now = new Date();
@@ -56,19 +62,24 @@
     ssActiveLayer = ssActiveLayer === "a" ? "b" : "a";
   }
 
+  function applyDim(active) {
+    if (!ssDimEl) return;
+    const o = (active && ssDimEnabled) ? Math.min(0.9, Math.max(0, (100 - ssDimLevel) / 100)) : 0;
+    ssDimEl.style.opacity = String(o);
+  }
+
   function syncWakeLock() {
-    if (ssActive) {
-      releaseWakeLockOverride?.().catch(() => {});
-      return;
-    }
-    requestWakeLockOverride?.().catch(() => {});
+    const wantLock = ssActive ? ssWakeLockLocked : ssWakeLockNormal;
+    if (wantLock) requestWakeLockOverride?.().catch(() => {});
+    else releaseWakeLockOverride?.().catch(() => {});
   }
 
   function show(animateSlideReset = false, animateOverlay = false) {
     if (!ssEnabled || ssActive || !ssEl) return;
     ssActive = true;
 
-    setDisplayBrightness?.(50).catch(() => {});
+    if (ssDimEnabled) setDisplayBrightness?.(ssDimLevel).catch(() => {});
+    applyDim(true);
     syncWakeLock();
     if (scalePowerMode === "disconnect") disconnectScale?.();
 
@@ -125,7 +136,8 @@
     clearInterval(ssClockTimer);
     clearInterval(ssImageTimer);
 
-    setDisplayBrightness?.(100).catch(() => {});
+    setDisplayBrightness?.(ssRestoreBrightness).catch(() => {});
+    applyDim(false);
     syncWakeLock();
     if (scalePowerMode === "disconnect") initiateScaleConnect?.().catch(() => {});
     ssUnlockCallback?.();
@@ -267,6 +279,15 @@
     setEnabled(v) {
       ssEnabled = Boolean(v);
       if (!ssEnabled && ssActive) hide(false);
+    },
+    setConfig(cfg = {}) {
+      if (typeof cfg.dimEnabled === 'boolean') ssDimEnabled = cfg.dimEnabled;
+      if (Number.isFinite(cfg.dimLevel)) ssDimLevel = cfg.dimLevel;
+      if (typeof cfg.wakeLockNormal === 'boolean') ssWakeLockNormal = cfg.wakeLockNormal;
+      if (typeof cfg.wakeLockLocked === 'boolean') ssWakeLockLocked = cfg.wakeLockLocked;
+      if (Number.isFinite(cfg.restoreBrightness)) ssRestoreBrightness = cfg.restoreBrightness;
+      applyDim(ssActive);
+      syncWakeLock();
     },
     setUnlockCallback(fn) {
       ssUnlockCallback = typeof fn === 'function' ? fn : null;

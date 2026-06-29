@@ -51,12 +51,12 @@
            <div class="header-clock-col">
              <span id="clock" class="nav-clock">--:--</span>
              <div class="header-water-indicator" aria-label="Wassertank" title="Wassertank">
-               <div class="header-water-battery">
-                 <span id="header-water-gauge-fill" class="header-water-battery-fill" style="width:0%"></span>
-                 <span id="header-water-pct" class="header-water-battery-pct">–</span>
+               <div class="header-water-drop">
+                 <span id="header-water-gauge-fill" class="header-water-drop-fill" style="height:0%"></span>
                </div>
-               <div class="header-water-battery-tip"></div>
+               <span id="header-water-pct" class="header-water-pct">–</span>
              </div>
+             <svg width="0" height="0" class="svg-defs" aria-hidden="true"><defs><clipPath id="waterDropClip" clipPathUnits="objectBoundingBox"><path d="M.5,.02 C.5,.02 .12,.42 .12,.62 C.12,.84 .29,.98 .5,.98 C.71,.98 .88,.84 .88,.62 C.88,.42 .5,.02 .5,.02 Z"/></clipPath></defs></svg>
            </div>
            <div class="temperature-orb-wrap">
              <div id="steam-temperature-orb" class="temperature-orb temperature-orb-cold" style="--temperature-progress: 0%;">
@@ -521,6 +521,7 @@
           <button type="button" id="btn-dose-scale" class="workflow-sbw-btn workflow-dose-btn" aria-label="Dose from scale">
             <img src="src/ui/graphics/coffee-beans.png" class="workflow-dose-img" alt="" aria-hidden="true" width="22" height="22">
           </button>
+          <span id="workflow-dose-pill" class="workflow-dose-pill"></span>
         </div>
         <!-- Scale icon -->
         <div class="workflow-scale-indicator">
@@ -2018,77 +2019,6 @@
     </div>
 
     <!-- Skin Einstellungen Modal -->
-    <div id="skin-settings-modal" class="modal-overlay" hidden>
-      <div class="modal-sheet modal-sheet-wide">
-        <div class="modal-handle"></div>
-        <div class="modal-header">
-          <button type="button" id="btn-skin-settings-back" class="modal-btn-cancel" data-i18n="action.back">Zurück</button>
-          <span class="modal-title" data-i18n="skin.title">Skin Einstellungen</span>
-          <button type="button" id="btn-skin-settings-save" class="modal-btn-save" data-i18n="action.save">Speichern</button>
-        </div>
-        <div class="modal-body bean-form-body" id="skin-settings-body">
-          <div class="bean-field-group">
-            <div class="bean-field-group-title" data-i18n="skin.section.general">Allgemein</div>
-            <div class="bean-field-list">
-              <div class="bean-field-row">
-                <span class="bean-field-label" data-i18n="skin.lang">Sprache</span>
-                <div class="skin-lang-toggle">
-                  <button type="button" class="skin-lang-btn" data-lang="de">DE</button>
-                  <button type="button" class="skin-lang-btn" data-lang="en">EN</button>
-                </div>
-              </div>
-              <div class="bean-field-row">
-                <span class="bean-field-label" data-i18n="skin.theme">Theme</span>
-                <div class="skin-theme-toggle">
-                  <button type="button" class="skin-theme-btn" data-theme-val="dark" data-i18n="skin.theme.dark">Dark</button>
-                </div>
-              </div>
-              <div class="bean-field-row skin-brightness-row">
-                <div class="skin-brightness-header">
-                  <span class="bean-field-label" data-i18n="skin.brightness">Displayhelligkeit</span>
-                  <span id="skin-brightness-value" class="skin-brightness-value">100%</span>
-                </div>
-                <input type="range" id="skin-brightness-slider" class="skin-brightness-slider" min="0" max="100" step="1" value="100" aria-label="Displayhelligkeit">
-              </div>
-              <div class="bean-field-row">
-                <span class="bean-field-label" data-i18n="skin.presence">Auto-Sleep</span>
-                <div class="skin-presence-toggle" role="group" aria-label="Auto-Sleep">
-                  <button type="button" class="skin-presence-btn" data-presence-enabled="true" data-i18n="skin.presence.on">An</button>
-                  <button type="button" class="skin-presence-btn" data-presence-enabled="false" data-i18n="skin.presence.off">Aus</button>
-                </div>
-              </div>
-              <div class="bean-field-row skin-presence-timeout-row">
-                <div class="skin-presence-timeout-header">
-                  <span class="bean-field-label" data-i18n="skin.sleepTimeout">Sleep-Timeout</span>
-                  <span id="skin-presence-timeout-value" class="skin-brightness-value">30 min</span>
-                </div>
-                <input type="range" id="skin-presence-timeout-slider" class="skin-brightness-slider" min="15" max="120" step="1" value="30" aria-label="Sleep-Timeout">
-              </div>
-              <div class="bean-field-row">
-                <span class="bean-field-label" data-i18n="skin.homeLabel">Home-Titel</span>
-                <input type="text" id="skin-home-label-input" class="bean-field-input" maxlength="32" placeholder="Home">
-              </div>
-              <div class="bean-field-row">
-                <span class="bean-field-label" data-i18n="skin.scale">Skalierung</span>
-                <div class="skin-scale-controls">
-                  <button type="button" id="skin-scale-auto" class="skin-scale-auto-btn" data-i18n="skin.scale.auto">Auto</button>
-                  <button type="button" id="skin-scale-manual" class="skin-scale-auto-btn" data-i18n="skin.scale.manual">Manual</button>
-                  <input type="range" id="skin-scale-slider" class="skin-scale-slider" min="90" max="110" step="1" value="100" aria-label="Skalierung">
-                  <input type="number" id="skin-scale-input" class="skin-scale-input" min="90" max="110" step="1" value="100" inputmode="numeric" aria-label="Skalierung Prozent">
-                </div>
-                <div class="skin-scale-presets" aria-label="Tablet Presets">
-                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="100">P85Pro</button>
-                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="100">M50mini</button>
-                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="100">A11</button>
-                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="100">A11+</button>
-                  <button type="button" class="skin-scale-preset-btn" data-scale-preset="98">iPad11</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Workflow Delete Confirm Dialog -->
     <div id="workflow-delete-confirm" class="modal-overlay modal-overlay-center" hidden>
@@ -2275,6 +2205,7 @@
 
     <!-- Screensaver / Lockscreen -->
     <div id="screensaver" class="screensaver" hidden>
+      <div id="ss-dim" class="ss-dim"></div>
       <div id="ss-bg-a" class="ss-bg"></div>
       <div id="ss-bg-b" class="ss-bg" style="opacity:0"></div>
       <div class="ss-gradient"></div>
