@@ -2050,20 +2050,20 @@ window.addEventListener('ui:seriesVisibilityChanged', ({ detail }) => {
   }
 });
 
-window.addEventListener("gateway:status", (event) => {
-  machineConnectedState = Boolean(event.detail?.connected);
+NSXCore.on("machineConnected", (connected) => {
+  machineConnectedState = Boolean(connected);
   setMachineConnected(machineConnectedState);
   updateEspressoFullscreen();
-  if (!event.detail?.connected && machineStateBannerEl) {
+  if (!connected && machineStateBannerEl) {
     machineStateBannerEl.hidden = true;
   }
 });
 
 let scaleConnected = false;
 
-window.addEventListener("scale:status", (event) => {
+NSXCore.on("scaleConnected", (connected) => {
   const wasConnected = scaleConnected;
-  scaleConnected = Boolean(event.detail?.connected);
+  scaleConnected = Boolean(connected);
   setScaleConnected(scaleConnected);
   const toggle = document.getElementById('scale-connect-toggle');
   if (toggle) toggle.checked = scaleConnected;
@@ -2072,9 +2072,9 @@ window.addEventListener("scale:status", (event) => {
   if (scaleConnected !== wasConnected) _schedulePushCurrentSkinState();
 });
 
-window.addEventListener("gateway:devices", (event) => {
-  const machineConnected = Boolean(event.detail?.machineConnected);
-  const scaleIsConnected = Boolean(event.detail?.scaleConnected);
+NSXCore.on("devices", (d) => {
+  const machineConnected = Boolean(d?.machineConnected);
+  const scaleIsConnected = Boolean(d?.scaleConnected);
 
   machineConnectedState = machineConnected;
   setMachineConnected(machineConnected);
@@ -2098,9 +2098,9 @@ function _maybeAutoTareNegative(weight) {
   tareScale?.().catch(() => {});
 }
 
-window.addEventListener("scale:weight", (event) => {
-  const newWeight = event.detail?.weight ?? liveWeight;
-  const apiRate = event.detail?.weightFlow ?? event.detail?.weight_flow;
+NSXCore.on("scaleWeight", (d) => {
+  const newWeight = d?.weight ?? liveWeight;
+  const apiRate = d?.weightFlow ?? d?.weight_flow;
   currentScaleRate = Number.isFinite(apiRate) && apiRate >= 0 ? apiRate : 0;
   liveWeight = newWeight;
   _maybeAutoTareNegative(newWeight);
@@ -2167,9 +2167,9 @@ document.getElementById('machine-icon-area')?.addEventListener('click', () => {
   }
 });
 
-window.addEventListener("water:level", (event) => {
-  const level = Number(event.detail?.currentLevel);
-  const refillLevel = Number(event.detail?.refillLevel);
+NSXCore.on("waterLevel", (d) => {
+  const level = Number(d?.currentLevel);
+  const refillLevel = Number(d?.refillLevel);
   if (Number.isFinite(level)) {
     currentWaterLevelPct = level;
     setWaterLevel(level);
@@ -2180,9 +2180,9 @@ window.addEventListener("water:level", (event) => {
   }
 });
 
-window.addEventListener("gateway:timeToReady", (event) => {
+NSXCore.on("timeToReady", (d) => {
   if (!readyInChipEl) return;
-  const { remainingMs } = event.detail;
+  const { remainingMs } = d || {};
   const isWarmingUp = currentMachineState === 'heating' || currentMachineState === 'preheating';
   if (isWarmingUp && typeof remainingMs === 'number' && remainingMs > 0) {
     readyInChipEl.textContent = t('machine.readyIn').replace('{time}', formatMmSs(remainingMs));
@@ -2203,9 +2203,9 @@ const MACHINE_STATE_LABELS = {
   descaleNeeded:  () => t('machine.state.descaleNeeded'),
 };
 
-window.addEventListener("gateway:machineState", (event) => {
-  const state = event.detail?.state || 'idle';
-  const substate = event.detail?.substate;
+NSXCore.on("machineState", (d) => {
+  const state = d?.state || 'idle';
+  const substate = d?.substate;
   const prevState = currentMachineState;
   const wasEspressoLike = _isEspressoLikeState(prevState);
   const isEspressoLike = _isEspressoLikeState(state);
@@ -2266,8 +2266,7 @@ window.addEventListener("gateway:machineState", (event) => {
 });
 
 
-window.addEventListener("gateway:snapshot", (event) => {
-  const snap = event.detail;
+NSXCore.on("liveShot", (snap) => {
   if (Number.isFinite(snap?.groupTemperature)) {
     _phoneGroupTemp = snap.groupTemperature;
     setBrewGroupTemperature(snap.groupTemperature);
