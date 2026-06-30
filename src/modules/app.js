@@ -5354,6 +5354,7 @@ const shotReviewTdsEl       = document.getElementById('shot-review-tds');
 const shotReviewEyEl        = document.getElementById('shot-review-ey');
 const shotReviewRatingEl    = document.getElementById('shot-review-rating');
 const shotReviewRatingValEl = document.getElementById('shot-review-rating-val');
+const shotReviewRatingMaxEl = document.getElementById('shot-review-rating-max');
 const shotReviewFavBtn      = document.getElementById('btn-shot-review-fav');
 const shotReviewNotesEl     = document.getElementById('shot-review-notes');
 const shotReviewTagsEl      = document.getElementById('shot-review-tags');
@@ -5392,7 +5393,7 @@ function _renderTagSuggestions(query) {
     `<button type="button" class="shot-review-tag-chip" data-tag="${_escapeHtml(t)}">${_escapeHtml(t)}</button>`
   ).join('');
 }
-let _reviewRating  = 50;
+let _reviewRating  = null;
 let _reviewFav     = false;
 
 function _setShotReviewFav(val) {
@@ -5401,11 +5402,17 @@ function _setShotReviewFav(val) {
 }
 
 function _setShotReviewRating(val) {
-  _reviewRating = val;
-  if (shotReviewRatingValEl) shotReviewRatingValEl.textContent = val;
+  const isNone = val == null;
+  _reviewRating = isNone ? null : val;
+  const fill = isNone ? 0 : val;
+  if (shotReviewRatingValEl) {
+    shotReviewRatingValEl.textContent = isNone ? t('shotReview.noRating') : val;
+    shotReviewRatingValEl.classList.toggle('is-none', isNone);
+  }
+  if (shotReviewRatingMaxEl) shotReviewRatingMaxEl.hidden = isNone;
   if (shotReviewRatingEl) {
-    shotReviewRatingEl.value = val;
-    shotReviewRatingEl.style.setProperty('--fill', `${val}%`);
+    shotReviewRatingEl.value = fill;
+    shotReviewRatingEl.style.setProperty('--fill', `${fill}%`);
   }
 }
 
@@ -5452,7 +5459,7 @@ function openShotReview(shotId) {
   // Target weight (number input — ratio shown in label via placeholder, not in value)
   const targetYield = Number(ctx.targetYield || profile?.target_weight || 0);
   if (shotReviewTargetWeightEl) shotReviewTargetWeightEl.value = targetYield > 0 ? targetYield : '';
-  const initRating = ann.enjoyment ?? shot.metadata?.rating ?? 50;
+  const initRating = ann.enjoyment ?? shot.metadata?.rating ?? null;
   const initFav    = ann.extras?.favorite ?? shot.metadata?.favorite === true;
   _reviewTags = [..._getShotTags(shot)];
   _setShotReviewRating(initRating);
@@ -5567,7 +5574,8 @@ function closeShotReview() {
 }
 
 shotReviewRatingEl?.addEventListener('input', () => {
-  _setShotReviewRating(Number(shotReviewRatingEl.value));
+  const v = Number(shotReviewRatingEl.value);
+  _setShotReviewRating(v === 0 ? null : v);
 });
 
 shotReviewFavBtn?.addEventListener('click', () => {

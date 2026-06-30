@@ -9007,6 +9007,11 @@ html, body {
   line-height: 1;
 }
 
+.shot-review-rating-num.is-none {
+  font-size: var(--fs-heading);
+  color: var(--c-label-3);
+}
+
 .shot-review-rating-max {
   font-size: var(--fs-caption);
   color: var(--c-label-3);

@@ -492,6 +492,7 @@ const TRANSLATIONS = {
     // Shot review
     'shotReview.title':    'Shot',
     'shotReview.rating':   'Bewertung',
+    'shotReview.noRating': 'Keine Bewertung',
     'shotReview.favAria':  'Favorit',
     'shotReview.tags':     'Tasting Notes',
     'shotReview.addTag':   '+ Tag',
@@ -1149,6 +1150,7 @@ const TRANSLATIONS = {
     // Shot review
     'shotReview.title':    'Shot',
     'shotReview.rating':   'Rating',
+    'shotReview.noRating': 'No rating',
     'shotReview.favAria':  'Favourite',
     'shotReview.tags':     'Tasting Notes',
     'shotReview.addTag':   '+ Tag',
