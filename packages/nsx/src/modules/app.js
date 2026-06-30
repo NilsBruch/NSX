@@ -4121,18 +4121,11 @@ document.getElementById('btn-flush-settings-save')?.addEventListener('click', ()
 
 /* ── Machine Settings Push ────────────────────────────── */
 
-function push(payload) {
-  if (typeof pushWorkflow !== 'function') return;
-  pushWorkflow(payload).catch(err => {
-    showToast(t('toast.settingsFailed') + ': ' + err.message);
-  });
-}
-
-const _debounce = {};
-function debounced(key, fn, ms = 1000) {
-  clearTimeout(_debounce[key]);
-  _debounce[key] = setTimeout(fn, ms);
-}
+// push() / debounced() live in core/push.js. Core emits 'toast' on push errors;
+// render it here where the DOM lives.
+const push = NSXCore.push;
+const debounced = NSXCore.debounced;
+NSXCore.on('toast', (msg) => showToast(msg));
 
 function pushSteamTemp()     { debounced('steamTemp',     () => push({ steamSettings: { targetTemperature: parseFloat(steamTemp) } })); }
 function pushSteamFlow()     { debounced('steamFlow',     () => push({ steamSettings: { flow: parseFloat(steamFlow) } })); }
