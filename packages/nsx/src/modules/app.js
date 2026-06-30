@@ -13,6 +13,8 @@
 "use strict";
 
 (() => {
+const NSXCore = window.NSXCore;
+const storeSettings = NSXCore.getStore();
 const { GATEWAY, WS_BASE } = window.NSXConfig || {};
 const {
   fetchCurrentWorkflow,
@@ -3298,9 +3300,8 @@ if (powerToggleEl) {
 
 // Settings store lives in core/store.js. `storeSettings` is the core's single,
 // stable object (mutated in place by NSXCore.patchStore/replaceStore), so this
-// alias and the ~80 reads below stay valid for the app's lifetime.
-const NSXCore = window.NSXCore;
-const storeSettings = NSXCore.getStore();
+// alias (declared at the top of the IIFE) and the ~80 reads below stay valid
+// for the app's lifetime.
 
 function patchStoreSettings(patch) {
   NSXCore.patchStore(patch);
