@@ -5345,7 +5345,6 @@ let _editTags = [];
 let _editUseVolumeStop = false;
 let _editBeanAgeRequestId = 0;
 let _originalIdentity = null;
-let _grindersCache = [];
 let _editSelectedProfileId = null;
 let _editSelectedProfileObj = null;
 let _profileRecordsCache = null;
@@ -8180,7 +8179,7 @@ async function openProfilePickerModal(context = 'editor') {
 }
 
 function _getGrinderSteps() {
-  const g = _grindersCache.find(g => g.id === _editPickedGrinderId);
+  const g = NSXCore.getGrinders().find(g => g.id === _editPickedGrinderId);
   const small = (g?.settingSmallStep > 0) ? g.settingSmallStep : 0.5;
   const big   = (g?.settingBigStep   > 0) ? g.settingBigStep   : 1;
   return { small, big };
@@ -8259,11 +8258,8 @@ function openWorkflowEditModal(index) {
   updateBeanPickerDisplay();
   _resolveEditBeanDetails();
   updateGrinderPickerDisplay();
-  if (_editPickedGrinderId && !_grindersCache?.find(g => g.id === _editPickedGrinderId)) {
-    fetchGrinders().then(res => {
-      _grindersCache = Array.isArray(res) ? res : (res?.items ?? []);
-      updateGrinderPickerDisplay();
-    }).catch(() => {});
+  if (_editPickedGrinderId && !NSXCore.getGrinders().find(g => g.id === _editPickedGrinderId)) {
+    NSXCore.loadGrinders().then(() => updateGrinderPickerDisplay()).catch(() => {});
   }
   document.getElementById('edit-profile').value = workflow.profileTitle !== '—' ? workflow.profileTitle : '';
 
@@ -8334,15 +8330,12 @@ function openWorkflowCreateModal() {
     }
     updateGrinderPickerDisplay();
   };
-  if (_grindersCache.length > 0) {
-    _applyAutoGrinder(_grindersCache);
+  const _cachedGrinders = NSXCore.getGrinders();
+  if (_cachedGrinders.length > 0) {
+    _applyAutoGrinder(_cachedGrinders);
   } else {
     updateGrinderPickerDisplay();
-    fetchGrinders().then(res => {
-      const grinders = Array.isArray(res) ? res : (res?.items ?? []);
-      _grindersCache = grinders;
-      _applyAutoGrinder(grinders);
-    }).catch(() => {});
+    NSXCore.loadGrinders().then(() => _applyAutoGrinder(NSXCore.getGrinders())).catch(() => {});
   }
   document.getElementById('edit-profile').value = '';
   _syncProfileDisplay();
@@ -9054,7 +9047,7 @@ function updateGrinderPickerDisplay() {
   const nameEl     = document.getElementById('edit-grinder-display-name');
   const burrsEl    = document.getElementById('edit-grinder-display-burrs');
   const burrsizeEl = document.getElementById('edit-grinder-display-burrsize');
-  const g = _grindersCache?.find(g => g.id === _editPickedGrinderId);
+  const g = NSXCore.getGrinders().find(g => g.id === _editPickedGrinderId);
   if (nameEl) nameEl.textContent = _editPickedGrinderModel || '—';
   if (burrsEl) burrsEl.textContent = g?.burrs || '—';
   if (burrsizeEl) burrsizeEl.textContent = g?.burrSize ? `${g.burrSize} mm` : '—';
@@ -9113,15 +9106,14 @@ async function _loadAndRenderGrinderPickerList() {
   if (!listEl) return;
   listEl.innerHTML = `<div class="bohnen-empty-state">${t('status.loading')}</div>`;
   try {
-    const grinders = await fetchGrinders();
-    _renderGrinderPickerTiles(Array.isArray(grinders) ? grinders : (grinders?.items ?? []));
+    await NSXCore.loadGrinders();
+    _renderGrinderPickerTiles(NSXCore.getGrinders());
   } catch {
     listEl.innerHTML = `<div class="bohnen-empty-state">${t('status.loadFailed')}</div>`;
   }
 }
 
 function _renderGrinderPickerTiles(grinders) {
-  _grindersCache = Array.isArray(grinders) ? grinders : [];
   const listEl = document.getElementById('grinder-picker-list');
   if (!listEl) return;
   if (!Array.isArray(grinders) || grinders.length === 0) {
@@ -9667,8 +9659,8 @@ window.closeNumberPicker = closeNumberPicker;
 {
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const grinderTextInputs = {
-    'grinder-model':          () => uniq(_grindersCache.map(g => g.model)),
-    'grinder-burrs':          () => uniq(_grindersCache.map(g => g.burrs)),
+    'grinder-model':          () => uniq(NSXCore.getGrinders().map(g => g.model)),
+    'grinder-burrs':          () => uniq(NSXCore.getGrinders().map(g => g.burrs)),
     'grinder-setting-values': () => [],
   };
   Object.entries(grinderTextInputs).forEach(([id, getOptions]) => {
@@ -10811,7 +10803,7 @@ async function loadAndRenderGrinders() {
   try {
     const [grindersRes, peek] = await Promise.all([fetchGrinders(), fetchShots(1)]);
     const gList = Array.isArray(grindersRes) ? grindersRes : (grindersRes?.items ?? []);
-    _grindersCache = gList;
+    NSXCore.setGrindersCache(gList);
 
     // Fetch all shots to sum grams per grinder model
     const total = peek?.total || 0;
@@ -10915,7 +10907,7 @@ muehlenCreateModalEl?.addEventListener('click', (e) => {
 document.getElementById('btn-grinder-delete')?.addEventListener('click', async () => {
   if (!_editingGrinder?.id) return;
   try {
-    await deleteGrinder(_editingGrinder.id);
+    await NSXCore.deleteGrinder(_editingGrinder.id);
     if (muehlenCreateModalEl) muehlenCreateModalEl.hidden = true;
     showToast(t('toast.grinderDeleted').replace('{name}', _editingGrinder.model));
     loadAndRenderGrinders();
@@ -10968,9 +10960,9 @@ document.getElementById('btn-muehlen-save')?.addEventListener('click', async () 
 
   try {
     if (_editingGrinder?.id) {
-      await updateGrinder(_editingGrinder.id, payload);
+      await NSXCore.updateGrinder(_editingGrinder.id, payload);
     } else {
-      await createGrinder(payload);
+      await NSXCore.createGrinder(payload);
     }
     if (saveBtn) saveBtn.textContent = t('action.save');
     if (muehlenCreateModalEl) muehlenCreateModalEl.hidden = true;
