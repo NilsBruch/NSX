@@ -8962,14 +8962,13 @@ function updateBeanPickerDisplay() {
 
 async function _resolveEditBeanDetails() {
   if (!_editPickedRoaster && !_editPickedBeanName) return;
-  let bean = _beanManagerAllBeans.find(b =>
+  let bean = NSXCore.getBeans().find(b =>
     b.roaster === _editPickedRoaster && b.name === _editPickedBeanName
   );
   if (!bean) {
     try {
-      const data = await fetchBeans(true);
-      const list = Array.isArray(data) ? data : (data?.items ?? []);
-      bean = list.find(b => b.roaster === _editPickedRoaster && b.name === _editPickedBeanName);
+      await NSXCore.loadBeans(true);
+      bean = NSXCore.getBeans().find(b => b.roaster === _editPickedRoaster && b.name === _editPickedBeanName);
     } catch { /* ignore */ }
   }
   if (bean) {
@@ -9172,7 +9171,6 @@ const _getMonthName = (month1Based) =>
   new Intl.DateTimeFormat(getLang?.() === 'en' ? 'en-US' : 'de-DE', { month: 'long' })
     .format(new Date(2000, month1Based - 1));
 let _editingBean = null;
-let _allBeans = [];
 let _editingBatch = null;
 let _lastBatches = [];
 let _batchDateDraft = null;
@@ -9321,10 +9319,10 @@ let _fieldPickerOnConfirm = null;
 function _beanPickerOptions() {
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   return {
-    'bean-roaster':    uniq(_allBeans.map(b => b.roaster)),
-    'bean-country':    uniq(_allBeans.map(b => b.country)),
-    'bean-processing': uniq(_allBeans.map(b => b.processing)),
-    'bean-variety':    uniq(_allBeans.flatMap(b => Array.isArray(b.variety) ? b.variety : [])),
+    'bean-roaster':    uniq(NSXCore.getBeans().map(b => b.roaster)),
+    'bean-country':    uniq(NSXCore.getBeans().map(b => b.country)),
+    'bean-processing': uniq(NSXCore.getBeans().map(b => b.processing)),
+    'bean-variety':    uniq(NSXCore.getBeans().flatMap(b => Array.isArray(b.variety) ? b.variety : [])),
   };
 }
 
@@ -10109,7 +10107,6 @@ document.getElementById('btn-batch-save')?.addEventListener('click', async () =>
 
 const beanManagerModalEl = document.getElementById('bean-manager-modal');
 let _beanManagerSelectedBean = null;
-let _beanManagerAllBeans = [];
 let _beanManagerShowArchived = false;
 let _beanManagerSearchQuery = '';
 let _beanManagerShowAllFields = false;
@@ -10122,7 +10119,7 @@ function _persistBeanManagerCollapsedRoasters() {
 
 function _beanManagerFilteredBeans() {
   const q = _beanManagerSearchQuery.toLowerCase().trim();
-  return _beanManagerAllBeans.filter(b => {
+  return NSXCore.getBeans().filter(b => {
     if (!_beanManagerShowArchived && b.archived) return false;
     if (!q) return true;
     return (b.name || '').toLowerCase().includes(q)
@@ -10218,9 +10215,9 @@ function _beanManagerSuggestions(field) {
   // (e.g. "Schokoladig, Nussig, Beerig") that practically never repeat verbatim,
   // so suggestions add no value there — open a plain text field instead.
   if (field === 'name' || field === 'notes') return [];
-  const fromBeans = (key) => [...new Set(_beanManagerAllBeans.map(b => b[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+  const fromBeans = (key) => [...new Set(NSXCore.getBeans().map(b => b[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   if (field === 'variety') {
-    return [...new Set(_beanManagerAllBeans.flatMap(b => Array.isArray(b.variety) ? b.variety : []).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    return [...new Set(NSXCore.getBeans().flatMap(b => Array.isArray(b.variety) ? b.variety : []).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   }
   return fromBeans(field);
 }
@@ -10271,7 +10268,7 @@ function _beanManagerSaveField(field, value) {
     notes:      bean.notes      || undefined,
   };
   _beanManagerApplyField(payload, field, value);
-  updateBean(bean.id, payload)
+  NSXCore.updateBean(bean.id, payload)
     .then(() => _beanManagerLoad())
     .catch(err => showToast(t('toast.error') + ': ' + err.message));
 }
@@ -10477,14 +10474,14 @@ async function _beanManagerLoad() {
   try {
     // Always load every bean (incl. archived) so autocomplete suggestions draw
     // from all beans; the list view hides archived ones via _beanManagerFilteredBeans().
-    const data = await fetchBeans(true);
-    _beanManagerAllBeans = Array.isArray(data) ? data : (data?.items ?? []);
+    await NSXCore.loadBeans(true);
+    const beans = NSXCore.getBeans();
     if (_beanManagerSelectedBean) {
-      _beanManagerSelectedBean = _beanManagerAllBeans.find(b => b.id === _beanManagerSelectedBean.id) ?? null;
+      _beanManagerSelectedBean = beans.find(b => b.id === _beanManagerSelectedBean.id) ?? null;
     }
     if (!_beanManagerSelectedBean && !_beanManagerPickCallback) {
       if (_beanManagerAutoSelectId) {
-        _beanManagerSelectedBean = _beanManagerAllBeans.find(b => b.id === _beanManagerAutoSelectId) ?? null;
+        _beanManagerSelectedBean = beans.find(b => b.id === _beanManagerAutoSelectId) ?? null;
       }
       if (!_beanManagerSelectedBean) {
         _beanManagerSelectedBean = _beanManagerFilteredBeans()[0] ?? null;
@@ -10618,10 +10615,10 @@ document.getElementById('bean-manager-detail')?.addEventListener('click', async 
     const saveBtn = e.target.closest('#btn-bm-save-new');
     if (saveBtn) saveBtn.textContent = '…';
     try {
-      const created = await createBean(payload);
+      const created = await NSXCore.createBean(payload);
       _beanManagerShowAllFields = false;
       await _beanManagerLoad();
-      const newBean = _beanManagerAllBeans.find(b => b.id === created?.id) ?? null;
+      const newBean = NSXCore.getBeans().find(b => b.id === created?.id) ?? null;
       if (newBean) _beanManagerSelectBean(newBean);
     } catch (err) {
       if (saveBtn) saveBtn.textContent = t('action.save');
@@ -10659,14 +10656,14 @@ document.getElementById('bean-manager-detail')?.addEventListener('click', async 
     if (!await showConfirm(t('confirm.deleteBean').replace('{name}', _beanManagerSelectedBean.name || t('beanEditor.unnamed')))) return;
     const deletedId = _beanManagerSelectedBean.id;
     try {
-      await deleteBean(deletedId);
+      await NSXCore.deleteBean(deletedId);
     } catch (err) {
       showToast(t('toast.error') + ': ' + err.message);
       return;
     }
     showToast(t('toast.beanDeleted'));
     _beanManagerSelectedBean = null;
-    _beanManagerAllBeans = _beanManagerAllBeans.filter(b => b.id !== deletedId);
+    NSXCore.setBeansCache(NSXCore.getBeans().filter(b => b.id !== deletedId));
     _beanManagerRenderList();
     const detailEl = document.getElementById('bean-manager-detail');
     const placeholderEl = document.getElementById('bean-manager-placeholder');
