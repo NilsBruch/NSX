@@ -1613,6 +1613,7 @@ async function endLiveShotSession() {
   _skipStepInFlight = false;
   _skipStepGuardFrame = null;
   _skipStepLastSentAt = 0;
+  _clearDoseScaleState();
   const prevCount = shots.length;
   const prevLatestShotId = shots[0]?.id || null;
 
