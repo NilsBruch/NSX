@@ -1052,7 +1052,7 @@ async function _buildRecipeGatewayPayload(workflow) {
     },
     // Bundle the machine-function settings into the same atomic workflow update so the
     // gateway applies them in ONE PUT (instead of 4 racing PUTs that get "Queue Cancelled").
-    steamSettings: { targetTemperature: _steamEnabled ? steamTemp : 0, flow: _steamEnabled ? steamFlow : 0, duration: steamDuration },
+    steamSettings: { targetTemperature: NSXCore.isSteamEnabled() ? NSXCore.getSteamTemp() : 0, flow: NSXCore.isSteamEnabled() ? NSXCore.getSteamFlow() : 0, duration: NSXCore.getSteamDuration() },
     hotWaterData:  { targetTemperature: NSXCore.getHotwaterTemp(), volume: NSXCore.getHotwaterVolume() },
     rinseData:     { flow: NSXCore.getFlushFlow(), duration: NSXCore.getFlushDuration() },
   };
@@ -1118,7 +1118,7 @@ async function _pushCurrentSkinStateToMachine(bypassStateCheck = false) {
   }
   // No recipe selected — still sync the standalone machine-function settings.
   try {
-    await pushSteamSettings(_steamEnabled ? steamTemp : 0, _steamEnabled ? steamFlow : 0);
+    await pushSteamSettings(NSXCore.isSteamEnabled() ? NSXCore.getSteamTemp() : 0, NSXCore.isSteamEnabled() ? NSXCore.getSteamFlow() : 0);
   } catch (err) {
     console.warn('Steam-Sync fehlgeschlagen:', err?.message);
   }
@@ -1788,6 +1788,7 @@ function startSteamSession() {
   if (cornerEl)        cornerEl.hidden = false;
 
   steamTimerInterval = setInterval(() => {
+    const steamDuration = NSXCore.getSteamDuration();
     const sec = Math.floor((Date.now() - steamSession.startTime) / 1000);
     const remaining = Math.max(0, steamDuration - sec);
     if (cornerElapsedEl) cornerElapsedEl.textContent = String(remaining);
@@ -2119,7 +2120,7 @@ window.addEventListener("scale:weight", (event) => {
   const sbwPill = document.getElementById('workflow-sbw-pill');
   if (sbwPill) {
     const sbwWidget = document.getElementById('workflow-sbw-widget');
-    const pitcher = pitcherPresets[activePitcherIndex];
+    const pitcher = NSXCore.getPitcherPresets()[NSXCore.getActivePitcherIndex()];
     if (scaleConnected && sbwWidget && !sbwWidget.hidden && pitcher?.pitcherWeight != null) {
       sbwPill.textContent = `${(newWeight - pitcher.pitcherWeight).toFixed(1)}g`;
     } else {
@@ -3311,63 +3312,42 @@ function saveActivePresetName(storageKey, name) {
   NSXCore.saveActivePresetName(storageKey, name);
 }
 
-/* ── Steam State ──────────────────────────────────────── */
+/* ── Steam State (domain in core/domains/steam.js) ──────── */
 
-const STEAM_PRESET_DEFAULTS = {
-  schwach: { name: 'Weak',   temp: 165, flow: 0.6, duration: 60, calibFactor: null },
-  normal:  { name: 'Normal', temp: 165, flow: 1.0, duration: 60, calibFactor: null },
-  stark:   { name: 'Strong', temp: 165, flow: 1.5, duration: 60, calibFactor: null },
-};
+NSXCore.on('steamChanged', () => {
+  setSteamWidget(NSXCore.getSteamTemp(), NSXCore.getSteamFlow(), NSXCore.getSteamDuration());
+  _updateSteamPresetButtons();
+  _applySteamEnabledDOM();
+});
 
-function loadSteamPresets() {
-  return Object.assign({}, STEAM_PRESET_DEFAULTS);
-}
-
-function saveSteamPresets(presets) {
-  patchStoreSettings({ nsx_steam_presets: presets });
-}
-
-let steamPresets = loadSteamPresets();
-let activeSteamPreset = 'normal';
-const _sp = steamPresets[activeSteamPreset] ?? steamPresets.normal;
-let steamTemp     = _sp.temp;
-let steamFlow     = _sp.flow;
-let steamDuration = _sp.duration ?? 60;
-
-function _updateSteamWidget() {
-  setSteamWidget(steamTemp, steamFlow, steamDuration);
-}
+NSXCore.on('pitcherChanged', () => {
+  _updateSbwWidget();
+});
 
 function _updateSteamPresetButtons() {
+  const presets = NSXCore.getSteamPresets();
+  const active  = NSXCore.getActiveSteamPreset();
   document.querySelectorAll('.steam-card .steam-preset-btn').forEach(btn => {
     const key = btn.dataset.preset;
-    btn.classList.toggle('is-active', btn.dataset.preset === activeSteamPreset);
-    if (steamPresets[key]?.name) btn.textContent = steamPresets[key].name;
+    btn.classList.toggle('is-active', key === active);
+    if (presets[key]?.name) btn.textContent = presets[key].name;
   });
 }
 
-function _deactivateSteamPreset() {
-  activeSteamPreset = null;
-  saveActivePresetName('nsx_steam_active_preset', '');
-  _updateSteamPresetButtons();
-}
-
-function selectSteamPreset(presetName) {
-  if (!steamPresets[presetName]) return;
-  activeSteamPreset = presetName;
-  saveActivePresetName('nsx_steam_active_preset', presetName);
-  steamTemp     = steamPresets[presetName].temp;
-  steamFlow     = steamPresets[presetName].flow;
-  steamDuration = steamPresets[presetName].duration ?? 60;
-  _updateSteamPresetButtons();
-  _updateSteamWidget();
-  pushSteam();
+function _applySteamEnabledDOM() {
+  const enabled  = NSXCore.isSteamEnabled();
+  const toggle   = document.getElementById('steam-power-toggle');
+  const controls = document.querySelector('.steam-controls');
+  const presetsEl = document.querySelector('.steam-presets');
+  if (toggle)   toggle.checked = enabled;
+  if (controls) controls.style.opacity = enabled ? '' : '0.4';
+  if (presetsEl) presetsEl.style.opacity = enabled ? '' : '0.4';
 }
 
 document.querySelectorAll('.steam-card .steam-preset-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     _clearSbwState(false); // manual preset choice supersedes auto-steam; drop its active state without reverting
-    selectSteamPreset(btn.dataset.preset);
+    NSXCore.selectSteamPreset(btn.dataset.preset);
   });
 });
 
@@ -3383,10 +3363,10 @@ function _renderSteamPurgeToggle(mode) {
 }
 
 function _openSteamSettingsModal() {
-  _steamSettingsDraft = JSON.parse(JSON.stringify(steamPresets));
-  _pitcherDraft = pitcherPresets.map(p => ({ ...p }));
-  _calibDraft = JSON.parse(JSON.stringify(steamCalibration));
-  _calibActivePreset = activeSteamPreset ?? 'normal';
+  _steamSettingsDraft = JSON.parse(JSON.stringify(NSXCore.getSteamPresets()));
+  _pitcherDraft = NSXCore.getPitcherPresets().map(p => ({ ...p }));
+  _calibDraft = JSON.parse(JSON.stringify(NSXCore.getSteamCalibration()));
+  _calibActivePreset = NSXCore.getActiveSteamPreset() ?? 'normal';
   const presetEls = steamSettingsModalEl?.querySelectorAll('.steam-settings-preset') ?? [];
   presetEls.forEach(el => {
     const key = el.dataset.preset;
@@ -3493,19 +3473,8 @@ document.getElementById('btn-calib-info')?.addEventListener('click', () => {
 
 /* ── Steam Calibration ───────────────────────────────── */
 
-const STEAM_CALIB_DEFAULTS = {
-  schwach: { milkWeight: null, steamingTime: null },
-  normal:  { milkWeight: null, steamingTime: null },
-  stark:   { milkWeight: null, steamingTime: null },
-};
-
-let steamCalibration = JSON.parse(JSON.stringify(STEAM_CALIB_DEFAULTS));
 let _calibDraft = null;
 let _calibActivePreset = 'normal';
-
-function _saveCalibration() {
-  patchStoreSettings({ nsx_steam_calibration: steamCalibration });
-}
 
 function _renderCalibCard() {
   const draft = _calibDraft;
@@ -3514,7 +3483,7 @@ function _renderCalibCard() {
   // Preset buttons
   const btnsEl = document.getElementById('calib-preset-btns');
   if (btnsEl) {
-    btnsEl.innerHTML = Object.entries(steamPresets).map(([key, sp]) =>
+    btnsEl.innerHTML = Object.entries(NSXCore.getSteamPresets()).map(([key, sp]) =>
       `<button type="button" class="grinder-toggle-btn${_calibActivePreset === key ? ' is-active' : ''}" data-key="${key}">${sp.name ?? key}</button>`
     ).join('');
     btnsEl.querySelectorAll('.grinder-toggle-btn').forEach(btn => {
@@ -3580,23 +3549,12 @@ document.getElementById('calib-steam-time')?.addEventListener('input', e => {
 
 /* ── Pitcher Presets ─────────────────────────────────── */
 
-const PITCHER_PRESET_DEFAULTS = [
-  { name: 'Pitcher 1', steamPreset: 'normal', pitcherWeight: null },
-  { name: 'Pitcher 2', steamPreset: 'normal', pitcherWeight: null },
-  { name: 'Pitcher 3', steamPreset: 'normal', pitcherWeight: null },
-];
-
-let pitcherPresets = PITCHER_PRESET_DEFAULTS.map(p => ({ ...p }));
 let _pitcherDraft = null;
-
-function _savePitcherPresets() {
-  patchStoreSettings({ nsx_pitcher_presets: pitcherPresets });
-}
 
 function _renderPitcherPresetCards() {
   const cards = steamSettingsModalEl?.querySelectorAll('.pitcher-preset-card[data-pitcher]') ?? [];
   cards.forEach((card, idx) => {
-    const p = _pitcherDraft?.[idx] ?? pitcherPresets[idx];
+    const p = _pitcherDraft?.[idx] ?? NSXCore.getPitcherPresets()[idx];
     if (!p) return;
 
     card.querySelector('.pitcher-preset-name').value = p.name ?? `Pitcher ${idx + 1}`;
@@ -3605,7 +3563,7 @@ function _renderPitcherPresetCards() {
     weightEl.textContent = p.pitcherWeight != null ? p.pitcherWeight.toFixed(1) + ' g' : '— g';
 
     const btnsEl = card.querySelector('.pitcher-steam-preset-btns');
-    btnsEl.innerHTML = Object.entries(steamPresets).map(([key, sp]) =>
+    btnsEl.innerHTML = Object.entries(NSXCore.getSteamPresets()).map(([key, sp]) =>
       `<button type="button" class="grinder-toggle-btn${p.steamPreset === key ? ' is-active' : ''}" data-key="${key}">${sp.name ?? key}</button>`
     ).join('');
     btnsEl.querySelectorAll('.grinder-toggle-btn').forEach(btn => {
@@ -3637,16 +3595,7 @@ document.getElementById('btn-steam-settings-save')?.addEventListener('click', ()
       _steamSettingsDraft[key].name = el.querySelector('.steam-settings-name-input').value.trim() || key;
     }
   });
-  steamPresets = _steamSettingsDraft;
-  saveSteamPresets(steamPresets);
-  _updateSteamPresetButtons();
-  if (activeSteamPreset && steamPresets[activeSteamPreset]) {
-    steamTemp     = steamPresets[activeSteamPreset].temp;
-    steamFlow     = steamPresets[activeSteamPreset].flow;
-    steamDuration = steamPresets[activeSteamPreset].duration ?? 60;
-    _updateSteamWidget();
-    pushSteam();
-  }
+  NSXCore.setSteamPresets(_steamSettingsDraft);
 
   // Save pitcher presets
   if (_pitcherDraft) {
@@ -3655,73 +3604,32 @@ document.getElementById('btn-steam-settings-save')?.addEventListener('click', ()
         _pitcherDraft[idx].name = card.querySelector('.pitcher-preset-name').value.trim() || `Pitcher ${idx + 1}`;
       }
     });
-    pitcherPresets = _pitcherDraft;
-    _savePitcherPresets();
-    _updateSbwWidget();
+    NSXCore.setPitcherPresets(_pitcherDraft);
   }
 
   if (_calibDraft) {
-    steamCalibration = _calibDraft;
-    _saveCalibration();
-    Object.entries(steamCalibration).forEach(([key, c]) => {
-      if (steamPresets[key] && c.milkWeight > 0 && c.steamingTime > 0) {
-        steamPresets[key].calibFactor = c.steamingTime / c.milkWeight;
-      }
-    });
-    saveSteamPresets(steamPresets);
-    _updateSbwWidget();
+    NSXCore.setSteamCalibration(_calibDraft);
   }
 
   if (steamSettingsModalEl) steamSettingsModalEl.hidden = true;
 });
 
-let _steamEnabled = true;
-
-function _setSteamEnabled(enabled, push = true) {
-  _steamEnabled = enabled;
-  patchStoreSettings({ nsx_steam_enabled: enabled });
-  const toggle = document.getElementById('steam-power-toggle');
-  if (toggle) toggle.checked = enabled;
-  const controls = document.querySelector('.steam-controls');
-  const presets = document.querySelector('.steam-presets');
-  if (controls) controls.style.opacity = enabled ? '' : '0.4';
-  if (presets) presets.style.opacity = enabled ? '' : '0.4';
-  if (!push) return;
-  if (enabled) {
-    pushSteamSettings(steamTemp, steamFlow).catch(() => {});
-  } else {
-    pushSteamSettings(0, 0).catch(() => {});
-  }
-}
-
 document.getElementById('steam-power-toggle')?.addEventListener('change', (e) => {
-  _setSteamEnabled(e.target.checked);
+  NSXCore.setSteamEnabled(e.target.checked);
 });
 
-document.getElementById('btn-steam-temp-up')?.addEventListener('click', () => {
-  steamTemp = Math.min(steamTemp + 5, 165);
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamTemp();
-});
-document.getElementById('btn-steam-temp-down')?.addEventListener('click', () => {
-  steamTemp = Math.max(steamTemp - 5, 100);
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamTemp();
-});
-document.getElementById('btn-steam-flow-up')?.addEventListener('click', () => {
-  steamFlow = Math.round(Math.min(steamFlow + 0.1, 4.0) * 10) / 10;
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamFlow();
-});
-document.getElementById('btn-steam-flow-down')?.addEventListener('click', () => {
-  steamFlow = Math.round(Math.max(steamFlow - 0.1, 0.5) * 10) / 10;
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamFlow();
-});
-document.getElementById('btn-steam-dur-up')?.addEventListener('click', () => {
-  steamDuration = Math.min(steamDuration + 1, 180);
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamDuration();
-});
-document.getElementById('btn-steam-dur-down')?.addEventListener('click', () => {
-  steamDuration = Math.max(steamDuration - 1, 1);
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamDuration();
-});
+document.getElementById('btn-steam-temp-up')?.addEventListener('click', () =>
+  NSXCore.setSteamTemp(NSXCore.getSteamTemp() + 5));
+document.getElementById('btn-steam-temp-down')?.addEventListener('click', () =>
+  NSXCore.setSteamTemp(NSXCore.getSteamTemp() - 5));
+document.getElementById('btn-steam-flow-up')?.addEventListener('click', () =>
+  NSXCore.setSteamFlow(NSXCore.getSteamFlow() + 0.1));
+document.getElementById('btn-steam-flow-down')?.addEventListener('click', () =>
+  NSXCore.setSteamFlow(NSXCore.getSteamFlow() - 0.1));
+document.getElementById('btn-steam-dur-up')?.addEventListener('click', () =>
+  NSXCore.setSteamDuration(NSXCore.getSteamDuration() + 1));
+document.getElementById('btn-steam-dur-down')?.addEventListener('click', () =>
+  NSXCore.setSteamDuration(NSXCore.getSteamDuration() - 1));
 
 /* ── Hotwater State ───────────────────────────────────── */
 
@@ -3994,11 +3902,11 @@ document.getElementById('btn-flush-settings-save')?.addEventListener('click', ()
 /* ── Tap-to-edit for Steam / Hotwater / Flush values ──── */
 {
   document.getElementById('steam-temp')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(130, 165, 5), steamTemp, v => { steamTemp = v; saveSteamState(); pushSteamTemp(); }));
+    openNumberPicker(_npMakeRange(130, 165, 5), NSXCore.getSteamTemp(), v => NSXCore.setSteamTemp(v)));
   document.getElementById('steam-flow')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(0.5, 2.5, 0.1), steamFlow, v => { steamFlow = v; saveSteamState(); pushSteamFlow(); }, 1));
+    openNumberPicker(_npMakeRange(0.5, 2.5, 0.1), NSXCore.getSteamFlow(), v => NSXCore.setSteamFlow(v), 1));
   document.getElementById('steam-duration')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(1, 180, 1), steamDuration, v => { steamDuration = v; saveSteamState(); pushSteamDuration(); }));
+    openNumberPicker(_npMakeRange(1, 180, 1), NSXCore.getSteamDuration(), v => NSXCore.setSteamDuration(v)));
 
   document.getElementById('hotwater-temp')?.addEventListener('click', () =>
     openNumberPicker(_npMakeRange(50, 100, 5), NSXCore.getHotwaterTemp(), v => NSXCore.setHotwaterTemp(v)));
@@ -4021,10 +3929,6 @@ const push = NSXCore.push;
 const debounced = NSXCore.debounced;
 NSXCore.on('toast', (msg) => showToast(msg));
 
-function pushSteamTemp()     { debounced('steamTemp',     () => push({ steamSettings: { targetTemperature: parseFloat(steamTemp) } })); }
-function pushSteamFlow()     { debounced('steamFlow',     () => push({ steamSettings: { flow: parseFloat(steamFlow) } })); }
-function pushSteamDuration() { debounced('steamDuration', () => push({ steamSettings: { duration: parseFloat(steamDuration) } })); }
-function pushSteam()         { debounced('steam',         () => push({ steamSettings: { targetTemperature: parseFloat(steamTemp), flow: parseFloat(steamFlow), duration: parseFloat(steamDuration) } })); }
 
 
 
@@ -4049,9 +3953,7 @@ function saveScheduleState() {
 let scheduleState = loadScheduleState();
 
 function applyPresetButtonStates() {
-  document.querySelectorAll('.steam-card .steam-preset-btn').forEach(btn => {
-    btn.classList.toggle('is-active', btn.dataset.preset === activeSteamPreset);
-  });
+  _updateSteamPresetButtons();
   _updateHotwaterPresetButtons();
   _updateFlushPresetButtons();
 }
@@ -4060,39 +3962,7 @@ async function hydrateUiSettingsFromStore() {
   try {
     if (!(await NSXCore.loadStore())) return;
 
-    if (storeSettings.nsx_steam_presets && typeof storeSettings.nsx_steam_presets === 'object') {
-      steamPresets = {
-        schwach: { ...STEAM_PRESET_DEFAULTS.schwach, ...storeSettings.nsx_steam_presets.schwach },
-        normal:  { ...STEAM_PRESET_DEFAULTS.normal,  ...storeSettings.nsx_steam_presets.normal  },
-        stark:   { ...STEAM_PRESET_DEFAULTS.stark,   ...storeSettings.nsx_steam_presets.stark   },
-      };
-    }
-    const savedActive = storeSettings.nsx_steam_active_preset;
-    if (typeof savedActive === 'string' && steamPresets[savedActive]) {
-      activeSteamPreset = savedActive;
-    } else if (savedActive === '' || savedActive === null) {
-      activeSteamPreset = null;
-    }
-
-    if (storeSettings.nsx_steam_calibration && typeof storeSettings.nsx_steam_calibration === 'object') {
-      steamCalibration = {
-        schwach: { ...STEAM_CALIB_DEFAULTS.schwach, ...storeSettings.nsx_steam_calibration.schwach },
-        normal:  { ...STEAM_CALIB_DEFAULTS.normal,  ...storeSettings.nsx_steam_calibration.normal  },
-        stark:   { ...STEAM_CALIB_DEFAULTS.stark,   ...storeSettings.nsx_steam_calibration.stark   },
-      };
-    }
-
-    if (Array.isArray(storeSettings.nsx_pitcher_presets)) {
-      pitcherPresets = storeSettings.nsx_pitcher_presets.map((p, i) => ({
-        ...PITCHER_PRESET_DEFAULTS[i],
-        ...p,
-      })).slice(0, 3);
-      while (pitcherPresets.length < 3) pitcherPresets.push({ ...PITCHER_PRESET_DEFAULTS[pitcherPresets.length] });
-    }
-
-    if (typeof storeSettings.nsx_active_pitcher === 'number' && storeSettings.nsx_active_pitcher >= 0 && storeSettings.nsx_active_pitcher <= 2) {
-      activePitcherIndex = storeSettings.nsx_active_pitcher;
-    }
+    NSXCore.hydrateSteam();
 
     if (storeSettings.nsx_sbw_enabled === true) {
       sbwEnabled = true;
@@ -4161,18 +4031,10 @@ async function hydrateUiSettingsFromStore() {
       }
     });
 
-    if (typeof storeSettings.nsx_steam_enabled === 'boolean') {
-      _setSteamEnabled(storeSettings.nsx_steam_enabled, false);
-    }
-
     _pushScreensaverConfig();
 
-    const steamState = steamPresets[activeSteamPreset] ?? steamPresets.normal;
-    steamTemp = steamState.temp;
-    steamFlow = steamState.flow;
-    steamDuration = steamState.duration ?? 60;
-
-    setSteamWidget(steamTemp, steamFlow, steamDuration);
+    setSteamWidget(NSXCore.getSteamTemp(), NSXCore.getSteamFlow(), NSXCore.getSteamDuration());
+    _applySteamEnabledDOM();
     _updateSteamPresetButtons();
     _updateSbwWidget();
     _applySbwEnabled();
@@ -4802,12 +4664,7 @@ async function _deleteHistoryShot(shotId) {
 
 /* ── Steam by Weight – recipe page widget ──────────────── */
 
-let activePitcherIndex = 0;
 let sbwEnabled = false;
-
-function _saveActivePitcher() {
-  setStoreValue?.('skin', 'nsx_active_pitcher', activePitcherIndex).catch(() => {});
-}
 
 function _saveSbwEnabled() {
   patchStoreSettings({ nsx_sbw_enabled: sbwEnabled });
@@ -4820,12 +4677,6 @@ function _applySbwEnabled() {
   if (bottom) bottom.classList.toggle('sbw-disabled', !sbwEnabled);
   const toggle = document.getElementById('sbw-enabled-toggle');
   if (toggle) toggle.checked = sbwEnabled;
-}
-
-function _sbwCalibFactor() {
-  const pitcher = pitcherPresets[activePitcherIndex];
-  if (!pitcher?.steamPreset) return null;
-  return steamPresets[pitcher.steamPreset]?.calibFactor ?? null;
 }
 
 /* ── Dose Scaling ────────────────────────────────────── */
@@ -4905,11 +4756,13 @@ document.getElementById('btn-dose-scale')?.addEventListener('click', () => {
 });
 
 function _updateSbwWidget() {
-  const pitcher = pitcherPresets[activePitcherIndex];
+  const pitchers = NSXCore.getPitcherPresets();
+  const idx = NSXCore.getActivePitcherIndex();
+  const pitcher = pitchers[idx];
   const nameEl = document.getElementById('sbw-pitcher-label');
-  if (nameEl) nameEl.textContent = pitcher?.name || `Pitcher ${activePitcherIndex + 1}`;
+  if (nameEl) nameEl.textContent = pitcher?.name || `Pitcher ${idx + 1}`;
   const btn = document.getElementById('btn-steam-by-weight');
-  const hasCalib = _sbwCalibFactor() != null && pitcher?.pitcherWeight != null;
+  const hasCalib = NSXCore.getSbwCalibFactor() != null && pitcher?.pitcherWeight != null;
   btn?.classList.toggle('is-ready', hasCalib);
 }
 
@@ -4918,14 +4771,7 @@ let _sbwSaved = null;
 function _clearSbwState(restore = true) {
   if (_sbwSaved === null) return;
   if (restore) {
-    activeSteamPreset = _sbwSaved.preset;
-    steamTemp     = _sbwSaved.temp;
-    steamFlow     = _sbwSaved.flow;
-    steamDuration = _sbwSaved.duration;
-    saveActivePresetName('nsx_steam_active_preset', _sbwSaved.preset ?? '');
-    _updateSteamPresetButtons();
-    _updateSteamWidget();
-    pushSteam();
+    NSXCore.applySteamSnapshot(_sbwSaved);
   }
   _sbwSaved = null;
   document.getElementById('btn-steam-by-weight')?.classList.remove('is-active');
@@ -4940,15 +4786,16 @@ function _toggleSbwPreset() {
 }
 
 function _applySbwPreset() {
-  const pitcher = pitcherPresets[activePitcherIndex];
+  const pitchers = NSXCore.getPitcherPresets();
+  const pitcher = pitchers[NSXCore.getActivePitcherIndex()];
   if (!pitcher) return;
   if (pitcher.pitcherWeight == null) {
     showAlert('Pitcher weight not set.\n\nMeasure the empty pitcher weight in Steam Settings → pitcher card.');
     return;
   }
-  const calibFactor = _sbwCalibFactor();
+  const calibFactor = NSXCore.getSbwCalibFactor();
   if (calibFactor == null) {
-    const presetName = steamPresets[pitcher.steamPreset]?.name ?? pitcher.steamPreset ?? '—';
+    const presetName = NSXCore.getSteamPresets()[pitcher.steamPreset]?.name ?? pitcher.steamPreset ?? '—';
     showAlert(`No calibration for preset "${presetName}".\n\nOpen Steam Settings → Calibration card, select this preset, measure the milk weight and enter the steaming time.`);
     return;
   }
@@ -4956,12 +4803,11 @@ function _applySbwPreset() {
   if (milkWeight <= 0) { showToast('Place filled pitcher on scale and tare it first'); return; }
 
   // Remember current steam settings so a second tap can revert (toggle, like auto-dose).
-  _sbwSaved = { preset: activeSteamPreset, temp: steamTemp, flow: steamFlow, duration: steamDuration };
+  _sbwSaved = NSXCore.saveSteamSnapshot();
 
-  selectSteamPreset(pitcher.steamPreset);
+  NSXCore.selectSteamPreset(pitcher.steamPreset);
   const newDuration = Math.max(5, Math.round(milkWeight * calibFactor));
-  steamDuration = newDuration;
-  _updateSteamWidget();
+  NSXCore.setSteamDurationRaw(newDuration);
   document.getElementById('btn-steam-by-weight')?.classList.add('is-active');
   showToast(`Steam time set to ${newDuration}s for ${milkWeight.toFixed(0)}g milk`);
 }
@@ -4977,8 +4823,10 @@ function _applySbwPreset() {
   let hoveredIdx = null;
 
   function renderStrip() {
-    strip.innerHTML = pitcherPresets.map((p, i) =>
-      `<div class="sbw-strip-item${i === activePitcherIndex ? ' is-active' : ''}" data-idx="${i}">${p.name || `Pitcher ${i + 1}`}</div>`
+    const _pitchers = NSXCore.getPitcherPresets();
+    const _activeIdx = NSXCore.getActivePitcherIndex();
+    strip.innerHTML = _pitchers.map((p, i) =>
+      `<div class="sbw-strip-item${i === _activeIdx ? ' is-active' : ''}" data-idx="${i}">${p.name || `Pitcher ${i + 1}`}</div>`
     ).join('');
   }
 
@@ -4993,10 +4841,8 @@ function _applySbwPreset() {
   function closeStrip(select) {
     strip.hidden = true;
     stripOpen = false;
-    if (select && hoveredIdx != null && hoveredIdx !== activePitcherIndex) {
-      activePitcherIndex = hoveredIdx;
-      _saveActivePitcher();
-      _updateSbwWidget();
+    if (select && hoveredIdx != null && hoveredIdx !== NSXCore.getActivePitcherIndex()) {
+      NSXCore.setActivePitcher(hoveredIdx);
     }
     hoveredIdx = null;
   }
@@ -8510,8 +8356,8 @@ function openWorkflowEditModal(index) {
   _editSelectedProfileId = gwf?.profileId ?? null;
   _syncProfileDisplay();
 
-  _setEditSteamTemp(steamTemp);
-  _setEditSteamDur(steamDuration);
+  _setEditSteamTemp(NSXCore.getSteamTemp());
+  _setEditSteamDur(NSXCore.getSteamDuration());
   _setEditHwTemp(NSXCore.getHotwaterTemp());
   _setEditHwVol(NSXCore.getHotwaterVolume());
   _setEditGroupTemp(Number(workflow.groupTemp || gwf?.profile?.groupTemp) || 93);
@@ -8582,8 +8428,8 @@ function openWorkflowCreateModal() {
   _setEditYield(36);
   _setEditGrind(10);
   _setEditGroupTemp(93);
-  _setEditSteamTemp(steamTemp);
-  _setEditSteamDur(steamDuration);
+  _setEditSteamTemp(NSXCore.getSteamTemp());
+  _setEditSteamDur(NSXCore.getSteamDuration());
   _setEditHwTemp(NSXCore.getHotwaterTemp());
   _setEditHwVol(NSXCore.getHotwaterVolume());
 
@@ -11279,7 +11125,7 @@ setMachineStateText("idle");
 setScaleConnected(false);
 setBrewGroupTemperature(91.5);
 setWaterLevel(0);
-setSteamWidget(steamTemp, steamFlow, steamDuration);
+setSteamWidget(NSXCore.getSteamTemp(), NSXCore.getSteamFlow(), NSXCore.getSteamDuration());
 setHotwaterWidget(NSXCore.getHotwaterTemp(), NSXCore.getHotwaterFlow(), NSXCore.getHotwaterVolume());
 updateFlushDisplay();
 renderScheduleUI();
@@ -11318,6 +11164,7 @@ document.getElementById('btn-steam-corner-graph')?.addEventListener('click', () 
   const targetEl  = document.getElementById('steam-overlay-target');
   const progressEl= document.getElementById('steam-overlay-progress');
   if (cornerEl)  cornerEl.hidden  = true;
+  const steamDuration = NSXCore.getSteamDuration();
   if (targetEl && steamDuration > 0) targetEl.textContent = `/ ${steamDuration} s`;
   if (progressEl && steamDuration > 0) {
     const sec = steamSession ? Math.floor((Date.now() - steamSession.startTime) / 1000) : 0;
