@@ -3296,110 +3296,18 @@ if (powerToggleEl) {
 
 /* ── Preset Active State Persistence ─────────────────── */
 
-const STORE_NAMESPACE = 'NSX';
-const STORE_KEY = 'ui-settings';
-const LEGACY_STORAGE_KEYS = [
-  'nsx_steam_presets',
-  'nsx_steam_active_preset',
-  'nsx_hotwater_presets',
-  'nsx_hotwater_active_preset',
-  'nsx_flush_presets',
-  'nsx_flush_active_preset',
-  'nsx_schedule',
-];
-let storeSettings = {};
-let storePersistTimer = null;
-
-function scheduleStorePersist() {
-  if (typeof setStoreValue !== 'function') return;
-  clearTimeout(storePersistTimer);
-  storePersistTimer = setTimeout(() => {
-    setStoreValue(STORE_NAMESPACE, STORE_KEY, storeSettings)
-      .catch((err) => console.debug('Store save failed:', err?.message || err));
-  }, 300);
-}
+// Settings store lives in core/store.js. `storeSettings` is the core's single,
+// stable object (mutated in place by NSXCore.patchStore/replaceStore), so this
+// alias and the ~80 reads below stay valid for the app's lifetime.
+const NSXCore = window.NSXCore;
+const storeSettings = NSXCore.getStore();
 
 function patchStoreSettings(patch) {
-  if (!patch || typeof patch !== 'object') return;
-  storeSettings = Object.assign({}, storeSettings, patch);
-  scheduleStorePersist();
+  NSXCore.patchStore(patch);
 }
 
 function saveActivePresetName(storageKey, name) {
-  patchStoreSettings({ [storageKey]: name });
-}
-
-function readLegacyLocalStorageValue(key, mode = 'json') {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw == null) return undefined;
-    return mode === 'json' ? JSON.parse(raw) : raw;
-  } catch {
-    return undefined;
-  }
-}
-
-function removeLegacyLocalStorageValues() {
-  try {
-    for (const key of LEGACY_STORAGE_KEYS) {
-      localStorage.removeItem(key);
-    }
-  } catch {
-    // ignore cleanup errors
-  }
-}
-
-function collectLegacySettingsFromLocalStorage() {
-  const legacy = {};
-
-  const steamPresets = readLegacyLocalStorageValue('nsx_steam_presets', 'json');
-  if (steamPresets && typeof steamPresets === 'object') legacy.nsx_steam_presets = steamPresets;
-
-  const steamActive = readLegacyLocalStorageValue('nsx_steam_active_preset', 'string');
-  if (typeof steamActive === 'string' && steamActive) legacy.nsx_steam_active_preset = steamActive;
-
-  const hotwaterPresets = readLegacyLocalStorageValue('nsx_hotwater_presets', 'json');
-  if (hotwaterPresets && typeof hotwaterPresets === 'object') legacy.nsx_hotwater_presets = hotwaterPresets;
-
-  const hotwaterActive = readLegacyLocalStorageValue('nsx_hotwater_active_preset', 'string');
-  if (typeof hotwaterActive === 'string' && hotwaterActive) legacy.nsx_hotwater_active_preset = hotwaterActive;
-
-  const flushPresets = readLegacyLocalStorageValue('nsx_flush_presets', 'json');
-  if (flushPresets && typeof flushPresets === 'object') legacy.nsx_flush_presets = flushPresets;
-
-  const flushActive = readLegacyLocalStorageValue('nsx_flush_active_preset', 'string');
-  if (typeof flushActive === 'string' && flushActive) legacy.nsx_flush_active_preset = flushActive;
-
-  const schedule = readLegacyLocalStorageValue('nsx_schedule', 'json');
-  if (schedule && typeof schedule === 'object') legacy.nsx_schedule = schedule;
-
-  return legacy;
-}
-
-async function migrateLegacyLocalSettingsToStore() {
-  if (typeof getStoreValue !== 'function' || typeof setStoreValue !== 'function') return;
-
-  const legacy = collectLegacySettingsFromLocalStorage();
-  if (!Object.keys(legacy).length) return;
-
-  try {
-    let current = {};
-    try {
-      const storeData = await getStoreValue(STORE_NAMESPACE, STORE_KEY);
-      if (storeData && typeof storeData === 'object') {
-        current = storeData;
-      }
-    } catch {
-      // missing store key is expected on first run
-    }
-
-    const merged = Object.assign({}, legacy, current);
-    await setStoreValue(STORE_NAMESPACE, STORE_KEY, merged);
-    removeLegacyLocalStorageValues();
-    console.debug('Legacy localStorage settings migrated to gateway store');
-  } catch (err) {
-    console.debug('Legacy settings migration skipped:', err?.message || err);
-  }
+  NSXCore.saveActivePresetName(storageKey, name);
 }
 
 /* ── Steam State ──────────────────────────────────────── */
@@ -4269,12 +4177,8 @@ function applyPresetButtonStates() {
 }
 
 async function hydrateUiSettingsFromStore() {
-  if (typeof getStoreValue !== 'function') return;
-
   try {
-    const data = await getStoreValue(STORE_NAMESPACE, STORE_KEY);
-    if (!data || typeof data !== 'object') return;
-    storeSettings = data;
+    if (!(await NSXCore.loadStore())) return;
 
     if (storeSettings.nsx_steam_presets && typeof storeSettings.nsx_steam_presets === 'object') {
       steamPresets = {
@@ -11543,7 +11447,7 @@ _applyPhoneLayout();
 setupPresenceTracking();
 setupDisplayControl();
 
-migrateLegacyLocalSettingsToStore()
+NSXCore.migrateLegacyStore()
   .catch(() => {})
   .finally(() => {
     hydrateUiSettingsFromStore();
