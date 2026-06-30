@@ -16,14 +16,21 @@ NSX is a UI skin for the [Decent DE1](https://decentespresso.com/) espresso mach
 
 This repo is an **npm-workspaces monorepo** (`packages/*`). The shared, DOM-free
 core lives in `packages/core`; each skin is its own package. NSX stays vanilla JS
-with no build step — `index.html` loads the core via relative `../../core/src/`
-paths in dev, and the release workflow flattens core into the ZIP at `core/`.
+with no build step.
+
+**The Decent app serves `packages/nsx/src` as the web root**, so that folder must be
+fully self-contained: `index.html` references the core at `core/…`, and the core is
+synced there from `packages/core/src`. The source of truth is `packages/core/src`;
+`packages/nsx/src/core/` is a generated copy (git-ignored). After cloning or editing
+any core file, run **`npm run sync-core`**. The release workflow does the same sync
+when assembling the ZIP.
 
 ```
 espresso-skins/                     # repo root (npm workspaces)
-├── package.json                    # workspaces: ["packages/*"]
+├── package.json                    # workspaces + "sync-core" script
+├── scripts/sync-core.mjs           # copies packages/core/src -> packages/nsx/src/core
 ├── packages/
-│   ├── core/                       # shared, DOM-FREE package
+│   ├── core/                       # shared, DOM-FREE package (SOURCE OF TRUTH)
 │   │   ├── package.json
 │   │   └── src/
 │   │       ├── config.js           # Constants
@@ -31,9 +38,10 @@ espresso-skins/                     # repo root (npm workspaces)
 │   │       └── translations.js     # i18n strings (DE + others)
 │   └── nsx/                         # NSX skin (vanilla JS, no build)
 │       ├── package.json
-│       ├── manifest.json           # PWA manifest (id: "NSX-skin")
-│       └── src/
-│           ├── index.html          # SPA shell — loads core (../../core/src) + nsx modules
+│       └── src/                     # <-- served as the web root in dev & ZIP root
+│           ├── index.html          # SPA shell — loads core/ + nsx modules
+│           ├── manifest.json       # PWA manifest (id: "NSX-skin")
+│           ├── core/               # GENERATED copy of packages/core/src (git-ignored)
 │           ├── css/                # app.css, phone.css
 │           ├── ui/                 # graphics/, screensaver/ images
 │           └── modules/
@@ -50,6 +58,8 @@ espresso-skins/                     # repo root (npm workspaces)
 ```
 
 > Function-index line numbers below refer to `packages/nsx/src/modules/app.js`.
+> **Edit core only in `packages/core/src`**, then `npm run sync-core` — never edit
+> `packages/nsx/src/core/` (it's overwritten).
 
 ## app.js Function Index
 

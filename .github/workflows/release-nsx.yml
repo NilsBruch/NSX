@@ -21,15 +21,13 @@ jobs:
         run: echo "VERSION=${GITHUB_REF_NAME#nsx-}" >> $GITHUB_OUTPUT
 
       - name: Assemble self-contained skin
-        # Flatten core + nsx into one staging dir so index.html + manifest.json sit
-        # at the ZIP root and the shared core is reachable at core/. Dev loads core
-        # via ../../core/src/; the ZIP serves it from core/, so rewrite those paths.
+        # packages/nsx/src is the servable skin root (index.html + manifest.json +
+        # css/ modules/ ui/). Sync the shared core into core/ exactly as dev does,
+        # then inject version/repository into the manifest.
         run: |
+          cp -r packages/nsx/src staging
           mkdir -p staging/core
-          cp -r packages/nsx/src/. staging/
-          cp packages/nsx/manifest.json staging/manifest.json
-          cp -r packages/core/src/. staging/core/
-          sed -i 's#\.\./\.\./core/src/#core/#g' staging/index.html
+          cp packages/core/src/*.js staging/core/
           jq '.version = "${{ steps.version.outputs.VERSION }}" | .repository = "${{ github.repository }}"' staging/manifest.json > staging/manifest.tmp.json
           mv staging/manifest.tmp.json staging/manifest.json
 
