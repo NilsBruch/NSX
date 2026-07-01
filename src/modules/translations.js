@@ -192,6 +192,7 @@ const TRANSLATIONS = {
     // History row labels
     'history.grindSize':   'Mahlgrad',
     'history.doseYield':   'Dosis → Ausbeute',
+    'history.temp':        'Temp',
     'history.time':        'Zeit',
     'history.rating':      'Bewertung',
 
@@ -857,6 +858,7 @@ const TRANSLATIONS = {
     // History row labels
     'history.grindSize':   'Grind Size',
     'history.doseYield':   'Dose → Yield',
+    'history.temp':        'Temp',
     'history.time':        'Time',
     'history.rating':      'Rating',
 

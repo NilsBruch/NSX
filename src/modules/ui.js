@@ -1591,6 +1591,23 @@ function _recipeKey(w) {
     .map(v => String(v || '—').trim().toLocaleLowerCase('de-DE')).join('||');
 }
 
+// Shot temperature — same source the shot review uses under "Temperatur":
+// profile groupTemp, else first frame temperature, else tank temperature.
+function _shotTemp(shot) {
+  const prof = shot?.workflow?.profile;
+  const g = Number(prof?.groupTemp);
+  if (Number.isFinite(g) && g > 0) return g;
+  const frames = prof?.steps ?? prof?.frames ?? [];
+  if (Array.isArray(frames)) {
+    for (const f of frames) {
+      const tv = Number(f?.temperature);
+      if (Number.isFinite(tv) && tv > 0) return tv;
+    }
+  }
+  const tank = Number(prof?.tank_temperature);
+  return (Number.isFinite(tank) && tank > 0) ? tank : null;
+}
+
 // Render a 0–100 enjoyment value as 5 half-fillable stars (each star = 20).
 function _starRatingHtml(val) {
   const fill = Math.round((Number(val) || 0) / 10) * 10; // nearest half-star (10% per half)
@@ -1660,6 +1677,8 @@ function _renderShotRows(shots, { showRecipe = false } = {}) {
     const doseYield = dose > 0 && yield_ > 0
       ? `${dose}g → ${yieldLabel} (1:${(yield_ / dose).toFixed(1)})`
       : '—';
+    const temp   = _shotTemp(shot);
+    const tempStr = Number.isFinite(temp) ? `${temp.toFixed(1)} °C` : '—';
     const rating = ann.enjoyment ?? shot.metadata?.rating ?? (shot.rating != null ? shot.rating : null);
     const ratingDisplay = rating != null ? _starRatingHtml(rating) : '<span class="history-shot-value">—</span>';
     const isFav  = ann.extras?.favorite ?? shot.metadata?.favorite === true;
@@ -1681,6 +1700,10 @@ function _renderShotRows(shots, { showRecipe = false } = {}) {
       <span class="history-shot-cell history-shot-cell--dose">
         <span class="history-shot-label">${t('history.doseYield')}</span>
         <span class="history-shot-value">${doseYield}</span>
+      </span>
+      <span class="history-shot-cell history-shot-cell--temp">
+        <span class="history-shot-label">${t('history.temp')}</span>
+        <span class="history-shot-value">${tempStr}</span>
       </span>
       <span class="history-shot-cell history-shot-cell--time">
         <span class="history-shot-label">${t('history.time')}</span>

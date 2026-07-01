@@ -8813,6 +8813,7 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 
 .history-shot-cell--grind  { width: 58px; }
 .history-shot-cell--dose   { width: 136px; margin-left: 8px; }
+.history-shot-cell--temp   { width: 58px; }
 .history-shot-cell--time   { width: 44px; }
 
 /* Flat shots-by-date view: recipe context cells flex to share width and truncate. */
