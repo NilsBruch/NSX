@@ -2713,6 +2713,7 @@ window.NSXSkinControls = {
   getCurrentScale:   () => _currentScale,
   getHomeLabel:      () => storeSettings.nsx_home_label || SKIN_DEFAULTS.homeLabel,
   getLang:           () => getLang?.() ?? SKIN_DEFAULTS.language,
+  getStartTab:       () => storeSettings.nsx_start_tab === 'recipe' ? 'recipe' : 'home',
   SCALE_PRESETS: DEVICE_SCALE_PRESETS,
 
   setTheme(theme) {
@@ -2746,6 +2747,9 @@ window.NSXSkinControls = {
     const trimmed = (label ?? '').trim();
     patchStoreSettings({ nsx_home_label: trimmed || null });
     window.NSXRouter?.setHomeLabelOverride(trimmed);
+  },
+  setStartTab(v) {
+    patchStoreSettings({ nsx_start_tab: v === 'recipe' ? 'recipe' : 'home' });
   },
   setLang(lang) {
     setLang?.(lang);
@@ -4400,6 +4404,8 @@ async function hydrateUiSettingsFromStore() {
     }
 
     window.NSXScreensaver?.setUnlockCallback(() => {
+      // Land on the configured start page (Home or Recipes) when unlocking.
+      window.NSXRouter?.setTab(storeSettings.nsx_start_tab === 'recipe' ? 1 : 0, false);
       if (storeSettings.nsx_wake_on_unlock !== false && currentMachineState === 'sleeping') {
         setMachineState('idle')
           .then(() => _schedulePushCurrentSkinState(true))
