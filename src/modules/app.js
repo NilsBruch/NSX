@@ -9875,46 +9875,18 @@ document.getElementById('btn-field-picker-cancel')?.addEventListener('click', ()
 document.getElementById('btn-field-picker-confirm')?.addEventListener('click', () => closeFieldPicker(true));
 document.getElementById('field-picker-input')?.addEventListener('input', (e) => _renderFieldPickerList(e.target.value));
 
-/* ── Generic Search Input Modal ──────────────────────────── */
-let _searchInputTarget = null;
-
-function openSearchInputModal(inputEl) {
-  _searchInputTarget = inputEl;
-  const modal = document.getElementById('search-input-modal');
-  const searchInput = document.getElementById('search-input-field');
-  if (!modal || !searchInput) return;
-  searchInput.value = inputEl?.value || '';
-  searchInput.placeholder = inputEl?.placeholder || '';
-  modal.hidden = false;
-  setTimeout(() => { searchInput.focus(); searchInput.select(); }, 60);
-}
-
-function closeSearchInputModal(confirm) {
-  const modal = document.getElementById('search-input-modal');
-  const searchInput = document.getElementById('search-input-field');
-  if (confirm && _searchInputTarget && searchInput) {
-    _searchInputTarget.value = searchInput.value;
-    _searchInputTarget.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-  if (modal) modal.hidden = true;
-  _searchInputTarget = null;
-}
-
 document.getElementById('profile-picker-search')?.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   openFieldPicker(e.target, []);
 });
 
 document.querySelector('.workflows-search')?.addEventListener('click', (e) => {
-  openSearchInputModal(e.target);
+  openFieldPicker(e.target, []);
 });
 
 document.getElementById('history-search')?.addEventListener('click', (e) => {
-  openSearchInputModal(e.target);
+  openFieldPicker(e.target, []);
 });
-
-document.getElementById('btn-search-input-cancel')?.addEventListener('click', () => closeSearchInputModal(false));
-document.getElementById('btn-search-input-confirm')?.addEventListener('click', () => closeSearchInputModal(true));
 
 /* ── Number Picker (iOS drum wheel) ───────────────────── */
 let _npValues = [];
