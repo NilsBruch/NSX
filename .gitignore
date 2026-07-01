@@ -28,3 +28,7 @@ Thumbs.db
 
 # Dev/personal files
 .claude/
+
+# Monorepo refactor (lives on monorepo-multi-skin branch only)
+packages/
+scripts/
