@@ -865,9 +865,129 @@
           <button type="button" id="btn-field-picker-confirm" class="field-picker-header-btn field-picker-header-btn-confirm" data-i18n="action.confirm">Bestätigen</button>
         </div>
         <div class="field-picker-input-wrap">
-          <input type="text" id="field-picker-input" class="field-picker-input" autocomplete="off" />
+          <input type="text" id="field-picker-input" class="field-picker-input" autocomplete="off" inputmode="none" />
         </div>
         <div id="field-picker-list" class="field-picker-list"></div>
+        <div id="field-picker-keyboard" class="fp-keyboard">
+          <div class="fp-kb-row">
+            <button class="fp-key" data-key="1">1</button>
+            <button class="fp-key" data-key="2">2</button>
+            <button class="fp-key" data-key="3">3</button>
+            <button class="fp-key" data-key="4">4</button>
+            <button class="fp-key" data-key="5">5</button>
+            <button class="fp-key" data-key="6">6</button>
+            <button class="fp-key" data-key="7">7</button>
+            <button class="fp-key" data-key="8">8</button>
+            <button class="fp-key" data-key="9">9</button>
+            <button class="fp-key" data-key="0">0</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key" data-key="q">Q</button>
+            <button class="fp-key" data-key="w">W</button>
+            <button class="fp-key" data-key="e">E</button>
+            <button class="fp-key" data-key="r">R</button>
+            <button class="fp-key" data-key="t">T</button>
+            <button class="fp-key" data-key="y">Y</button>
+            <button class="fp-key" data-key="u">U</button>
+            <button class="fp-key" data-key="i">I</button>
+            <button class="fp-key" data-key="o">O</button>
+            <button class="fp-key" data-key="p">P</button>
+          </div>
+          <div class="fp-kb-row fp-kb-row--center">
+            <button class="fp-key" data-key="a">A</button>
+            <button class="fp-key" data-key="s">S</button>
+            <button class="fp-key" data-key="d">D</button>
+            <button class="fp-key" data-key="f">F</button>
+            <button class="fp-key" data-key="g">G</button>
+            <button class="fp-key" data-key="h">H</button>
+            <button class="fp-key" data-key="j">J</button>
+            <button class="fp-key" data-key="k">K</button>
+            <button class="fp-key" data-key="l">L</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key fp-key--fn" id="fp-kb-shift">⇧</button>
+            <button class="fp-key" data-key="z">Z</button>
+            <button class="fp-key" data-key="x">X</button>
+            <button class="fp-key" data-key="c">C</button>
+            <button class="fp-key" data-key="v">V</button>
+            <button class="fp-key" data-key="b">B</button>
+            <button class="fp-key" data-key="n">N</button>
+            <button class="fp-key" data-key="m">M</button>
+            <button class="fp-key fp-key--fn" id="fp-kb-backspace">⌫</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key fp-key--space" data-key=" "></button>
+            <button class="fp-key fp-key--sym" data-key=".">.</button>
+            <button class="fp-key fp-key--sym" data-key="-">-</button>
+            <button class="fp-key fp-key--sym" data-key="_">_</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Multiline Text Editor Modal (notes) -->
+    <div id="text-editor-modal" class="modal-overlay field-picker-overlay" hidden>
+      <div class="text-editor-sheet">
+        <div class="field-picker-header">
+          <button type="button" id="btn-text-editor-cancel"  class="field-picker-header-btn" data-i18n="action.cancel">Abbrechen</button>
+          <button type="button" id="btn-text-editor-confirm" class="field-picker-header-btn field-picker-header-btn-confirm" data-i18n="action.confirm">Bestätigen</button>
+        </div>
+        <textarea id="text-editor-textarea" class="text-editor-textarea" inputmode="none" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+        <div id="text-editor-keyboard" class="fp-keyboard">
+          <div class="fp-kb-row">
+            <button class="fp-key" data-key="1">1</button>
+            <button class="fp-key" data-key="2">2</button>
+            <button class="fp-key" data-key="3">3</button>
+            <button class="fp-key" data-key="4">4</button>
+            <button class="fp-key" data-key="5">5</button>
+            <button class="fp-key" data-key="6">6</button>
+            <button class="fp-key" data-key="7">7</button>
+            <button class="fp-key" data-key="8">8</button>
+            <button class="fp-key" data-key="9">9</button>
+            <button class="fp-key" data-key="0">0</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key" data-key="q">Q</button>
+            <button class="fp-key" data-key="w">W</button>
+            <button class="fp-key" data-key="e">E</button>
+            <button class="fp-key" data-key="r">R</button>
+            <button class="fp-key" data-key="t">T</button>
+            <button class="fp-key" data-key="y">Y</button>
+            <button class="fp-key" data-key="u">U</button>
+            <button class="fp-key" data-key="i">I</button>
+            <button class="fp-key" data-key="o">O</button>
+            <button class="fp-key" data-key="p">P</button>
+          </div>
+          <div class="fp-kb-row fp-kb-row--center">
+            <button class="fp-key" data-key="a">A</button>
+            <button class="fp-key" data-key="s">S</button>
+            <button class="fp-key" data-key="d">D</button>
+            <button class="fp-key" data-key="f">F</button>
+            <button class="fp-key" data-key="g">G</button>
+            <button class="fp-key" data-key="h">H</button>
+            <button class="fp-key" data-key="j">J</button>
+            <button class="fp-key" data-key="k">K</button>
+            <button class="fp-key" data-key="l">L</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key fp-key--fn" id="te-kb-shift">⇧</button>
+            <button class="fp-key" data-key="z">Z</button>
+            <button class="fp-key" data-key="x">X</button>
+            <button class="fp-key" data-key="c">C</button>
+            <button class="fp-key" data-key="v">V</button>
+            <button class="fp-key" data-key="b">B</button>
+            <button class="fp-key" data-key="n">N</button>
+            <button class="fp-key" data-key="m">M</button>
+            <button class="fp-key fp-key--fn" id="te-kb-backspace">⌫</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key fp-key--space" data-key=" "></button>
+            <button class="fp-key fp-key--sym" data-key=".">.</button>
+            <button class="fp-key fp-key--sym" data-key="-">-</button>
+            <button class="fp-key fp-key--sym" data-key="_">_</button>
+            <button class="fp-key fp-key--sym" data-key="&#10;">↵</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1529,7 +1649,7 @@
 
           <div class="bean-field-group">
             <div class="bean-field-group-title" data-i18n="shotReview.notes">Notizen</div>
-            <textarea id="shot-review-notes" class="shot-review-notes" placeholder="Notizen zum Shot..." data-i18n-placeholder="shotReview.notesPlaceholder"></textarea>
+            <textarea id="shot-review-notes" class="shot-review-notes" placeholder="Notizen zum Shot..." data-i18n-placeholder="shotReview.notesPlaceholder" readonly></textarea>
           </div>
 
           <div class="bean-field-group shot-review-workflow-tags-group" id="shot-review-workflow-tags-group" hidden>

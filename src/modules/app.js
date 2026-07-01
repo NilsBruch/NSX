@@ -9841,6 +9841,116 @@ function _renderFieldPickerList(filter) {
   });
 }
 
+/* ── Shared Keyboard Logic ───────────────────────────── */
+let _fpKbShift = false;
+let _fpKbActiveTarget = null;
+let _fpKbBsTimer = null;
+let _fpKbBsInterval = null;
+
+function _fpKbSetShift(on) {
+  _fpKbShift = on;
+  document.querySelectorAll('[id$="-kb-shift"]').forEach(btn => {
+    btn.classList.toggle('fp-key--shift-active', _fpKbShift);
+  });
+  document.querySelectorAll('.fp-keyboard .fp-key[data-key]').forEach(btn => {
+    const k = btn.dataset.key;
+    if (/^[a-z]$/.test(k)) btn.textContent = _fpKbShift ? k.toUpperCase() : k.toLowerCase();
+  });
+}
+
+function _fpKbInsert(char) {
+  const input = _fpKbActiveTarget;
+  if (!input) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end   = input.selectionEnd   ?? input.value.length;
+  const isLetter = /^[a-z]$/i.test(char);
+  const ch = isLetter ? (_fpKbShift ? char.toUpperCase() : char.toLowerCase()) : char;
+  input.value = input.value.slice(0, start) + ch + input.value.slice(end);
+  const pos = start + ch.length;
+  input.setSelectionRange(pos, pos);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if (_fpKbShift && isLetter) _fpKbSetShift(false);
+}
+
+function _fpKbBackspace() {
+  const input = _fpKbActiveTarget;
+  if (!input) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end   = input.selectionEnd   ?? input.value.length;
+  if (start !== end) {
+    input.value = input.value.slice(0, start) + input.value.slice(end);
+    input.setSelectionRange(start, start);
+  } else if (start > 0) {
+    input.value = input.value.slice(0, start - 1) + input.value.slice(start);
+    input.setSelectionRange(start - 1, start - 1);
+  }
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function _fpKbStopBackspace() {
+  clearTimeout(_fpKbBsTimer);
+  clearInterval(_fpKbBsInterval);
+  _fpKbBsTimer = null;
+  _fpKbBsInterval = null;
+}
+
+function _setupKeyboard(keyboardId, shiftBtnId, bsBtnId) {
+  const kb = document.getElementById(keyboardId);
+  if (!kb) return;
+  kb.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const key = e.target.closest('.fp-key');
+    if (!key) return;
+    if (key.id === shiftBtnId) { _fpKbSetShift(!_fpKbShift); return; }
+    if (key.id === bsBtnId) {
+      _fpKbBackspace();
+      _fpKbBsTimer = setTimeout(() => { _fpKbBsInterval = setInterval(_fpKbBackspace, 80); }, 400);
+      return;
+    }
+    const char = key.dataset.key;
+    if (char !== undefined) _fpKbInsert(char);
+  });
+  kb.addEventListener('pointerup',     _fpKbStopBackspace);
+  kb.addEventListener('pointercancel', _fpKbStopBackspace);
+  kb.addEventListener('pointerleave',  _fpKbStopBackspace);
+}
+
+_setupKeyboard('field-picker-keyboard', 'fp-kb-shift', 'fp-kb-backspace');
+_setupKeyboard('text-editor-keyboard',  'te-kb-shift', 'te-kb-backspace');
+
+/* ── Text Editor Modal (multiline notes) ─────────────── */
+let _textEditorOnConfirm = null;
+
+function openTextEditorModal(currentValue, onConfirm) {
+  _textEditorOnConfirm = onConfirm;
+  const modal = document.getElementById('text-editor-modal');
+  const ta    = document.getElementById('text-editor-textarea');
+  if (!modal || !ta) return;
+  ta.value = currentValue ?? '';
+  _fpKbActiveTarget = ta;
+  _fpKbSetShift(false);
+  modal.hidden = false;
+  setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 60);
+}
+
+function closeTextEditorModal(confirm) {
+  const modal = document.getElementById('text-editor-modal');
+  const ta    = document.getElementById('text-editor-textarea');
+  if (confirm && _textEditorOnConfirm && ta) _textEditorOnConfirm(ta.value);
+  if (modal) modal.hidden = true;
+  _textEditorOnConfirm = null;
+  _fpKbActiveTarget = null;
+}
+
+document.getElementById('btn-text-editor-cancel')?.addEventListener('click',  () => closeTextEditorModal(false));
+document.getElementById('btn-text-editor-confirm')?.addEventListener('click', () => closeTextEditorModal(true));
+
+document.getElementById('shot-review-notes')?.addEventListener('click', () => {
+  openTextEditorModal(shotReviewNotesEl?.value ?? '', (val) => {
+    if (shotReviewNotesEl) shotReviewNotesEl.value = val;
+  });
+});
+
 function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = null, initialValue = null } = {}) {
   _fieldPickerTarget = inputEl;
   _fieldPickerOnConfirm = onConfirm;
@@ -9848,9 +9958,10 @@ function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = nul
   const modal = document.getElementById('field-picker-modal');
   const pickerInput = document.getElementById('field-picker-input');
   if (!modal || !pickerInput) return;
-  pickerInput.setAttribute('inputmode', inputMode);
   pickerInput.value = initialValue !== null ? String(initialValue) : (inputEl?.value || '');
   _renderFieldPickerList(pickerInput.value);
+  _fpKbActiveTarget = pickerInput;
+  _fpKbSetShift(pickerInput.value.length === 0);
   modal.hidden = false;
   setTimeout(() => { pickerInput.focus(); pickerInput.select(); }, 60);
 }
