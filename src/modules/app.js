@@ -5740,40 +5740,18 @@ shotReviewFavBtn?.addEventListener('click', () => {
 document.getElementById('btn-shot-review-close')?.addEventListener('click', closeShotReview);
 
 document.getElementById('btn-shot-review-tag-add')?.addEventListener('click', () => {
-  if (!shotReviewTagPanelEl) return;
-  const opening = shotReviewTagPanelEl.hidden;
-  shotReviewTagPanelEl.hidden = !opening;
-  if (opening) {
-    if (shotReviewTagInputEl) shotReviewTagInputEl.value = '';
-    _renderTagSuggestions('');
-    shotReviewTagInputEl?.focus();
-  }
-});
-
-shotReviewTagInputEl?.addEventListener('input', () => {
-  _renderTagSuggestions(shotReviewTagInputEl.value);
-});
-
-shotReviewTagInputEl?.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return;
-  const val = shotReviewTagInputEl.value.trim();
-  if (val && !_reviewTags.includes(val)) {
-    _reviewTags.push(val);
-    _renderReviewTags();
-  }
-  shotReviewTagInputEl.value = '';
-  _renderTagSuggestions('');
-});
-
-shotReviewTagListEl?.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-tag]');
-  if (!btn) return;
-  const tag = btn.dataset.tag;
-  if (!_reviewTags.includes(tag)) {
-    _reviewTags.push(tag);
-    _renderReviewTags();
-    _renderTagSuggestions(shotReviewTagInputEl?.value ?? '');
-  }
+  // Reuse the field picker: it provides the custom keyboard plus a filterable
+  // list of previously used tags in one modal.
+  const options = _getAllUsedTags().filter(t => !_reviewTags.includes(t));
+  openFieldPicker(null, options, {
+    onConfirm: (val) => {
+      const tag = (val ?? '').trim();
+      if (tag && !_reviewTags.includes(tag)) {
+        _reviewTags.push(tag);
+        _renderReviewTags();
+      }
+    },
+  });
 });
 
 shotReviewTagsEl?.addEventListener('click', (e) => {
