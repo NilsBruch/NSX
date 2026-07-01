@@ -496,10 +496,11 @@
                   </svg>
                   <input type="search" id="history-search" class="history-search-input" placeholder="Röster, Bohne, Mühle, Profil…" data-i18n-placeholder="history.search" autocomplete="off" autocorrect="off" spellcheck="false">
                 </div>
-                <button type="button" id="btn-history-filter" class="history-filter-btn" aria-label="Filter" data-i18n-aria="history.filterAria">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
-                  </svg>
+                <button type="button" id="btn-history-view-toggle" class="history-toolbar-btn" aria-label="Ansicht wechseln" data-i18n-aria="history.viewToggleAria">
+                  <span id="history-view-toggle-label" data-i18n="history.orderedByRecipe">Nach Rezept sortiert</span>
+                </button>
+                <button type="button" id="btn-history-filter" class="history-toolbar-btn" aria-label="Filter" data-i18n-aria="history.filterAria">
+                  <span data-i18n="history.filters">Filter</span>
                 </button>
               </div>
               <div class="history-scroll">

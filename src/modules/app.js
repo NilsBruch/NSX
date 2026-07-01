@@ -97,6 +97,7 @@ const {
   updateRecipeListFade,
   updateActiveWorkflowCardHistoricalValues,
   renderHistoryAccordion,
+  renderHistoryShotList,
   updateHistoryShotDuration,
   updateRecipeRating,
   setOnRecipesRendered,
@@ -4807,6 +4808,7 @@ let _historySearch = '';
 let _historyServerResults = null;
 let _historySearchTimer = null;
 let _shotsTotalCount = 0;
+let _historyViewMode = 'recipe'; // 'recipe' (accordion) | 'shots' (flat, by date)
 const _historyFilters = { roasters: new Set(), beans: new Set(), grinders: new Set(), profiles: new Set(), favoritesOnly: false, minRating: 0 };
 
 function _hasActiveHistoryFilters() {
@@ -4841,19 +4843,30 @@ function _getFilteredHistoryRecipes(all) {
 function _updateLoadMoreButton() {
   const wrap = document.getElementById('history-load-more-wrap');
   if (!wrap) return;
-  wrap.hidden = !_historySearch || historyShots.length >= _shotsTotalCount;
+  if (_historyViewMode === 'shots') {
+    const loaded = (historyShots.length > 0 ? historyShots : shots).length;
+    wrap.hidden = loaded >= _shotsTotalCount;
+  } else {
+    wrap.hidden = !_historySearch || historyShots.length >= _shotsTotalCount;
+  }
 }
 
 async function _loadMoreHistory() {
   const btn = document.getElementById('btn-history-load-more');
   if (btn) btn.disabled = true;
+  // In the flat shots view without an active search we paginate the live `shots`
+  // buffer (kept fresh by post-shot updates); otherwise we page `historyShots`
+  // (the server search results).
+  const useShotsBuffer = _historyViewMode === 'shots' && !_historySearch;
+  const buffer = useShotsBuffer ? shots : historyShots;
   try {
-    const res = await fetchShots(50, historyShots.length, _historySearch);
+    const res = await fetchShots(50, buffer.length, _historySearch);
     const newItems = Array.isArray(res?.items) ? res.items : [];
     _shotsTotalCount = Number.isFinite(res?.total) ? res.total : _shotsTotalCount;
     if (newItems.length > 0) {
-      const existingIds = new Set(historyShots.map(s => s.id));
-      historyShots = [...historyShots, ...newItems.filter(s => !existingIds.has(s.id))];
+      const existingIds = new Set(buffer.map(s => s.id));
+      const merged = [...buffer, ...newItems.filter(s => !existingIds.has(s.id))];
+      if (useShotsBuffer) shots = merged; else historyShots = merged;
     }
   } catch (err) {
     console.warn('Mehr Shots konnten nicht geladen werden:', err?.message);
@@ -4947,7 +4960,36 @@ function _filterShotsByFavAndRating(shotList) {
   });
 }
 
+// Client-side roaster/bean/grinder/profile chip filter for individual shots
+// (the flat shots-by-date view). Server-side `search` is handled by the search
+// input; these multi-value chips can't be expressed as single query params.
+function _filterShotsByChips(shotList) {
+  const f = _historyFilters;
+  if (f.roasters.size === 0 && f.beans.size === 0 && f.grinders.size === 0 && f.profiles.size === 0) {
+    return shotList;
+  }
+  return shotList.filter(s => {
+    const w = mapShotToWorkflow(s);
+    if (f.roasters.size > 0 && !f.roasters.has(w.coffeeRoaster)) return false;
+    if (f.beans.size    > 0 && !f.beans.has(w.coffeeName))       return false;
+    if (f.grinders.size > 0 && !f.grinders.has(w.grinderModel))  return false;
+    if (f.profiles.size > 0 && !f.profiles.has(w.profileTitle))  return false;
+    return true;
+  });
+}
+
+function renderHistoryShotsList() {
+  const raw = historyShots.length > 0 ? historyShots : shots;
+  let list = _filterShotsByFavAndRating(raw);
+  list = _filterShotsByChips(list);
+  list = [...list].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  renderHistoryShotList?.(list);
+  _loadHistoryShotDurations(list);
+  _updateLoadMoreButton();
+}
+
 function renderHistory() {
+  if (_historyViewMode === 'shots') { renderHistoryShotsList(); return; }
   const raw = historyShots.length > 0 ? historyShots : shots;
   const source = _filterShotsByFavAndRating(raw);
   historyRecipes = buildWorkflowItemsFromShots(source);
@@ -4975,6 +5017,21 @@ function _loadHistoryShotDurations(recipeShots) {
 
 document.getElementById('btn-history-load-more')?.addEventListener('click', () => _loadMoreHistory());
 
+function _updateHistoryViewToggleLabel() {
+  const label = document.getElementById('history-view-toggle-label');
+  if (label) {
+    label.textContent = t(_historyViewMode === 'shots' ? 'history.orderedByDate' : 'history.orderedByRecipe');
+  }
+}
+
+document.getElementById('btn-history-view-toggle')?.addEventListener('click', () => {
+  _historyViewMode = _historyViewMode === 'shots' ? 'recipe' : 'shots';
+  _updateHistoryViewToggleLabel();
+  historySelectedRecipeIndex = -1;
+  closeAllHistorySwipes();
+  renderHistory();
+});
+
 document.getElementById('history-accordion-list')?.addEventListener('click', e => {
   const deleteAllBtn = e.target.closest('.history-delete-all-btn');
   if (deleteAllBtn) {
@@ -4992,6 +5049,8 @@ document.getElementById('history-accordion-list')?.addEventListener('click', e =
       try {
         await Promise.all(recipeShotIds.map(id => deleteShotById(id)));
         shots = shots.filter(s => !recipeShotIds.includes(s.id));
+        historyShots = historyShots.filter(s => !recipeShotIds.includes(s.id));
+        _shotsTotalCount = Math.max(0, _shotsTotalCount - recipeShotIds.length);
         recipeShotIds.forEach(id => shotDetailsCache.delete(id));
         _recipeRatingCache.clear();
         historySelectedRecipeIndex = -1;
@@ -5041,6 +5100,8 @@ async function _deleteHistoryShot(shotId) {
   try {
     await deleteShotById(shotId);
     shots = shots.filter(s => s.id !== shotId);
+    historyShots = historyShots.filter(s => s.id !== shotId);
+    if (_shotsTotalCount > 0) _shotsTotalCount--;
     shotDetailsCache.delete(shotId);
     _recipeRatingCache.clear();
     if (historySelectedRecipeIndex >= workflowItems.length) {

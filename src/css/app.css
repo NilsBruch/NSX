@@ -8577,6 +8577,37 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   color: var(--c-blue);
 }
 
+.history-toolbar-btn {
+  appearance: none;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.history-toolbar-btn.is-active {
+  background: rgba(10, 132, 255, 0.18);
+  border-color: rgba(10, 132, 255, 0.4);
+  color: var(--c-blue);
+}
+
+/* Fixed width so the view-toggle stays the same size in both label states. */
+#btn-history-view-toggle {
+  min-width: 180px;
+}
+
 .history-scroll {
   flex: 1;
   min-height: 0;
@@ -8780,11 +8811,14 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 .history-shot-cell--dose   { width: 136px; margin-left: 8px; }
 .history-shot-cell--time   { width: 44px; }
 
+/* Flat shots-by-date view: recipe context cells flex to share width and truncate. */
+.history-shot-row--flat { gap: 12px; }
+.history-shot-cell--recipe { flex: 1 1 0; min-width: 40px; }
+
 .history-shot-label {
   font-size: 11px;
   font-weight: 600;
   color: var(--c-label-3);
-  text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 

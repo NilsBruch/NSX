@@ -1528,7 +1528,7 @@ function updateRecipeRating(key, max, count) {
 let _onRecipesRendered = null;
 function setOnRecipesRendered(fn) { _onRecipesRendered = fn; }
 
-function _renderShotRows(shots) {
+function _renderShotRows(shots, { showRecipe = false } = {}) {
   if (!Array.isArray(shots) || shots.length === 0) {
     return `<li class="history-shot-empty">${t('history.noShots')}</li>`;
   }
@@ -1536,6 +1536,31 @@ function _renderShotRows(shots) {
     const ctx    = shot?.workflow?.context || {};
     const grind  = ctx.grinderSetting ?? '—';
     const ann    = shot.annotations ?? {};
+    // Recipe context — only shown in the flat shots-by-date view (the accordion
+    // already carries roaster/bean/grinder/profile in its header).
+    const roaster = ctx.coffeeRoaster || '—';
+    const bean    = ctx.coffeeName || '—';
+    const grinder = ctx.grinderModel || '—';
+    const profile = shot?.workflow?.profile?.title || shot?.workflow?.profileTitle
+                 || shot?.profileTitle || shot?.workflow?.name || '—';
+    const recipeCells = showRecipe ? `
+      <span class="history-shot-cell history-shot-cell--recipe">
+        <span class="history-shot-label">${t('filter.roaster')}</span>
+        <span class="history-shot-value">${_esc(roaster)}</span>
+      </span>
+      <span class="history-shot-cell history-shot-cell--recipe">
+        <span class="history-shot-label">${t('filter.bean')}</span>
+        <span class="history-shot-value">${_esc(bean)}</span>
+      </span>
+      <span class="history-shot-cell history-shot-cell--recipe">
+        <span class="history-shot-label">${t('recipe.grinder')}</span>
+        <span class="history-shot-value">${_esc(grinder)}</span>
+      </span>` : '';
+    const profileCell = showRecipe ? `
+      <span class="history-shot-cell history-shot-cell--recipe">
+        <span class="history-shot-label">${t('recipe.profile')}</span>
+        <span class="history-shot-value">${_esc(profile)}</span>
+      </span>` : '';
     // Actual shot values: actual dose / actual yield from annotations, recipe target as fallback.
     const dose   = Number(ann.actualDoseWeight ?? ctx.targetDoseWeight ?? 0);
     const annYield = Number(ann.actualYield ?? ann.extras?.actualYield);
@@ -1556,12 +1581,14 @@ function _renderShotRows(shots) {
       ? `<span class="history-shot-tags">${tags.map(tag => `<span class="history-shot-tag">${_esc(tag)}</span>`).join('')}</span>`
       : '';
     return `
-    <li class="history-shot-row" data-shot-id="${shot.id}">
+    <li class="history-shot-row${showRecipe ? ' history-shot-row--flat' : ''}" data-shot-id="${shot.id}">
       <span class="history-shot-date">${date}</span>
+      ${recipeCells}
       <span class="history-shot-cell history-shot-cell--grind">
         <span class="history-shot-label">${t('history.grindSize')}</span>
         <span class="history-shot-value">${_esc(grind)}</span>
       </span>
+      ${profileCell}
       <span class="history-shot-cell history-shot-cell--dose">
         <span class="history-shot-label">${t('history.doseYield')}</span>
         <span class="history-shot-value">${doseYield}</span>
@@ -1634,6 +1661,16 @@ function renderHistoryAccordion(recipes, selectedIndex, selectedShots) {
   }).join('');
 }
 
+function renderHistoryShotList(shots) {
+  const listEl = document.getElementById('history-accordion-list');
+  if (!listEl) return;
+  if (!Array.isArray(shots) || shots.length === 0) {
+    listEl.innerHTML = `<li class="history-accordion-empty">${t('history.empty')}</li>`;
+    return;
+  }
+  listEl.innerHTML = `<li class="history-shots-flat"><ul class="history-shots-list">${_renderShotRows(shots, { showRecipe: true })}</ul></li>`;
+}
+
 function updateHistoryShotDuration(shotId, seconds) {
   const el = document.querySelector(`#history-accordion-list .history-shot-duration[data-shot-id="${shotId}"]`);
   if (el) el.textContent = Number.isFinite(seconds) ? `${seconds.toFixed(0)}s` : '—';
@@ -1665,6 +1702,7 @@ window.NSXUI = {
   updateRecipeListFade,
   updateActiveWorkflowCardHistoricalValues,
   renderHistoryAccordion,
+  renderHistoryShotList,
   updateHistoryShotDuration,
   updateRecipeRating,
   setOnRecipesRendered,

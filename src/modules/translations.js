@@ -172,6 +172,10 @@ const TRANSLATIONS = {
     // History panel
     'history.search':      'Röster, Bohne, Mühle, Profil…',
     'history.filterAria':  'Filter',
+    'history.filters':     'Filter',
+    'history.viewToggleAria': 'Ansicht wechseln',
+    'history.orderedByRecipe': 'Nach Rezept sortiert',
+    'history.orderedByDate':   'Nach Datum sortiert',
     'history.listAria':    'Rezept-History',
     'history.toHistory':   'Zur History',
     'history.empty':       'Noch keine Shots vorhanden',
@@ -830,6 +834,10 @@ const TRANSLATIONS = {
     // History panel
     'history.search':      'Roaster, bean, grinder, profile…',
     'history.filterAria':  'Filter',
+    'history.filters':     'Filters',
+    'history.viewToggleAria': 'Toggle view',
+    'history.orderedByRecipe': 'Ordered by Recipe',
+    'history.orderedByDate':   'Ordered by Date',
     'history.listAria':    'Recipe history',
     'history.toHistory':   'To history',
     'history.empty':       'No shots yet',
