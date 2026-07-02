@@ -6815,6 +6815,7 @@ function _renderProfilePreview(record) {
         await deleteProfile(profileId);
         showToast(t('toast.profileDeleted'));
         _profileRecordsCache = null;
+        _profileRecordsCacheAll = null;
         _deletedProfilesCache = null;
         await _ensureProfilesLoaded();
         _applyNextSelection(Array.isArray(_profileRecordsCache) ? _profileRecordsCache : [], nextId);
@@ -6858,9 +6859,13 @@ function _renderProfilePickerList() {
   } else if (isHidden) {
     list = (Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : []).filter(r => r.visibility === 'hidden');
   } else if (isCopy) {
-    list = Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : (Array.isArray(_profileRecordsCache) ? _profileRecordsCache : []);
+    const all = Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : (Array.isArray(_profileRecordsCache) ? _profileRecordsCache : []);
+    list = all.filter(r => r.visibility !== 'deleted');
   } else if (_profilePickerShowHidden) {
-    list = Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : (Array.isArray(_profileRecordsCache) ? _profileRecordsCache : []);
+    // includeHidden=true also returns soft-deleted (visibility:'deleted') records —
+    // exclude them here so the eye toggle shows visible+hidden only, not the trash.
+    const all = Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : (Array.isArray(_profileRecordsCache) ? _profileRecordsCache : []);
+    list = all.filter(r => r.visibility !== 'deleted');
   } else {
     list = Array.isArray(_profileRecordsCache) ? _profileRecordsCache : [];
   }
@@ -6961,6 +6966,8 @@ function _renderProfileInfoBody(record, readOnly = false) {
         await deleteProfile(profileId);
         showToast(t('toast.profileDeleted'));
         _profileRecordsCache = null;
+        _profileRecordsCacheAll = null;
+        _deletedProfilesCache = null;
         if (profileInfoModalEl) profileInfoModalEl.hidden = true;
         if (profilePickerModalEl && !profilePickerModalEl.hidden) {
           await _ensureProfilesLoaded();
@@ -9144,7 +9151,7 @@ profilePickerListEl?.addEventListener('click', (e) => {
   const id = item.dataset.profileId;
   const cache = _profilePickerMode === 'trash'
     ? (_deletedProfilesCache || [])
-    : (_profilePickerMode === 'hidden' || _profilePickerMode === 'copy')
+    : (_profilePickerMode === 'hidden' || _profilePickerMode === 'copy' || _profilePickerShowHidden)
       ? (_profileRecordsCacheAll || _profileRecordsCache || [])
       : (_profileRecordsCache || []);
   const record = cache.find(r => String(r.id || '') === String(id || ''));
