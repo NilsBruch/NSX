@@ -372,6 +372,19 @@
       });
   }
 
+  // Max enjoyment rating across a shot list, plus how many shots share that
+  // maximum (NOT the total number of rated shots). Returns {max, count}.
+  function computeMaxRating(shotList) {
+    let max = null, count = 0;
+    for (const s of shotList || []) {
+      const r = Number(s?.annotations?.enjoyment ?? s?.metadata?.rating);
+      if (!Number.isFinite(r)) continue;
+      if (max === null || r > max) { max = r; count = 1; }
+      else if (r === max) { count++; }
+    }
+    return { max, count };
+  }
+
   // source: the shot list to search (caller's live `shots` or a history
   // source array) — passed explicitly since this domain owns no shot state.
   function findShotsForWorkflow(workflow, source) {
@@ -402,6 +415,7 @@
     getShotDurationSeconds,
     buildShotDiffData,
     buildWorkflowItemsFromShots,
+    computeMaxRating,
     findShotsForWorkflow,
   });
 })();

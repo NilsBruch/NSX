@@ -260,26 +260,11 @@ function updateMachineStateBanner(state, substate) {
 }
 
 /* ── Machine State Validation (Reaprime Best Practice) ─────– */
-const ALLOWED_OPERATIONS = {
-  idle: ['setState', 'uploadProfile', 'updateSettings', 'setWorkflow'],
-  booting: ['setState'],
-  sleeping: ['setState'],
-  heating: ['setState'],
-  preheating: ['setState'],
-  espresso: ['stopShot'],
-  hotWater: ['setState'],
-  flush: ['setState'],
-  steam: ['setState'],
-  steamRinse: ['setState'],
-  cleaning: ['setState'],
-  descaling: ['setState'],
-  error: ['setState'],
-  needsWater: ['setState'],
-};
-
-function canExecuteOperation(operation, state = NSXCore.getMachineState()) {
-  return ALLOWED_OPERATIONS[state]?.includes(operation) ?? false;
-}
+// ALLOWED_OPERATIONS + canExecuteOperation now live in core/domains/machine.js
+// (NSXCore.canExecuteOperation) — pure machine business rule, reusable by any
+// skin. Thin delegate so the call sites below are unchanged; state omitted
+// here so core applies its own current-state default.
+const canExecuteOperation = (operation, state) => NSXCore.canExecuteOperation(operation, state);
 
 /* ── Workflow Search & Filter ─────────────────────────── */
 
@@ -3935,17 +3920,7 @@ async function _loadMoreHistory() {
 
 const _recipeRatingCache = new Map(); // key: getWorkflowKey → { max:number|null, count:number }
 
-function _computeMaxRating(shotList) {
-  // count = how many shots share the maximum rating (not total rated shots)
-  let max = null, count = 0;
-  for (const s of shotList || []) {
-    const r = Number(s?.annotations?.enjoyment ?? s?.metadata?.rating);
-    if (!Number.isFinite(r)) continue;
-    if (max === null || r > max) { max = r; count = 1; }
-    else if (r === max) { count++; }
-  }
-  return { max, count };
-}
+const _computeMaxRating = (shotList) => NSXCore.computeMaxRating(shotList);
 
 async function _fetchAllRecipeShots(params) {
   const all = [];

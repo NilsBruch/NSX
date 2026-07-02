@@ -15,8 +15,13 @@
  * race entirely: there is still exactly one writer, exactly one place that
  * reads-then-writes, same as when this was a local app.js variable.
  *
+ * Also owns the machine-state operation guard (Reaprime best practice): which
+ * high-level operations are legal in each machine state. This is a pure
+ * business rule any DE1 skin needs identically, independent of the UI.
+ *
  * Registered on NSXCore:
- *   Selectors: getMachineState(), isEspressoLikeState(state)
+ *   Selectors: getMachineState(), isEspressoLikeState(state),
+ *              canExecuteOperation(operation, state?)
  *   Commands:  setMachineState(state)
  */
 (function () {
@@ -32,9 +37,33 @@
   function setMachineState(state) { _state = state; }
   function isEspressoLikeState(state) { return state === "espresso" || state === "skipStep"; }
 
+  const ALLOWED_OPERATIONS = {
+    idle: ["setState", "uploadProfile", "updateSettings", "setWorkflow"],
+    booting: ["setState"],
+    sleeping: ["setState"],
+    heating: ["setState"],
+    preheating: ["setState"],
+    espresso: ["stopShot"],
+    hotWater: ["setState"],
+    flush: ["setState"],
+    steam: ["setState"],
+    steamRinse: ["setState"],
+    cleaning: ["setState"],
+    descaling: ["setState"],
+    error: ["setState"],
+    needsWater: ["setState"],
+  };
+
+  // state defaults to the current machine state when the caller omits it.
+  function canExecuteOperation(operation, state) {
+    const s = state === undefined ? _state : state;
+    return ALLOWED_OPERATIONS[s]?.includes(operation) ?? false;
+  }
+
   NSXCore.register({
     getMachineState,
     setMachineState,
     isEspressoLikeState,
+    canExecuteOperation,
   });
 })();
