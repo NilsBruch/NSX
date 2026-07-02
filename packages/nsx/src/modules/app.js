@@ -19,7 +19,6 @@ const { GATEWAY, WS_BASE } = window.NSXConfig || {};
 const {
   fetchCurrentWorkflow,
   fetchMachineInfo,
-  fetchShotDetails,
   fetchShots,
   pushWorkflow,
   pushSteamSettings,
@@ -37,9 +36,6 @@ const {
   initiateScaleConnect,
   initiateDE1Connect,
   disconnectScale,
-  deleteShotById,
-  updateShotRecord,
-  updateShotMetadata,
   fetchBeans,
   createBean,
   updateBean,
@@ -179,7 +175,6 @@ let shots = [];
 let historyShots = [];
 let workflowItems = [];
 let workflowSearchQuery = '';
-const shotDetailsCache = new Map();
 let currentMachineState = 'idle';
 let _workflowPushNonce = 0;
 let displayWs = null;
@@ -592,12 +587,7 @@ function getShotDetailsCached(shotId) {
     return Promise.reject(new Error("Ungültige Shot-ID"));
   }
 
-  if (shotDetailsCache.has(shotId)) {
-    return Promise.resolve(shotDetailsCache.get(shotId));
-  }
-
-  return fetchShotDetails(shotId).then((fullShot) => {
-    shotDetailsCache.set(shotId, fullShot);
+  return NSXCore.getShotDetails(shotId).then((fullShot) => {
     const listShot = shots.find(s => s.id === shotId) || historyShots.find(s => s.id === shotId);
     if (listShot) {
       if (fullShot.annotations) listShot.annotations = fullShot.annotations;
@@ -1691,7 +1681,7 @@ async function endLiveShotSession() {
         const roundedYield = Math.round(estimatedYield * 10) / 10;
         const existingAnn = newShot.annotations ?? {};
         const existingExtras = existingAnn.extras ?? {};
-        updateShotMetadata(newShot.id, {
+        NSXCore.updateShotMeta(newShot.id, {
           rating: existingAnn.enjoyment,
           favorite: existingExtras.favorite,
           notes: existingAnn.espressoNotes,
@@ -4598,11 +4588,10 @@ document.getElementById('history-accordion-list')?.addEventListener('click', e =
         return;
       }
       try {
-        await Promise.all(recipeShotIds.map(id => deleteShotById(id)));
+        await Promise.all(recipeShotIds.map(id => NSXCore.deleteShot(id)));
         shots = shots.filter(s => !recipeShotIds.includes(s.id));
         historyShots = historyShots.filter(s => !recipeShotIds.includes(s.id));
         _shotsTotalCount = Math.max(0, _shotsTotalCount - recipeShotIds.length);
-        recipeShotIds.forEach(id => shotDetailsCache.delete(id));
         _recipeRatingCache.clear();
         historySelectedRecipeIndex = -1;
         renderHistory();
@@ -4649,11 +4638,10 @@ function _confirmDeleteHistoryShot(shotId) {
 
 async function _deleteHistoryShot(shotId) {
   try {
-    await deleteShotById(shotId);
+    await NSXCore.deleteShot(shotId);
     shots = shots.filter(s => s.id !== shotId);
     historyShots = historyShots.filter(s => s.id !== shotId);
     if (_shotsTotalCount > 0) _shotsTotalCount--;
-    shotDetailsCache.delete(shotId);
     _recipeRatingCache.clear();
     if (historySelectedRecipeIndex >= workflowItems.length) {
       historySelectedRecipeIndex = workflowItems.length > 0 ? 0 : -1;
@@ -5412,7 +5400,7 @@ document.getElementById('btn-shot-review-reference')?.addEventListener('click', 
   } else {
     _reviewReferenceActive = true;
     _reviewReferenceId = _reviewShotId;
-    _reviewReferenceFull = _reviewCurrentFull || shotDetailsCache.get(_reviewShotId) || null;
+    _reviewReferenceFull = _reviewCurrentFull || NSXCore.getCachedShotDetails(_reviewShotId);
     if (!_reviewReferenceFull && _reviewShotId) {
       try { _reviewReferenceFull = await getShotDetailsCached(_reviewShotId); } catch {}
     }
@@ -5461,7 +5449,7 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
   };
   const doseVal = d.actualDoseWeight;
   // Build full merged workflow so a top-level partial PUT doesn't drop the profile
-  const cachedShot = shotDetailsCache.get(id);
+  const cachedShot = NSXCore.getCachedShotDetails(id);
   const mergedWorkflow = cachedShot
     ? { ...(cachedShot.workflow || {}), context: { ...(cachedShot.workflow?.context || {}), ...ctxPatch } }
     : null;
@@ -5482,7 +5470,7 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
       },
       ...(mergedWorkflow ? { workflow: mergedWorkflow } : {}),
     };
-    await updateShotRecord(id, patch);
+    await NSXCore.updateShot(id, patch);
     const shot = shots.find(s => s.id === id);
     if (shot) {
       shot.annotations = {
@@ -5496,7 +5484,6 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
       };
       if (shot.workflow?.context) Object.assign(shot.workflow.context, ctxPatch);
     }
-    shotDetailsCache.delete(id);
     _recipeRatingCache.clear();
     renderHistory();
     showToast(t('toast.shotSaved'));
