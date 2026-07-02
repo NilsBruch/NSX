@@ -898,30 +898,12 @@ function findShotsForHistoryWorkflow(workflow, source) {
 }
 
 /* ── Recipe Store (Bridge KV) ─────────────────────────── */
-
-const _RECIPE_NS  = 'NSX';
-const _RECIPE_KEY = 'recipes';
-
-async function _loadRecipesFromStore() {
-  try {
-    const data = await getStoreValue?.(_RECIPE_NS, _RECIPE_KEY);
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
-
-async function _saveRecipesToStore(recipes) {
-  try {
-    await setStoreValue?.(_RECIPE_NS, _RECIPE_KEY, recipes);
-  } catch (err) {
-    console.warn('Rezepte konnten nicht gespeichert werden:', err?.message);
-  }
-}
-
-function _makeRecipeId() {
-  return `recipe-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
+// Recipe-store I/O + id generation live in core/domains/workflow.js
+// (NSXCore.loadRecipes/saveRecipes/makeRecipeId); these are thin delegators
+// so the ~7 call sites below stay unchanged.
+const _loadRecipesFromStore = () => NSXCore.loadRecipes();
+const _saveRecipesToStore   = (recipes) => NSXCore.saveRecipes(recipes);
+const _makeRecipeId         = () => NSXCore.makeRecipeId();
 
 /* ── Workflow Management ──────────────────────────────── */
 
@@ -940,23 +922,6 @@ function _getLiveProfileFrames() {
   return profile?.steps ?? profile?.frames ?? [];
 }
 
-function workflowToGatewayPayload(workflow) {
-  if (workflow?._resolvedPayload) return workflow._resolvedPayload;
-  if (workflow?.gatewayWorkflow && typeof workflow.gatewayWorkflow === "object") {
-    return workflow.gatewayWorkflow;
-  }
-  return {
-    profile: { title: workflow?.profileTitle || "—" },
-    context: {
-      coffeeRoaster: workflow?.coffeeRoaster || "—",
-      coffeeName: workflow?.coffeeName || "—",
-      grinderModel: workflow?.grinderModel || "—",
-      grinderSetting: workflow?.grinderSetting || "—",
-      targetDoseWeight: Number(workflow?.targetDoseWeight || 0),
-      targetYield: Number(workflow?.targetYield || 0),
-    },
-  };
-}
 
 async function _buildRecipeGatewayPayload(workflow) {
   const title = String(workflow?.profileTitle || '').trim();
@@ -1558,7 +1523,7 @@ function startLiveShotSession() {
     substates: [],
     phaseMarkers: [],
     lastProfileFrame: null,
-    workflow: workflowToGatewayPayload(workflow),
+    workflow: NSXCore.workflowToGatewayPayload(workflow),
     lastSnap: null,
   };
   liveWeight = 0;
