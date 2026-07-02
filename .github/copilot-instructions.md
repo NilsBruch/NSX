@@ -37,6 +37,12 @@ router → ui → screensaver → app → settings. A core module that registers
 
 ## Ground rules
 
+0. **Core-first (check before you implement).** Before writing any non-trivial
+   function, check whether core already has it — read `packages/core/README.md` and
+   `grep packages/core/src` for the concept; reuse `NSXCore.<fn>` if it exists. Any
+   pure logic / business rule / API interaction other skins would need goes in
+   **core**, not the skin. Only DOM-fused / UI-shaped code stays skin-side. This
+   keeps the skins from re-implementing the same logic twice.
 1. **Ask, don't assume.** Unclear intent → ask before writing code.
 2. **Simplest thing that works.** No abstractions/flexibility that weren't requested.
 3. **Don't touch unrelated code**, even if it could be improved.

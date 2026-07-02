@@ -81,9 +81,26 @@ call sites are unchanged, e.g. `const mapShotToWorkflow = (s) => NSXCore.mapShot
 `buildWorkflowItemsFromShots`, `findShotsForWorkflow`, `buildShotDiffData`,
 `getShotDurationSeconds`, `computeMaxRating`, formatters).
 
-**Rule for new code:** pure data transformation or business rule → core; DOM-fused
-or UI-shaped state → app.js. (Details + what deliberately stays in app.js:
-core README.)
+### Core-first rule (do this for EVERY new function)
+
+To avoid re-implementing something that already exists in core, before writing any
+non-trivial function follow these three steps **in order**:
+
+1. **Check core first.** Skim [`packages/core/README.md`](packages/core/README.md)
+   and `grep -rin "<concept>" packages/core/src` for an existing equivalent. If it
+   exists, **use `NSXCore.<fn>`** (add a thin same-named delegate in the skin if it
+   keeps call sites clean) — never reimplement it.
+2. **Decide where it belongs.** If it's **pure logic** — a data transformation,
+   business rule, formatting, or gateway/API interaction that *any* skin would need
+   — it goes in **core** (the fitting domain, or a new `core/src/domains/*.js`), not
+   in the skin. Wire a thin delegate in app.js.
+3. **Only put it in the skin** if it's **DOM-fused / rendering / UI-shaped state**
+   (a second skin would reimplement it in its own idiom anyway).
+
+The dividing line is *pure-vs-DOM-fused*, not "is it shot-related" or "is it big."
+When unsure, lean toward core — but don't force DOM-fused code in (see the core
+README's "what deliberately stays in the skin"). This rule is what keeps the two
+skins sharing one source of truth instead of drifting.
 
 ## app.js Function Areas
 
@@ -139,6 +156,8 @@ skin wiring (the shared logic moved to NSXCore, above):
 ## Working With Claude on This Project
 
 ### Ground Rules
+
+0. **Core-first (check before you implement).** Before writing any non-trivial function, check whether core already has it (`packages/core/README.md` + `grep packages/core/src`); reuse `NSXCore.<fn>` if so. Any pure logic / business rule / API interaction that other skins would need goes in **core**, not the skin. See the "Core-first rule" section above. This is the rule that keeps the skins from duplicating logic.
 
 1. **Ask, don't assume.** If something is unclear, ask before writing a single line. Never make silent assumptions about intent, architecture, or requirements.
 
