@@ -14,6 +14,7 @@ const TRANSLATIONS = {
     'action.cancel':       'Abbrechen',
     'action.ok':           'OK',
     'action.delete':       'Löschen',
+    'action.discard':      'Verwerfen',
     'action.close':        'Schließen',
     'action.confirm':      'Bestätigen',
     'action.add':          'Hinzufügen',
@@ -172,6 +173,12 @@ const TRANSLATIONS = {
     // History panel
     'history.search':      'Röster, Bohne, Mühle, Profil…',
     'history.filterAria':  'Filter',
+    'history.filters':     'Filter',
+    'history.viewToggleAria': 'Ansicht wechseln',
+    'shotReview.reference': 'Referenz',
+    'shotReview.referenceAria': 'Diesen Shot als Referenz überlagern',
+    'history.orderedByRecipe': 'Nach Rezept sortiert',
+    'history.orderedByDate':   'Nach Datum sortiert',
     'history.listAria':    'Rezept-History',
     'history.toHistory':   'Zur History',
     'history.empty':       'Noch keine Shots vorhanden',
@@ -185,6 +192,7 @@ const TRANSLATIONS = {
     // History row labels
     'history.grindSize':   'Mahlgrad',
     'history.doseYield':   'Dosis → Ausbeute',
+    'history.temp':        'Temp',
     'history.time':        'Zeit',
     'history.rating':      'Bewertung',
 
@@ -672,6 +680,7 @@ const TRANSLATIONS = {
     'action.cancel':       'Cancel',
     'action.ok':           'OK',
     'action.delete':       'Delete',
+    'action.discard':      'Discard',
     'action.close':        'Close',
     'action.confirm':      'Confirm',
     'action.add':          'Add',
@@ -830,6 +839,12 @@ const TRANSLATIONS = {
     // History panel
     'history.search':      'Roaster, bean, grinder, profile…',
     'history.filterAria':  'Filter',
+    'history.filters':     'Filters',
+    'history.viewToggleAria': 'Toggle view',
+    'shotReview.reference': 'Reference',
+    'shotReview.referenceAria': 'Overlay this shot as reference',
+    'history.orderedByRecipe': 'Ordered by Recipe',
+    'history.orderedByDate':   'Ordered by Date',
     'history.listAria':    'Recipe history',
     'history.toHistory':   'To history',
     'history.empty':       'No shots yet',
@@ -843,6 +858,7 @@ const TRANSLATIONS = {
     // History row labels
     'history.grindSize':   'Grind Size',
     'history.doseYield':   'Dose → Yield',
+    'history.temp':        'Temp',
     'history.time':        'Time',
     'history.rating':      'Rating',
 

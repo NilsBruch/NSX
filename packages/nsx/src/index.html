@@ -497,10 +497,11 @@
                   </svg>
                   <input type="search" id="history-search" class="history-search-input" placeholder="Röster, Bohne, Mühle, Profil…" data-i18n-placeholder="history.search" autocomplete="off" autocorrect="off" spellcheck="false">
                 </div>
-                <button type="button" id="btn-history-filter" class="history-filter-btn" aria-label="Filter" data-i18n-aria="history.filterAria">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
-                  </svg>
+                <button type="button" id="btn-history-view-toggle" class="history-toolbar-btn" aria-label="Ansicht wechseln" data-i18n-aria="history.viewToggleAria">
+                  <span id="history-view-toggle-label" data-i18n="history.orderedByRecipe">Nach Rezept sortiert</span>
+                </button>
+                <button type="button" id="btn-history-filter" class="history-toolbar-btn" aria-label="Filter" data-i18n-aria="history.filterAria">
+                  <span data-i18n="history.filters">Filter</span>
                 </button>
               </div>
               <div class="history-scroll">
@@ -866,21 +867,128 @@
           <button type="button" id="btn-field-picker-confirm" class="field-picker-header-btn field-picker-header-btn-confirm" data-i18n="action.confirm">Bestätigen</button>
         </div>
         <div class="field-picker-input-wrap">
-          <input type="text" id="field-picker-input" class="field-picker-input" autocomplete="off" />
+          <input type="text" id="field-picker-input" class="field-picker-input" autocomplete="off" inputmode="none" />
         </div>
         <div id="field-picker-list" class="field-picker-list"></div>
+        <div id="field-picker-keyboard" class="fp-keyboard">
+          <div class="fp-kb-row">
+            <button class="fp-key" data-key="1">1</button>
+            <button class="fp-key" data-key="2">2</button>
+            <button class="fp-key" data-key="3">3</button>
+            <button class="fp-key" data-key="4">4</button>
+            <button class="fp-key" data-key="5">5</button>
+            <button class="fp-key" data-key="6">6</button>
+            <button class="fp-key" data-key="7">7</button>
+            <button class="fp-key" data-key="8">8</button>
+            <button class="fp-key" data-key="9">9</button>
+            <button class="fp-key" data-key="0">0</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key" data-key="q">Q</button>
+            <button class="fp-key" data-key="w">W</button>
+            <button class="fp-key" data-key="e">E</button>
+            <button class="fp-key" data-key="r">R</button>
+            <button class="fp-key" data-key="t">T</button>
+            <button class="fp-key" data-key="y">Y</button>
+            <button class="fp-key" data-key="u">U</button>
+            <button class="fp-key" data-key="i">I</button>
+            <button class="fp-key" data-key="o">O</button>
+            <button class="fp-key" data-key="p">P</button>
+          </div>
+          <div class="fp-kb-row fp-kb-row--center">
+            <button class="fp-key" data-key="a">A</button>
+            <button class="fp-key" data-key="s">S</button>
+            <button class="fp-key" data-key="d">D</button>
+            <button class="fp-key" data-key="f">F</button>
+            <button class="fp-key" data-key="g">G</button>
+            <button class="fp-key" data-key="h">H</button>
+            <button class="fp-key" data-key="j">J</button>
+            <button class="fp-key" data-key="k">K</button>
+            <button class="fp-key" data-key="l">L</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key fp-key--fn" id="fp-kb-shift">⇧</button>
+            <button class="fp-key" data-key="z">Z</button>
+            <button class="fp-key" data-key="x">X</button>
+            <button class="fp-key" data-key="c">C</button>
+            <button class="fp-key" data-key="v">V</button>
+            <button class="fp-key" data-key="b">B</button>
+            <button class="fp-key" data-key="n">N</button>
+            <button class="fp-key" data-key="m">M</button>
+            <button class="fp-key fp-key--fn" id="fp-kb-backspace">⌫</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key fp-key--space" data-key=" "></button>
+            <button class="fp-key fp-key--sym" data-key=".">.</button>
+            <button class="fp-key fp-key--sym" data-key="-">-</button>
+            <button class="fp-key fp-key--sym" data-key="_">_</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Search Input Modal (für Suchleisten ohne Optionen-Liste) -->
-    <div id="search-input-modal" class="modal-overlay field-picker-overlay" hidden>
-      <div class="field-picker-sheet">
+    <!-- Multiline Text Editor Modal (notes) -->
+    <div id="text-editor-modal" class="modal-overlay field-picker-overlay" hidden>
+      <div class="text-editor-sheet">
         <div class="field-picker-header">
-          <button type="button" id="btn-search-input-cancel" class="field-picker-header-btn" data-i18n="action.cancel">Abbrechen</button>
-          <button type="button" id="btn-search-input-confirm" class="field-picker-header-btn field-picker-header-btn-confirm" data-i18n="action.confirm">Bestätigen</button>
+          <button type="button" id="btn-text-editor-cancel"  class="field-picker-header-btn" data-i18n="action.cancel">Abbrechen</button>
+          <button type="button" id="btn-text-editor-confirm" class="field-picker-header-btn field-picker-header-btn-confirm" data-i18n="action.confirm">Bestätigen</button>
         </div>
-        <div class="field-picker-input-wrap">
-          <input type="text" id="search-input-field" class="field-picker-input" autocomplete="off" />
+        <textarea id="text-editor-textarea" class="text-editor-textarea" inputmode="none" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+        <div id="text-editor-keyboard" class="fp-keyboard">
+          <div class="fp-kb-row">
+            <button class="fp-key" data-key="1">1</button>
+            <button class="fp-key" data-key="2">2</button>
+            <button class="fp-key" data-key="3">3</button>
+            <button class="fp-key" data-key="4">4</button>
+            <button class="fp-key" data-key="5">5</button>
+            <button class="fp-key" data-key="6">6</button>
+            <button class="fp-key" data-key="7">7</button>
+            <button class="fp-key" data-key="8">8</button>
+            <button class="fp-key" data-key="9">9</button>
+            <button class="fp-key" data-key="0">0</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key" data-key="q">Q</button>
+            <button class="fp-key" data-key="w">W</button>
+            <button class="fp-key" data-key="e">E</button>
+            <button class="fp-key" data-key="r">R</button>
+            <button class="fp-key" data-key="t">T</button>
+            <button class="fp-key" data-key="y">Y</button>
+            <button class="fp-key" data-key="u">U</button>
+            <button class="fp-key" data-key="i">I</button>
+            <button class="fp-key" data-key="o">O</button>
+            <button class="fp-key" data-key="p">P</button>
+          </div>
+          <div class="fp-kb-row fp-kb-row--center">
+            <button class="fp-key" data-key="a">A</button>
+            <button class="fp-key" data-key="s">S</button>
+            <button class="fp-key" data-key="d">D</button>
+            <button class="fp-key" data-key="f">F</button>
+            <button class="fp-key" data-key="g">G</button>
+            <button class="fp-key" data-key="h">H</button>
+            <button class="fp-key" data-key="j">J</button>
+            <button class="fp-key" data-key="k">K</button>
+            <button class="fp-key" data-key="l">L</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key fp-key--fn" id="te-kb-shift">⇧</button>
+            <button class="fp-key" data-key="z">Z</button>
+            <button class="fp-key" data-key="x">X</button>
+            <button class="fp-key" data-key="c">C</button>
+            <button class="fp-key" data-key="v">V</button>
+            <button class="fp-key" data-key="b">B</button>
+            <button class="fp-key" data-key="n">N</button>
+            <button class="fp-key" data-key="m">M</button>
+            <button class="fp-key fp-key--fn" id="te-kb-backspace">⌫</button>
+          </div>
+          <div class="fp-kb-row">
+            <button class="fp-key fp-key--space" data-key=" "></button>
+            <button class="fp-key fp-key--sym" data-key=".">.</button>
+            <button class="fp-key fp-key--sym" data-key="-">-</button>
+            <button class="fp-key fp-key--sym" data-key="_">_</button>
+            <button class="fp-key fp-key--sym" data-key="&#10;">↵</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1488,46 +1596,61 @@
         <div class="modal-handle"></div>
         <div class="modal-header">
           <button type="button" id="btn-shot-review-close" class="modal-btn-cancel" data-i18n="action.close">Schließen</button>
-          <span class="modal-title" id="shot-review-title" data-i18n="shotReview.title">Shot</span>
+          <span class="modal-title" data-i18n="shotReview.title">Shot</span>
           <button type="button" id="btn-shot-review-save" class="modal-btn-save" data-i18n="action.save">Speichern</button>
         </div>
         <div class="shot-review-body modal-body">
+
+          <div class="shot-review-legend-row">
+            <div class="workflow-shot-meta shot-review-meta">
+              <button type="button" id="btn-shot-review-prev" class="workflow-shot-nav-btn" aria-label="Älteren Shot" data-i18n-aria="recipe.olderShot" hidden><span aria-hidden="true">&#x2039;</span></button>
+              <span class="workflow-shot-meta-text">
+                <span class="workflow-shot-meta-row" id="shot-review-meta-main">Shot</span>
+                <span class="workflow-shot-meta-row workflow-shot-meta-row--sub" id="shot-review-meta-sub"></span>
+              </span>
+              <button type="button" id="btn-shot-review-next" class="workflow-shot-nav-btn" aria-label="Neueren Shot" data-i18n-aria="recipe.newerShot" hidden><span aria-hidden="true">&#x203A;</span></button>
+            </div>
+            <div id="shot-review-legend-host" class="shot-review-legend-host"></div>
+            <button type="button" id="btn-shot-review-reference" class="shot-review-ref-btn" aria-label="Diesen Shot als Referenz überlagern" data-i18n-aria="shotReview.referenceAria">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>
+              <span data-i18n="shotReview.reference">Referenz</span>
+            </button>
+          </div>
 
           <div class="shot-review-graph-wrap">
             <div id="shot-review-graph" class="workflow-shot-graph"></div>
           </div>
 
-          <div class="bean-field-group">
-            <div class="bean-field-group-title" data-i18n="shotReview.rating">Bewertung</div>
-            <div class="shot-review-rating-card">
-              <button type="button" id="btn-shot-review-fav" class="shot-review-fav-btn" aria-label="Favorit" data-i18n-aria="shotReview.favAria">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-              </button>
-              <div class="shot-review-slider-wrap">
-                <div class="shot-review-rating-display">
-                  <span id="shot-review-rating-val" class="shot-review-rating-num">50</span>
-                  <span id="shot-review-rating-max" class="shot-review-rating-max">/ 100</span>
-                </div>
-                <input type="range" id="shot-review-rating" class="shot-review-slider" min="0" max="100" step="1" value="0">
-                <div class="shot-review-slider-labels">
-                  <span data-i18n="shotReview.noRating">Keine Bewertung</span>
-                  <span>100</span>
+          <div class="shot-review-bottom-row">
+            <div class="bean-field-group">
+              <div class="bean-field-group-title" data-i18n="shotReview.rating">Bewertung</div>
+              <div class="shot-review-rating-card">
+                <button type="button" id="btn-shot-review-fav" class="shot-review-fav-btn" aria-label="Favorit" data-i18n-aria="shotReview.favAria">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                </button>
+                <div class="shot-review-slider-wrap">
+                  <div class="shot-review-stars" id="shot-review-stars"></div>
+                  <input type="range" id="shot-review-rating" class="shot-review-slider" min="0" max="100" step="10" value="0">
+                  <div class="shot-review-slider-labels">
+                    <span data-i18n="shotReview.noRating">Keine Bewertung</span>
+                    <span>★★★★★</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="bean-field-group shot-review-tags-group">
-            <div class="shot-review-tags-header">
-              <div class="bean-field-group-title" data-i18n="shotReview.tags">Tags</div>
-              <button type="button" class="shot-review-tag-add-btn" id="btn-shot-review-tag-add" data-i18n="shotReview.addTag">+ Tag</button>
-            </div>
-            <div class="shot-review-tags" id="shot-review-tags"></div>
-            <div class="shot-review-tag-panel" id="shot-review-tag-panel" hidden>
-              <input type="text" id="shot-review-tag-input" class="shot-review-tag-input" placeholder="Tag eingeben..." data-i18n-placeholder="shotReview.tagPlaceholder">
-              <div class="shot-review-tag-list" id="shot-review-tag-list"></div>
+            <div class="bean-field-group shot-review-tags-group">
+              <div class="shot-review-tags-header">
+                <div class="bean-field-group-title" data-i18n="shotReview.tags">Tags</div>
+                <button type="button" class="shot-review-tag-add-btn" id="btn-shot-review-tag-add" data-i18n="shotReview.addTag">+ Tag</button>
+              </div>
+              <div class="shot-review-tags" id="shot-review-tags"></div>
+              <div class="shot-review-tag-panel" id="shot-review-tag-panel" hidden>
+                <input type="text" id="shot-review-tag-input" class="shot-review-tag-input" placeholder="Tag eingeben..." data-i18n-placeholder="shotReview.tagPlaceholder">
+                <div class="shot-review-tag-list" id="shot-review-tag-list"></div>
+              </div>
             </div>
           </div>
 
@@ -1543,7 +1666,7 @@
 
           <div class="bean-field-group">
             <div class="bean-field-group-title" data-i18n="shotReview.notes">Notizen</div>
-            <textarea id="shot-review-notes" class="shot-review-notes" placeholder="Notizen zum Shot..." data-i18n-placeholder="shotReview.notesPlaceholder"></textarea>
+            <textarea id="shot-review-notes" class="shot-review-notes" placeholder="Notizen zum Shot..." data-i18n-placeholder="shotReview.notesPlaceholder" readonly></textarea>
           </div>
 
           <div class="bean-field-group shot-review-workflow-tags-group" id="shot-review-workflow-tags-group" hidden>

@@ -7591,6 +7591,10 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   padding: 0 4px;
 }
 
+#shot-review-modal .bean-field-group-title {
+  text-transform: none;
+}
+
 .bean-field-list {
   background: var(--c-bg-2);
   border-radius: 12px;
@@ -8577,6 +8581,37 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   color: var(--c-blue);
 }
 
+.history-toolbar-btn {
+  appearance: none;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.history-toolbar-btn.is-active {
+  background: rgba(10, 132, 255, 0.18);
+  border-color: rgba(10, 132, 255, 0.4);
+  color: var(--c-blue);
+}
+
+/* Fixed width so the view-toggle stays the same size in both label states. */
+#btn-history-view-toggle {
+  min-width: 180px;
+}
+
 .history-scroll {
   flex: 1;
   min-height: 0;
@@ -8778,13 +8813,17 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 
 .history-shot-cell--grind  { width: 58px; }
 .history-shot-cell--dose   { width: 136px; margin-left: 8px; }
+.history-shot-cell--temp   { width: 58px; }
 .history-shot-cell--time   { width: 44px; }
+
+/* Flat shots-by-date view: recipe context cells flex to share width and truncate. */
+.history-shot-row--flat { gap: 12px; }
+.history-shot-cell--recipe { flex: 1 1 0; min-width: 40px; }
 
 .history-shot-label {
   font-size: 11px;
   font-weight: 600;
   color: var(--c-label-3);
-  text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
@@ -8882,11 +8921,116 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-  color: #FFD60A;
-  fill: #FFD60A;
+  color: #FF3B30;
+  fill: #FF3B30;
 }
 
 /* ── Shot Review Modal ───────────────────────────────── */
+
+/* Header is just Close/Save now — trim its padding and the handle margin. */
+#shot-review-modal .modal-handle {
+  margin-top: 6px;
+}
+
+#shot-review-modal .modal-header {
+  padding: 6px 16px;
+}
+
+/* Date picker (left) · legend (centre) · reference button (right) share one row
+   above the graph, so the header can stay a slim Close/Save bar. */
+.shot-review-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 16px 0;
+  flex-shrink: 0;
+}
+
+.shot-review-legend-host {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.shot-review-legend-host .workflow-legend {
+  justify-content: center;
+}
+
+#shot-review-modal .shot-review-meta {
+  width: min(340px, 46vw);
+  max-width: none;
+  justify-content: space-between;
+}
+
+/* Text fills the middle so the ‹ › arrows stay pinned to the pill edges
+   regardless of the date/duration/dose content between them. */
+#shot-review-modal .shot-review-meta .workflow-shot-meta-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A touch more line-height so descenders (g, p, …) aren't clipped by the
+   row's overflow:hidden. */
+#shot-review-modal .shot-review-meta .workflow-shot-meta-row {
+  line-height: 1.3;
+  padding-bottom: 1px;
+}
+
+.shot-review-ref-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--c-label-2);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.shot-review-ref-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.shot-review-ref-btn.is-active {
+  background: rgba(10, 132, 255, 0.18);
+  border-color: rgba(10, 132, 255, 0.5);
+  color: var(--c-blue);
+}
+
+/* Reuse the recipe page's shot-meta pill; just fit it into the modal header.
+   Capped so the centered pill clears the reference button at the right-half centre. */
+.shot-review-meta {
+  min-width: 0;
+  max-width: 38%;
+  gap: 6px;
+}
+
+.shot-review-meta .workflow-shot-nav-btn {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.shot-review-meta .workflow-shot-meta-text {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shot-review-meta .workflow-shot-meta-row {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 
 .shot-review-body {
   flex: 1;
@@ -8935,8 +9079,8 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 }
 
 .shot-review-graph-wrap {
-  height: max(calc(240px / var(--app-scale, 1)), calc((100vh - 250px) / var(--app-scale, 1)));
-  min-height: calc(240px / var(--app-scale, 1));
+  height: max(calc(200px / var(--app-scale, 1)), calc((100vh - 400px) / var(--app-scale, 1)));
+  min-height: calc(200px / var(--app-scale, 1));
   flex-shrink: 0;
   position: relative;
   width: 100%;
@@ -8946,6 +9090,14 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   height: 100%;
   min-height: unset;
   border-radius: 0;
+}
+
+/* Let vertical swipes over the (non-interactive) graph scroll the review body. */
+.shot-review-graph-wrap,
+.shot-review-graph-wrap .u-wrap,
+.shot-review-graph-wrap .u-over,
+.shot-review-graph-wrap canvas {
+  touch-action: pan-y;
 }
 
 .shot-review-graph-wrap .workflow-legend {
@@ -8997,12 +9149,12 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 }
 
 .shot-review-fav-btn.is-fav {
-  background: rgba(255, 214, 10, 0.14);
+  background: rgba(255, 59, 48, 0.14);
 }
 
 .shot-review-fav-btn.is-fav svg {
-  fill: #FFD60A;
-  stroke: #FFD60A;
+  fill: #FF3B30;
+  stroke: #FF3B30;
 }
 
 .shot-review-fav-btn:active {
@@ -9017,28 +9169,36 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   min-width: 0;
 }
 
-.shot-review-rating-display {
+.shot-review-stars {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
+  gap: 6px;
+  align-items: center;
 }
 
-.shot-review-rating-num {
-  font-size: var(--fs-title);
-  font-weight: 700;
-  color: var(--c-label);
-  line-height: 1;
+.sr-star {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
 }
 
-.shot-review-rating-num.is-none {
-  font-size: var(--fs-heading);
-  color: var(--c-label-3);
+.sr-star-svg {
+  width: 28px;
+  height: 28px;
+  display: block;
 }
 
-.shot-review-rating-max {
-  font-size: var(--fs-caption);
-  color: var(--c-label-3);
+.sr-star-bg polygon { fill: var(--c-separator); }
+
+.sr-star-fillwrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 28px;
+  overflow: hidden;
 }
+
+.sr-star-fill polygon { fill: #ffb400; }
 
 .shot-review-slider {
   --fill: 50%;
@@ -10206,15 +10366,6 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   display: none;
 }
 
-/* Anchor the search bar near the top so it stays fully visible when the on-screen
-   keyboard opens (bottom-anchored, it gets pushed up through the top of the screen). */
-#search-input-modal {
-  align-items: flex-start;
-}
-#search-input-modal .field-picker-sheet {
-  max-height: none;
-  margin-bottom: 0;
-}
 
 .field-picker-sheet {
   width: calc(100% - 32px);
@@ -10224,7 +10375,6 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   margin-bottom: 16px;
   display: flex;
   flex-direction: column;
-  max-height: calc(var(--real-vh, 100vh) * 0.55);
   overflow: hidden;
 }
 
@@ -10278,10 +10428,10 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 }
 
 .field-picker-list {
-  flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 12px;
+  padding-bottom: 8px;
+  max-height: 108px;
   width: 50%;
   margin: 0 auto;
 }
@@ -10316,6 +10466,105 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 .bean-field-input[readonly] {
   cursor: pointer;
   touch-action: pan-y;
+}
+
+/* ─── Text Editor Modal (multiline notes) ────────────── */
+.text-editor-sheet {
+  width: calc(100% - 32px);
+  max-width: 600px;
+  background: #1c1c1e;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.text-editor-textarea {
+  flex: none;
+  height: 160px;
+  resize: none;
+  background: transparent;
+  border: none;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
+  color: var(--c-label);
+  font-size: var(--fs-input);
+  font-family: inherit;
+  padding: 12px 16px;
+  outline: none;
+  line-height: 1.5;
+  caret-color: var(--c-accent, #0a84ff);
+  -webkit-overflow-scrolling: touch;
+}
+
+.text-editor-textarea::placeholder {
+  color: var(--c-label-3);
+}
+
+/* ─── Field Picker Keyboard ───────────────────────────── */
+.fp-keyboard {
+  padding: 6px 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+  background: #111;
+  flex-shrink: 0;
+}
+
+.fp-kb-row {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+}
+
+.fp-kb-row--center {
+  padding: 0 5%;
+}
+
+.fp-key {
+  flex: 1;
+  height: 40px;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.16);
+  border: none;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.fp-key:active {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.fp-key--fn {
+  flex: 1.4;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 18px;
+}
+
+.fp-key--fn.fp-key--shift-active {
+  background: #fff;
+  color: #111;
+}
+
+.fp-key--space {
+  flex: 4;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.02em;
+}
+
+.fp-key--sym {
+  flex: 1;
 }
 
 /* ─── Number Picker Modal (iOS Drum Wheel) ────────────── */

@@ -99,6 +99,7 @@ const {
   updateRecipeListFade,
   updateActiveWorkflowCardHistoricalValues,
   renderHistoryAccordion,
+  renderHistoryShotList,
   updateHistoryShotDuration,
   updateRecipeRating,
   setOnRecipesRendered,
@@ -161,6 +162,12 @@ function showAlert(message) {
     okBtn.addEventListener('click', onOk);
     modal.addEventListener('click', onBackdrop);
   });
+}
+
+/* Close every open modal overlay (shot review, pickers, dialogs, …) — used when
+   a shot starts so the live shot isn't hidden behind a modal. */
+function _closeOpenModals() {
+  document.querySelectorAll('.modal-overlay:not([hidden])').forEach(el => { el.hidden = true; });
 }
 
 /* ── Global State ─────────────────────────────────────── */
@@ -2226,6 +2233,9 @@ NSXCore.on("machineState", (d) => {
   if (historyTabEl) historyTabEl.hidden = state === 'espresso';
 
   if (state === 'espresso' && !wasEspressoLike) {
+    // A shot just started — close any open modal (as if the user pressed Close)
+    // so the live shot on the Rezepte tab isn't hidden behind it.
+    _closeOpenModals();
     window.NSXRouter?.setTab(1);
     tareScale?.().catch(() => {});
     startLiveShotSession();
@@ -2714,6 +2724,7 @@ window.NSXSkinControls = {
   getCurrentScale:   () => _currentScale,
   getHomeLabel:      () => storeSettings.nsx_home_label || SKIN_DEFAULTS.homeLabel,
   getLang:           () => getLang?.() ?? SKIN_DEFAULTS.language,
+  getStartTab:       () => storeSettings.nsx_start_tab === 'recipe' ? 'recipe' : 'home',
   SCALE_PRESETS: DEVICE_SCALE_PRESETS,
 
   setTheme(theme) {
@@ -2747,6 +2758,9 @@ window.NSXSkinControls = {
     const trimmed = (label ?? '').trim();
     patchStoreSettings({ nsx_home_label: trimmed || null });
     window.NSXRouter?.setHomeLabelOverride(trimmed);
+  },
+  setStartTab(v) {
+    patchStoreSettings({ nsx_start_tab: v === 'recipe' ? 'recipe' : 'home' });
   },
   setLang(lang) {
     setLang?.(lang);
@@ -4007,6 +4021,8 @@ async function hydrateUiSettingsFromStore() {
     }
 
     window.NSXScreensaver?.setUnlockCallback(() => {
+      // Land on the configured start page (Home or Recipes) when unlocking.
+      window.NSXRouter?.setTab(storeSettings.nsx_start_tab === 'recipe' ? 1 : 0, false);
       if (storeSettings.nsx_wake_on_unlock !== false && currentMachineState === 'sleeping') {
         setMachineState('idle')
           .then(() => _schedulePushCurrentSkinState(true))
@@ -4338,6 +4354,10 @@ let _historySearch = '';
 let _historyServerResults = null;
 let _historySearchTimer = null;
 let _shotsTotalCount = 0;
+let _historyViewMode = 'recipe'; // 'recipe' (accordion) | 'shots' (flat, by date)
+// Ordered shot list backing the review's prev/next nav — the expanded recipe's
+// shots in recipe mode, or the full filtered/sorted flat list in date mode.
+let _historyCurrentShotList = [];
 const _historyFilters = { roasters: new Set(), beans: new Set(), grinders: new Set(), profiles: new Set(), favoritesOnly: false, minRating: 0 };
 
 function _hasActiveHistoryFilters() {
@@ -4372,19 +4392,30 @@ function _getFilteredHistoryRecipes(all) {
 function _updateLoadMoreButton() {
   const wrap = document.getElementById('history-load-more-wrap');
   if (!wrap) return;
-  wrap.hidden = !_historySearch || historyShots.length >= _shotsTotalCount;
+  if (_historyViewMode === 'shots') {
+    const loaded = (historyShots.length > 0 ? historyShots : shots).length;
+    wrap.hidden = loaded >= _shotsTotalCount;
+  } else {
+    wrap.hidden = !_historySearch || historyShots.length >= _shotsTotalCount;
+  }
 }
 
 async function _loadMoreHistory() {
   const btn = document.getElementById('btn-history-load-more');
   if (btn) btn.disabled = true;
+  // In the flat shots view without an active search we paginate the live `shots`
+  // buffer (kept fresh by post-shot updates); otherwise we page `historyShots`
+  // (the server search results).
+  const useShotsBuffer = _historyViewMode === 'shots' && !_historySearch;
+  const buffer = useShotsBuffer ? shots : historyShots;
   try {
-    const res = await fetchShots(50, historyShots.length, _historySearch);
+    const res = await fetchShots(50, buffer.length, _historySearch);
     const newItems = Array.isArray(res?.items) ? res.items : [];
     _shotsTotalCount = Number.isFinite(res?.total) ? res.total : _shotsTotalCount;
     if (newItems.length > 0) {
-      const existingIds = new Set(historyShots.map(s => s.id));
-      historyShots = [...historyShots, ...newItems.filter(s => !existingIds.has(s.id))];
+      const existingIds = new Set(buffer.map(s => s.id));
+      const merged = [...buffer, ...newItems.filter(s => !existingIds.has(s.id))];
+      if (useShotsBuffer) shots = merged; else historyShots = merged;
     }
   } catch (err) {
     console.warn('Mehr Shots konnten nicht geladen werden:', err?.message);
@@ -4478,7 +4509,37 @@ function _filterShotsByFavAndRating(shotList) {
   });
 }
 
+// Client-side roaster/bean/grinder/profile chip filter for individual shots
+// (the flat shots-by-date view). Server-side `search` is handled by the search
+// input; these multi-value chips can't be expressed as single query params.
+function _filterShotsByChips(shotList) {
+  const f = _historyFilters;
+  if (f.roasters.size === 0 && f.beans.size === 0 && f.grinders.size === 0 && f.profiles.size === 0) {
+    return shotList;
+  }
+  return shotList.filter(s => {
+    const w = mapShotToWorkflow(s);
+    if (f.roasters.size > 0 && !f.roasters.has(w.coffeeRoaster)) return false;
+    if (f.beans.size    > 0 && !f.beans.has(w.coffeeName))       return false;
+    if (f.grinders.size > 0 && !f.grinders.has(w.grinderModel))  return false;
+    if (f.profiles.size > 0 && !f.profiles.has(w.profileTitle))  return false;
+    return true;
+  });
+}
+
+function renderHistoryShotsList() {
+  const raw = historyShots.length > 0 ? historyShots : shots;
+  let list = _filterShotsByFavAndRating(raw);
+  list = _filterShotsByChips(list);
+  list = [...list].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  _historyCurrentShotList = list;
+  renderHistoryShotList?.(list);
+  _loadHistoryShotDurations(list);
+  _updateLoadMoreButton();
+}
+
 function renderHistory() {
+  if (_historyViewMode === 'shots') { renderHistoryShotsList(); return; }
   const raw = historyShots.length > 0 ? historyShots : shots;
   const source = _filterShotsByFavAndRating(raw);
   historyRecipes = buildWorkflowItemsFromShots(source);
@@ -4487,6 +4548,7 @@ function renderHistory() {
   if (historySelectedRecipeIndex >= 0 && historySelectedRecipeIndex < filtered.length) {
     selectedShots = findShotsForHistoryWorkflow(filtered[historySelectedRecipeIndex], source);
   }
+  _historyCurrentShotList = selectedShots || [];
   renderHistoryAccordion?.(filtered, historySelectedRecipeIndex, selectedShots);
   // Only fetch authoritative per-recipe ratings when the History tab is actually
   // shown — avoids a burst of /shots requests during the startup pre-render.
@@ -4506,6 +4568,21 @@ function _loadHistoryShotDurations(recipeShots) {
 
 document.getElementById('btn-history-load-more')?.addEventListener('click', () => _loadMoreHistory());
 
+function _updateHistoryViewToggleLabel() {
+  const label = document.getElementById('history-view-toggle-label');
+  if (label) {
+    label.textContent = t(_historyViewMode === 'shots' ? 'history.orderedByDate' : 'history.orderedByRecipe');
+  }
+}
+
+document.getElementById('btn-history-view-toggle')?.addEventListener('click', () => {
+  _historyViewMode = _historyViewMode === 'shots' ? 'recipe' : 'shots';
+  _updateHistoryViewToggleLabel();
+  historySelectedRecipeIndex = -1;
+  closeAllHistorySwipes();
+  renderHistory();
+});
+
 document.getElementById('history-accordion-list')?.addEventListener('click', e => {
   const deleteAllBtn = e.target.closest('.history-delete-all-btn');
   if (deleteAllBtn) {
@@ -4523,6 +4600,8 @@ document.getElementById('history-accordion-list')?.addEventListener('click', e =
       try {
         await Promise.all(recipeShotIds.map(id => deleteShotById(id)));
         shots = shots.filter(s => !recipeShotIds.includes(s.id));
+        historyShots = historyShots.filter(s => !recipeShotIds.includes(s.id));
+        _shotsTotalCount = Math.max(0, _shotsTotalCount - recipeShotIds.length);
         recipeShotIds.forEach(id => shotDetailsCache.delete(id));
         _recipeRatingCache.clear();
         historySelectedRecipeIndex = -1;
@@ -4572,6 +4651,8 @@ async function _deleteHistoryShot(shotId) {
   try {
     await deleteShotById(shotId);
     shots = shots.filter(s => s.id !== shotId);
+    historyShots = historyShots.filter(s => s.id !== shotId);
+    if (_shotsTotalCount > 0) _shotsTotalCount--;
     shotDetailsCache.delete(shotId);
     _recipeRatingCache.clear();
     if (historySelectedRecipeIndex >= workflowItems.length) {
@@ -4870,13 +4951,11 @@ window.addEventListener('router:tabchange', e => {
 /* ── Shot Review Modal ───────────────────────────────── */
 
 const shotReviewModalEl  = document.getElementById('shot-review-modal');
-const shotReviewTitleEl  = document.getElementById('shot-review-title');
 const shotReviewGraphEl  = document.getElementById('shot-review-graph');
 const shotReviewRecipeGridEl  = document.getElementById('shot-review-recipe-grid');
 const shotReviewResultsGridEl = document.getElementById('shot-review-results-grid');
 const shotReviewRatingEl    = document.getElementById('shot-review-rating');
-const shotReviewRatingValEl = document.getElementById('shot-review-rating-val');
-const shotReviewRatingMaxEl = document.getElementById('shot-review-rating-max');
+const shotReviewStarsEl     = document.getElementById('shot-review-stars');
 const shotReviewFavBtn      = document.getElementById('btn-shot-review-fav');
 const shotReviewNotesEl     = document.getElementById('shot-review-notes');
 const shotReviewTagsEl      = document.getElementById('shot-review-tags');
@@ -4919,6 +4998,103 @@ let _reviewRating  = null;
 let _reviewFav     = false;
 let _reviewDraft   = null;
 let _reviewAnalysisRows = [];
+// Prev/next navigation through the shot list the review was opened from
+// (recipe-scoped when opened in recipe mode, the full flat list in date mode).
+let _reviewNavShots = [];
+let _reviewNavIndex = -1;
+let _reviewInitialSig = '';
+let _reviewMetaDate = null;
+// Reference-shot overlay: when active, the shot picked as reference is drawn
+// (ghosted) behind whatever shot is currently displayed.
+let _reviewReferenceActive = false;
+let _reviewReferenceId = null;
+let _reviewReferenceFull = null;
+let _reviewCurrentFull = null;
+
+function _updateReferenceBtn() {
+  document.getElementById('btn-shot-review-reference')
+    ?.classList.toggle('is-active', _reviewReferenceActive);
+}
+
+// Re-render the current shot's graph, applying the reference overlay if active
+// (skipped when the current shot *is* the reference).
+function _rerenderReviewGraph() {
+  if (!shotReviewGraphEl || !_reviewCurrentFull) return;
+  shotReviewGraphEl._referenceNormalized =
+    (_reviewReferenceActive && _reviewReferenceFull && _reviewReferenceId !== _reviewShotId)
+      ? normalizeShotData(_reviewReferenceFull) : null;
+  renderShotGraph?.(shotReviewGraphEl, _reviewCurrentFull, null, undefined, null, null, normalizeShotData, 'history');
+}
+
+const _SR_GEAR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" style="vertical-align:-1px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+
+// Build the two-row shot-meta pill (matches the recipe page's date picker):
+//   row 1: "Di 30.06. | 14:36 | 8.2s"   row 2: "⚙ 10 · 10g → 30.3g (1:3.1)"
+function _renderReviewMeta() {
+  const mainEl = document.getElementById('shot-review-meta-main');
+  const subEl  = document.getElementById('shot-review-meta-sub');
+  const d = _reviewDraft || {};
+  const date = _reviewMetaDate;
+  const valid = date instanceof Date && !Number.isNaN(date.getTime());
+  const day  = valid ? new Intl.DateTimeFormat('de-DE', { weekday: 'short' }).format(date) : '--';
+  const dstr = valid ? new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(date) : '--.--.';
+  const time = valid ? new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(date) : '--:--';
+  const durTxt = Number.isFinite(d.durationSec) ? `${d.durationSec.toFixed(1)}s` : '--.-s';
+  if (mainEl) mainEl.textContent = `${day} ${dstr} | ${time} | ${durTxt}`;
+
+  const grind = (d.grinderSetting ?? '') !== '' ? d.grinderSetting : null;
+  const dose  = Number.isFinite(d.actualDoseWeight) ? d.actualDoseWeight : null;
+  const out   = Number.isFinite(d.outValue) ? d.outValue : null;
+  const unit  = d.outUnit || 'g';
+  const est   = d.outEstimated === true;
+  const grindStr = grind != null ? `${_SR_GEAR_SVG} ${_escapeHtml(String(grind))}` : null;
+  const doseStr  = dose != null ? `${dose.toFixed(0)}g` : '—';
+  const outStr   = out != null ? `${est ? '~' : ''}${est ? Math.round(out) : out.toFixed(1)}${unit}` : '—';
+  const ratioStr = dose != null && out != null && dose > 0 ? ` (1:${(out / dose).toFixed(1)})` : '';
+  const row2 = [grindStr, `${doseStr} → ${outStr}${ratioStr}`].filter(Boolean).join(' · ');
+  if (subEl) subEl.innerHTML = row2;
+}
+
+// Signature of the user-editable review state, for detecting unsaved edits.
+function _reviewStateSig() {
+  const d = _reviewDraft || {};
+  return JSON.stringify({
+    r: _reviewRating,
+    f: _reviewFav,
+    t: _reviewTags,
+    n: shotReviewNotesEl?.value ?? '',
+    cr: d.coffeeRoaster, cn: d.coffeeName, gm: d.grinderModel, gs: d.grinderSetting,
+    dose: d.actualDoseWeight, ty: d.targetYield, tds: d.drinkTds, ey: d.drinkEy,
+  });
+}
+
+function _isReviewDirty() {
+  return _reviewStateSig() !== _reviewInitialSig;
+}
+
+function _updateReviewNav() {
+  const prevBtn = document.getElementById('btn-shot-review-prev');
+  const nextBtn = document.getElementById('btn-shot-review-next');
+  const has = _reviewNavShots.length > 1 && _reviewNavIndex >= 0;
+  if (prevBtn) {
+    prevBtn.hidden = !has;
+    prevBtn.disabled = !(has && _reviewNavIndex < _reviewNavShots.length - 1);
+  }
+  if (nextBtn) {
+    nextBtn.hidden = !has;
+    nextBtn.disabled = !(has && _reviewNavIndex > 0);
+  }
+}
+
+// delta: +1 = older shot (prev/‹), -1 = newer shot (next/›)
+async function _navigateReview(delta) {
+  const list = _reviewNavShots;
+  const target = _reviewNavIndex + delta;
+  if (!Array.isArray(list) || target < 0 || target >= list.length) return;
+  if (_isReviewDirty() && !await showConfirm(t('profileEditor.discardChanges'), t('action.discard'))) return;
+  const nextShot = list[target];
+  if (nextShot?.id) openShotReview(nextShot.id, list);
+}
 
 function _srTile(field, label, value, { editable = true, inputMode = 'text' } = {}) {
   const isEmpty = value === '' || value === null || value === undefined;
@@ -4985,34 +5161,49 @@ function _setShotReviewFav(val) {
   shotReviewFavBtn?.classList.toggle('is-fav', val);
 }
 
+const _SR_STAR_POINTS = '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2';
+
+// Render the 0–100 enjoyment value as 5 half-fillable stars (each star = 20).
+function _renderReviewStars(val) {
+  if (!shotReviewStarsEl) return;
+  const stars = (Number(val) || 0) / 20; // 0..5
+  let html = '';
+  for (let i = 0; i < 5; i++) {
+    const pct = Math.max(0, Math.min(1, stars - i)) * 100;
+    html +=
+      `<span class="sr-star">` +
+      `<svg class="sr-star-svg sr-star-bg" viewBox="0 0 24 24" aria-hidden="true"><polygon points="${_SR_STAR_POINTS}"/></svg>` +
+      `<span class="sr-star-fillwrap" style="width:${pct}%"><svg class="sr-star-svg sr-star-fill" viewBox="0 0 24 24" aria-hidden="true"><polygon points="${_SR_STAR_POINTS}"/></svg></span>` +
+      `</span>`;
+  }
+  shotReviewStarsEl.innerHTML = html;
+}
+
 function _setShotReviewRating(val) {
   const isNone = val == null;
   _reviewRating = isNone ? null : val;
   const fill = isNone ? 0 : val;
-  if (shotReviewRatingValEl) {
-    shotReviewRatingValEl.textContent = isNone ? t('shotReview.noRating') : val;
-    shotReviewRatingValEl.classList.toggle('is-none', isNone);
-  }
-  if (shotReviewRatingMaxEl) shotReviewRatingMaxEl.hidden = isNone;
+  _renderReviewStars(fill);
   if (shotReviewRatingEl) {
     shotReviewRatingEl.value = fill;
     shotReviewRatingEl.style.setProperty('--fill', `${fill}%`);
   }
 }
 
-function openShotReview(shotId) {
+function openShotReview(shotId, navList = null) {
   const shot = shots.find(s => s.id === shotId)
-    ?? historyShots.find(s => s.id === shotId);
+    ?? historyShots.find(s => s.id === shotId)
+    ?? (Array.isArray(navList) ? navList.find(s => s.id === shotId) : null);
   if (!shot || !shotReviewModalEl) return;
 
   _reviewShotId = shotId;
+  _reviewNavShots = Array.isArray(navList) ? navList : [];
+  _reviewNavIndex = _reviewNavShots.findIndex(s => s.id === shotId);
+  _updateReviewNav();
+  _updateReferenceBtn();
 
   const ctx = shot.workflow?.context || {};
-  const date = new Date(shot.timestamp);
-  const dateStr = isNaN(date.getTime()) ? '—'
-    : date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-  if (shotReviewTitleEl)  shotReviewTitleEl.textContent = dateStr;
+  _reviewMetaDate = new Date(shot.timestamp);
 
   const ann = shot.annotations ?? {};
   // The review edits the actual shot's dose (annotations.actualDoseWeight), the same
@@ -5045,8 +5236,10 @@ function openShotReview(shotId) {
     outValue:         undefined, // undefined = loading, null = no data, number = actual out
     outUnit:          'g',
     outEstimated:     false,
+    durationSec:      null,
   };
   _renderShotReviewFields();
+  _renderReviewMeta();
 
   const initRating = ann.enjoyment ?? shot.metadata?.rating ?? null;
   const initFav    = ann.extras?.favorite ?? shot.metadata?.favorite === true;
@@ -5055,6 +5248,7 @@ function openShotReview(shotId) {
   _setShotReviewFav(initFav);
   if (shotReviewNotesEl) shotReviewNotesEl.value = ann.espressoNotes ?? shot.metadata?.notes ?? '';
   _renderReviewTags();
+  _reviewInitialSig = _reviewStateSig();
 
   const workflowTagsGroupEl = document.getElementById('shot-review-workflow-tags-group');
   const workflowTagsEl      = document.getElementById('shot-review-workflow-tags');
@@ -5101,6 +5295,7 @@ function openShotReview(shotId) {
       if (_reviewShotId !== shotId || !_reviewDraft) return;
       const secs = getShotDurationSeconds(fullShot);
       _reviewDraft.dispDuration = Number.isFinite(secs) ? `${secs.toFixed(0)} s` : '—';
+      _reviewDraft.durationSec = Number.isFinite(secs) ? secs : null;
 
       let actualOut = null;
       let outUnit = 'g';
@@ -5133,8 +5328,13 @@ function openShotReview(shotId) {
 
       _reviewAnalysisRows = window.NSXUI?.renderShotAnalysis(normalizeShotData(fullShot)) || [];
       _renderShotReviewFields();
+      _renderReviewMeta();
 
+      _reviewCurrentFull = fullShot;
       if (shotReviewGraphEl) {
+        shotReviewGraphEl._referenceNormalized =
+          (_reviewReferenceActive && _reviewReferenceFull && _reviewReferenceId !== shotId)
+            ? normalizeShotData(_reviewReferenceFull) : null;
         requestAnimationFrame(() => {
           renderShotGraph?.(shotReviewGraphEl, fullShot, null, undefined, null, null, normalizeShotData, 'history');
         });
@@ -5148,12 +5348,21 @@ function openShotReview(shotId) {
       _reviewDraft.outUnit      = 'g';
       _reviewDraft.outEstimated = estYield != null;
       _renderShotReviewFields();
+      _renderReviewMeta();
     });
 }
 
 function closeShotReview() {
   if (shotReviewModalEl) shotReviewModalEl.hidden = true;
   _reviewShotId = null;
+  _reviewNavShots = [];
+  _reviewNavIndex = -1;
+  _reviewReferenceActive = false;
+  _reviewReferenceId = null;
+  _reviewReferenceFull = null;
+  _reviewCurrentFull = null;
+  if (shotReviewGraphEl) shotReviewGraphEl._referenceNormalized = null;
+  _updateReferenceBtn();
 }
 
 shotReviewRatingEl?.addEventListener('input', () => {
@@ -5192,42 +5401,39 @@ shotReviewFavBtn?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-shot-review-close')?.addEventListener('click', closeShotReview);
+document.getElementById('btn-shot-review-prev')?.addEventListener('click', () => _navigateReview(+1));
+document.getElementById('btn-shot-review-next')?.addEventListener('click', () => _navigateReview(-1));
+
+document.getElementById('btn-shot-review-reference')?.addEventListener('click', async () => {
+  if (_reviewReferenceActive) {
+    _reviewReferenceActive = false;
+    _reviewReferenceId = null;
+    _reviewReferenceFull = null;
+  } else {
+    _reviewReferenceActive = true;
+    _reviewReferenceId = _reviewShotId;
+    _reviewReferenceFull = _reviewCurrentFull || shotDetailsCache.get(_reviewShotId) || null;
+    if (!_reviewReferenceFull && _reviewShotId) {
+      try { _reviewReferenceFull = await getShotDetailsCached(_reviewShotId); } catch {}
+    }
+  }
+  _updateReferenceBtn();
+  _rerenderReviewGraph();
+});
 
 document.getElementById('btn-shot-review-tag-add')?.addEventListener('click', () => {
-  if (!shotReviewTagPanelEl) return;
-  const opening = shotReviewTagPanelEl.hidden;
-  shotReviewTagPanelEl.hidden = !opening;
-  if (opening) {
-    if (shotReviewTagInputEl) shotReviewTagInputEl.value = '';
-    _renderTagSuggestions('');
-    shotReviewTagInputEl?.focus();
-  }
-});
-
-shotReviewTagInputEl?.addEventListener('input', () => {
-  _renderTagSuggestions(shotReviewTagInputEl.value);
-});
-
-shotReviewTagInputEl?.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return;
-  const val = shotReviewTagInputEl.value.trim();
-  if (val && !_reviewTags.includes(val)) {
-    _reviewTags.push(val);
-    _renderReviewTags();
-  }
-  shotReviewTagInputEl.value = '';
-  _renderTagSuggestions('');
-});
-
-shotReviewTagListEl?.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-tag]');
-  if (!btn) return;
-  const tag = btn.dataset.tag;
-  if (!_reviewTags.includes(tag)) {
-    _reviewTags.push(tag);
-    _renderReviewTags();
-    _renderTagSuggestions(shotReviewTagInputEl?.value ?? '');
-  }
+  // Reuse the field picker: it provides the custom keyboard plus a filterable
+  // list of previously used tags in one modal.
+  const options = _getAllUsedTags().filter(t => !_reviewTags.includes(t));
+  openFieldPicker(null, options, {
+    onConfirm: (val) => {
+      const tag = (val ?? '').trim();
+      if (tag && !_reviewTags.includes(tag)) {
+        _reviewTags.push(tag);
+        _renderReviewTags();
+      }
+    },
+  });
 });
 
 shotReviewTagsEl?.addEventListener('click', (e) => {
@@ -5302,7 +5508,7 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
 document.getElementById('history-accordion-list')?.addEventListener('click', e => {
   if (e.target.closest('.history-shot-delete-btn')) return;
   const row = e.target.closest('.history-shot-row');
-  if (row?.dataset.shotId) openShotReview(row.dataset.shotId);
+  if (row?.dataset.shotId) openShotReview(row.dataset.shotId, _historyCurrentShotList);
 });
 
 /* ── History Shortcut Button ────────────────────────── */
@@ -5317,7 +5523,7 @@ document.getElementById('btn-workflow-history-shortcut')?.addEventListener('clic
   const navIdx = Number(graphEl?._shotNav?.index);
   const idx = Number.isInteger(navIdx) ? Math.max(0, Math.min(navIdx, matching.length - 1)) : 0;
   const shot = matching[idx] || matching[0];
-  if (shot?.id) openShotReview(shot.id);
+  if (shot?.id) openShotReview(shot.id, matching);
 });
 
 /* ── Workflow Edit Modal ──────────────────────────────── */
@@ -9346,6 +9552,116 @@ function _renderFieldPickerList(filter) {
   });
 }
 
+/* ── Shared Keyboard Logic ───────────────────────────── */
+let _fpKbShift = false;
+let _fpKbActiveTarget = null;
+let _fpKbBsTimer = null;
+let _fpKbBsInterval = null;
+
+function _fpKbSetShift(on) {
+  _fpKbShift = on;
+  document.querySelectorAll('[id$="-kb-shift"]').forEach(btn => {
+    btn.classList.toggle('fp-key--shift-active', _fpKbShift);
+  });
+  document.querySelectorAll('.fp-keyboard .fp-key[data-key]').forEach(btn => {
+    const k = btn.dataset.key;
+    if (/^[a-z]$/.test(k)) btn.textContent = _fpKbShift ? k.toUpperCase() : k.toLowerCase();
+  });
+}
+
+function _fpKbInsert(char) {
+  const input = _fpKbActiveTarget;
+  if (!input) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end   = input.selectionEnd   ?? input.value.length;
+  const isLetter = /^[a-z]$/i.test(char);
+  const ch = isLetter ? (_fpKbShift ? char.toUpperCase() : char.toLowerCase()) : char;
+  input.value = input.value.slice(0, start) + ch + input.value.slice(end);
+  const pos = start + ch.length;
+  input.setSelectionRange(pos, pos);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if (_fpKbShift && isLetter) _fpKbSetShift(false);
+}
+
+function _fpKbBackspace() {
+  const input = _fpKbActiveTarget;
+  if (!input) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end   = input.selectionEnd   ?? input.value.length;
+  if (start !== end) {
+    input.value = input.value.slice(0, start) + input.value.slice(end);
+    input.setSelectionRange(start, start);
+  } else if (start > 0) {
+    input.value = input.value.slice(0, start - 1) + input.value.slice(start);
+    input.setSelectionRange(start - 1, start - 1);
+  }
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function _fpKbStopBackspace() {
+  clearTimeout(_fpKbBsTimer);
+  clearInterval(_fpKbBsInterval);
+  _fpKbBsTimer = null;
+  _fpKbBsInterval = null;
+}
+
+function _setupKeyboard(keyboardId, shiftBtnId, bsBtnId) {
+  const kb = document.getElementById(keyboardId);
+  if (!kb) return;
+  kb.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const key = e.target.closest('.fp-key');
+    if (!key) return;
+    if (key.id === shiftBtnId) { _fpKbSetShift(!_fpKbShift); return; }
+    if (key.id === bsBtnId) {
+      _fpKbBackspace();
+      _fpKbBsTimer = setTimeout(() => { _fpKbBsInterval = setInterval(_fpKbBackspace, 80); }, 400);
+      return;
+    }
+    const char = key.dataset.key;
+    if (char !== undefined) _fpKbInsert(char);
+  });
+  kb.addEventListener('pointerup',     _fpKbStopBackspace);
+  kb.addEventListener('pointercancel', _fpKbStopBackspace);
+  kb.addEventListener('pointerleave',  _fpKbStopBackspace);
+}
+
+_setupKeyboard('field-picker-keyboard', 'fp-kb-shift', 'fp-kb-backspace');
+_setupKeyboard('text-editor-keyboard',  'te-kb-shift', 'te-kb-backspace');
+
+/* ── Text Editor Modal (multiline notes) ─────────────── */
+let _textEditorOnConfirm = null;
+
+function openTextEditorModal(currentValue, onConfirm) {
+  _textEditorOnConfirm = onConfirm;
+  const modal = document.getElementById('text-editor-modal');
+  const ta    = document.getElementById('text-editor-textarea');
+  if (!modal || !ta) return;
+  ta.value = currentValue ?? '';
+  _fpKbActiveTarget = ta;
+  _fpKbSetShift(false);
+  modal.hidden = false;
+  setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 60);
+}
+
+function closeTextEditorModal(confirm) {
+  const modal = document.getElementById('text-editor-modal');
+  const ta    = document.getElementById('text-editor-textarea');
+  if (confirm && _textEditorOnConfirm && ta) _textEditorOnConfirm(ta.value);
+  if (modal) modal.hidden = true;
+  _textEditorOnConfirm = null;
+  _fpKbActiveTarget = null;
+}
+
+document.getElementById('btn-text-editor-cancel')?.addEventListener('click',  () => closeTextEditorModal(false));
+document.getElementById('btn-text-editor-confirm')?.addEventListener('click', () => closeTextEditorModal(true));
+
+document.getElementById('shot-review-notes')?.addEventListener('click', () => {
+  openTextEditorModal(shotReviewNotesEl?.value ?? '', (val) => {
+    if (shotReviewNotesEl) shotReviewNotesEl.value = val;
+  });
+});
+
 function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = null, initialValue = null } = {}) {
   _fieldPickerTarget = inputEl;
   _fieldPickerOnConfirm = onConfirm;
@@ -9353,9 +9669,10 @@ function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = nul
   const modal = document.getElementById('field-picker-modal');
   const pickerInput = document.getElementById('field-picker-input');
   if (!modal || !pickerInput) return;
-  pickerInput.setAttribute('inputmode', inputMode);
   pickerInput.value = initialValue !== null ? String(initialValue) : (inputEl?.value || '');
   _renderFieldPickerList(pickerInput.value);
+  _fpKbActiveTarget = pickerInput;
+  _fpKbSetShift(pickerInput.value.length === 0);
   modal.hidden = false;
   setTimeout(() => { pickerInput.focus(); pickerInput.select(); }, 60);
 }
@@ -9380,46 +9697,18 @@ document.getElementById('btn-field-picker-cancel')?.addEventListener('click', ()
 document.getElementById('btn-field-picker-confirm')?.addEventListener('click', () => closeFieldPicker(true));
 document.getElementById('field-picker-input')?.addEventListener('input', (e) => _renderFieldPickerList(e.target.value));
 
-/* ── Generic Search Input Modal ──────────────────────────── */
-let _searchInputTarget = null;
-
-function openSearchInputModal(inputEl) {
-  _searchInputTarget = inputEl;
-  const modal = document.getElementById('search-input-modal');
-  const searchInput = document.getElementById('search-input-field');
-  if (!modal || !searchInput) return;
-  searchInput.value = inputEl?.value || '';
-  searchInput.placeholder = inputEl?.placeholder || '';
-  modal.hidden = false;
-  setTimeout(() => { searchInput.focus(); searchInput.select(); }, 60);
-}
-
-function closeSearchInputModal(confirm) {
-  const modal = document.getElementById('search-input-modal');
-  const searchInput = document.getElementById('search-input-field');
-  if (confirm && _searchInputTarget && searchInput) {
-    _searchInputTarget.value = searchInput.value;
-    _searchInputTarget.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-  if (modal) modal.hidden = true;
-  _searchInputTarget = null;
-}
-
 document.getElementById('profile-picker-search')?.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   openFieldPicker(e.target, []);
 });
 
 document.querySelector('.workflows-search')?.addEventListener('click', (e) => {
-  openSearchInputModal(e.target);
+  openFieldPicker(e.target, []);
 });
 
 document.getElementById('history-search')?.addEventListener('click', (e) => {
-  openSearchInputModal(e.target);
+  openFieldPicker(e.target, []);
 });
-
-document.getElementById('btn-search-input-cancel')?.addEventListener('click', () => closeSearchInputModal(false));
-document.getElementById('btn-search-input-confirm')?.addEventListener('click', () => closeSearchInputModal(true));
 
 /* ── Number Picker (iOS drum wheel) ───────────────────── */
 let _npValues = [];

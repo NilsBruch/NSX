@@ -125,6 +125,34 @@ function makeGradFill(r, g, b, alpha = 0.16) {
   };
 }
 
+// Faded ("ghost") variant of a #rrggbb colour, for the reference-shot overlay.
+function _fadeHex(hex, alpha) {
+  const h = String(hex).replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Linear-resample a reference series (refX→refY) onto targetX (the current shot's
+// elapsed grid). Returns null outside the reference's time range so the line stops.
+function _resampleSeries(refX, refY, targetX) {
+  const n = refX?.length || 0;
+  const out = new Array(targetX.length).fill(null);
+  if (!n || !Array.isArray(refY)) return out;
+  let j = 0;
+  for (let i = 0; i < targetX.length; i++) {
+    const t = targetX[i];
+    if (!Number.isFinite(t) || t < refX[0] || t > refX[n - 1]) { out[i] = null; continue; }
+    while (j < n - 1 && refX[j + 1] < t) j++;
+    const k = Math.min(j + 1, n - 1);
+    const x0 = refX[j], x1 = refX[k], y0 = refY[j], y1 = refY[k];
+    if (!Number.isFinite(y0)) { out[i] = Number.isFinite(y1) ? y1 : null; continue; }
+    out[i] = (x1 === x0 || !Number.isFinite(y1)) ? y0 : y0 + (y1 - y0) * ((t - x0) / (x1 - x0));
+  }
+  return out;
+}
+
 const DEFAULT_SERIES_VISIBILITY = {
   pressure: true,
   flow: true,
@@ -478,8 +506,17 @@ function createLegendControl(key, label, isActive) {
   `;
 }
 
+// The shot review renders its legend into a dedicated slot (flanked by the date
+// picker and reference button) instead of inside the graph wrap.
+function _legendHostFor(graphEl) {
+  if (graphEl?.id === 'shot-review-graph') {
+    return document.getElementById('shot-review-legend-host') || graphEl.parentElement || graphEl;
+  }
+  return graphEl?.parentElement || graphEl;
+}
+
 function renderShotLegend(graphEl, visibility, onToggle, navContext) {
-  const host = graphEl.parentElement || graphEl;
+  const host = _legendHostFor(graphEl);
   const existing = host.querySelector('.workflow-legend');
   if (existing) existing.remove();
 
@@ -515,11 +552,12 @@ function renderShotLegend(graphEl, visibility, onToggle, navContext) {
     legend.appendChild(skipBtn);
   }
 
-  host.insertBefore(legend, graphEl);
+  if (host.contains(graphEl)) host.insertBefore(legend, graphEl);
+  else host.appendChild(legend);
 }
 
 function updateWorkflowLegendLive(graphEl, vals) {
-  const legend = graphEl?.parentElement?.querySelector('.workflow-legend');
+  const legend = _legendHostFor(graphEl)?.querySelector('.workflow-legend');
   if (!legend) return;
   const fmt = {
     pressure:    Number.isFinite(vals.pressure)                         ? `${vals.pressure.toFixed(1)} bar`  : '— bar',
@@ -1339,6 +1377,28 @@ function renderShotGraph(graphEl, shot, workflow, seriesVisibility, navContext, 
   setSeriesVisibility(mode, visibility);
   const opts = createChartOpts(width, height, visibility);
 
+  // Reference-shot overlay: same per-metric colours, ghosted (faded, thinner, no
+  // fill, solid) so it reads as background behind the current shot. Resampled onto
+  // the current shot's elapsed grid because uPlot needs one shared x-axis.
+  const ref = graphEl._referenceNormalized;
+  if (ref && Array.isArray(ref.elapsed) && ref.elapsed.length) {
+    const tx = normalized.elapsed;
+    const refSpline = uPlot.paths.spline?.();
+    const A = 0.4;
+    data.push(
+      _resampleSeries(ref.elapsed, ref.pressure,    tx),
+      _resampleSeries(ref.elapsed, ref.flow,        tx),
+      _resampleSeries(ref.elapsed, ref.scaleRate,   tx),
+      _resampleSeries(ref.elapsed, ref.temperature, tx),
+    );
+    opts.series.push(
+      { label: 'Ref Pressure', stroke: _fadeHex(CHART_COLORS.pressure, A),   width: 1.5, paths: refSpline, scale: 'pressure', points: { show: false }, show: visibility.pressure    !== false },
+      { label: 'Ref Flow',     stroke: _fadeHex(CHART_COLORS.flow, A),       width: 1.5, paths: refSpline, scale: 'pressure', points: { show: false }, show: visibility.flow        !== false },
+      { label: 'Ref Scale',    stroke: _fadeHex(CHART_COLORS.weightRate, A), width: 1.5, paths: refSpline, scale: 'pressure', points: { show: false }, show: visibility.scaleRate   !== false },
+      { label: 'Ref Temp',     stroke: _fadeHex(CHART_COLORS.temperature, A),width: 1.5, paths: refSpline, scale: 'temp',     points: { show: false }, show: visibility.temperature !== false },
+    );
+  }
+
   try {
     const chart = new uPlot(opts, data, graphEl);
     graphEl._chart = chart;
@@ -1373,7 +1433,7 @@ function renderShotGraph(graphEl, shot, workflow, seriesVisibility, navContext, 
     // Remove any cursor listeners from a previous renderShotGraph call on this element
     graphEl._removeCursorListeners?.();
 
-    const _legendHost = graphEl.parentElement || graphEl;
+    const _legendHost = _legendHostFor(graphEl);
     const _origLabels = {};
     let _origCaptured = false;
 
@@ -1435,17 +1495,40 @@ function renderShotGraph(graphEl, shot, workflow, seriesVisibility, navContext, 
 
     const _onPointerMove  = e => _showAtClientX(e.clientX);
     const _onPointerLeave = () => _resetLegend();
-    const _onTouchMove    = e => { e.preventDefault(); _showAtClientX(e.touches[0].clientX); };
-    const _onTouchEnd     = () => _resetLegend();
+    // Decide per gesture: a horizontal drag scrubs the crosshair (preventDefault),
+    // a vertical drag is left alone so the surrounding container can scroll.
+    let _touchStartX = 0, _touchStartY = 0, _touchMode = null; // null | 'scrub' | 'scroll'
+    const _onTouchStart = e => {
+      const t0 = e.touches[0];
+      _touchStartX = t0.clientX;
+      _touchStartY = t0.clientY;
+      _touchMode = null;
+    };
+    const _onTouchMove = e => {
+      const t0 = e.touches[0];
+      if (_touchMode === null) {
+        const dx = Math.abs(t0.clientX - _touchStartX);
+        const dy = Math.abs(t0.clientY - _touchStartY);
+        if (dx < 6 && dy < 6) return; // too small to classify yet
+        _touchMode = dx > dy ? 'scrub' : 'scroll';
+      }
+      if (_touchMode === 'scrub') {
+        e.preventDefault();
+        _showAtClientX(t0.clientX);
+      }
+    };
+    const _onTouchEnd     = () => { _touchMode = null; _resetLegend(); };
 
     graphEl.addEventListener('pointermove',  _onPointerMove);
     graphEl.addEventListener('pointerleave', _onPointerLeave);
+    graphEl.addEventListener('touchstart',   _onTouchStart, { passive: true });
     graphEl.addEventListener('touchmove',    _onTouchMove, { passive: false });
     graphEl.addEventListener('touchend',     _onTouchEnd,  { passive: true });
 
     graphEl._removeCursorListeners = () => {
       graphEl.removeEventListener('pointermove',  _onPointerMove);
       graphEl.removeEventListener('pointerleave', _onPointerLeave);
+      graphEl.removeEventListener('touchstart',   _onTouchStart);
       graphEl.removeEventListener('touchmove',    _onTouchMove);
       graphEl.removeEventListener('touchend',     _onTouchEnd);
       delete graphEl._removeCursorListeners;
@@ -1497,7 +1580,7 @@ function _historyFormatDate(timestamp) {
   return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-const _starFilledSvg = `<svg class="history-shot-fav" viewBox="0 0 24 24" fill="#FFD60A" stroke="#FFD60A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Favorit"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+const _starFilledSvg = `<svg class="history-shot-fav" viewBox="0 0 24 24" fill="#FF3B30" stroke="#FF3B30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Favorit"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 
 function _esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1506,6 +1589,29 @@ function _esc(s) {
 function _recipeKey(w) {
   return [w.coffeeRoaster, w.coffeeName, w.grinderModel, w.profileTitle]
     .map(v => String(v || '—').trim().toLocaleLowerCase('de-DE')).join('||');
+}
+
+// Shot temperature — same source the shot review uses under "Temperatur":
+// profile groupTemp, else first frame temperature, else tank temperature.
+function _shotTemp(shot) {
+  const prof = shot?.workflow?.profile;
+  const g = Number(prof?.groupTemp);
+  if (Number.isFinite(g) && g > 0) return g;
+  const frames = prof?.steps ?? prof?.frames ?? [];
+  if (Array.isArray(frames)) {
+    for (const f of frames) {
+      const tv = Number(f?.temperature);
+      if (Number.isFinite(tv) && tv > 0) return tv;
+    }
+  }
+  const tank = Number(prof?.tank_temperature);
+  return (Number.isFinite(tank) && tank > 0) ? tank : null;
+}
+
+// Render a 0–100 enjoyment value as 5 half-fillable stars (each star = 20).
+function _starRatingHtml(val) {
+  const fill = Math.round((Number(val) || 0) / 10) * 10; // nearest half-star (10% per half)
+  return `<span class="rating-stars" style="--fill:${fill}%"><span class="rating-stars-bg">★★★★★</span><span class="rating-stars-fg">★★★★★</span></span>`;
 }
 
 function _renderRecipeRating(key, max, count) {
@@ -1528,7 +1634,7 @@ function updateRecipeRating(key, max, count) {
 let _onRecipesRendered = null;
 function setOnRecipesRendered(fn) { _onRecipesRendered = fn; }
 
-function _renderShotRows(shots) {
+function _renderShotRows(shots, { showRecipe = false } = {}) {
   if (!Array.isArray(shots) || shots.length === 0) {
     return `<li class="history-shot-empty">${t('history.noShots')}</li>`;
   }
@@ -1536,6 +1642,31 @@ function _renderShotRows(shots) {
     const ctx    = shot?.workflow?.context || {};
     const grind  = ctx.grinderSetting ?? '—';
     const ann    = shot.annotations ?? {};
+    // Recipe context — only shown in the flat shots-by-date view (the accordion
+    // already carries roaster/bean/grinder/profile in its header).
+    const roaster = ctx.coffeeRoaster || '—';
+    const bean    = ctx.coffeeName || '—';
+    const grinder = ctx.grinderModel || '—';
+    const profile = shot?.workflow?.profile?.title || shot?.workflow?.profileTitle
+                 || shot?.profileTitle || shot?.workflow?.name || '—';
+    const recipeCells = showRecipe ? `
+      <span class="history-shot-cell history-shot-cell--recipe">
+        <span class="history-shot-label">${t('filter.roaster')}</span>
+        <span class="history-shot-value">${_esc(roaster)}</span>
+      </span>
+      <span class="history-shot-cell history-shot-cell--recipe">
+        <span class="history-shot-label">${t('filter.bean')}</span>
+        <span class="history-shot-value">${_esc(bean)}</span>
+      </span>
+      <span class="history-shot-cell history-shot-cell--recipe">
+        <span class="history-shot-label">${t('recipe.grinder')}</span>
+        <span class="history-shot-value">${_esc(grinder)}</span>
+      </span>` : '';
+    const profileCell = showRecipe ? `
+      <span class="history-shot-cell history-shot-cell--recipe">
+        <span class="history-shot-label">${t('recipe.profile')}</span>
+        <span class="history-shot-value">${_esc(profile)}</span>
+      </span>` : '';
     // Actual shot values: actual dose / actual yield from annotations, recipe target as fallback.
     const dose   = Number(ann.actualDoseWeight ?? ctx.targetDoseWeight ?? 0);
     const annYield = Number(ann.actualYield ?? ann.extras?.actualYield);
@@ -1546,8 +1677,10 @@ function _renderShotRows(shots) {
     const doseYield = dose > 0 && yield_ > 0
       ? `${dose}g → ${yieldLabel} (1:${(yield_ / dose).toFixed(1)})`
       : '—';
+    const temp   = _shotTemp(shot);
+    const tempStr = Number.isFinite(temp) ? `${temp.toFixed(1)} °C` : '—';
     const rating = ann.enjoyment ?? shot.metadata?.rating ?? (shot.rating != null ? shot.rating : null);
-    const ratingDisplay = rating != null ? String(rating) : '—';
+    const ratingDisplay = rating != null ? _starRatingHtml(rating) : '<span class="history-shot-value">—</span>';
     const isFav  = ann.extras?.favorite ?? shot.metadata?.favorite === true;
     const date   = _historyFormatDate(shot.timestamp);
     const tags   = Array.isArray(ann.extras?.tags) ? ann.extras.tags
@@ -1556,15 +1689,21 @@ function _renderShotRows(shots) {
       ? `<span class="history-shot-tags">${tags.map(tag => `<span class="history-shot-tag">${_esc(tag)}</span>`).join('')}</span>`
       : '';
     return `
-    <li class="history-shot-row" data-shot-id="${shot.id}">
+    <li class="history-shot-row${showRecipe ? ' history-shot-row--flat' : ''}" data-shot-id="${shot.id}">
       <span class="history-shot-date">${date}</span>
+      ${recipeCells}
       <span class="history-shot-cell history-shot-cell--grind">
         <span class="history-shot-label">${t('history.grindSize')}</span>
         <span class="history-shot-value">${_esc(grind)}</span>
       </span>
+      ${profileCell}
       <span class="history-shot-cell history-shot-cell--dose">
         <span class="history-shot-label">${t('history.doseYield')}</span>
         <span class="history-shot-value">${doseYield}</span>
+      </span>
+      <span class="history-shot-cell history-shot-cell--temp">
+        <span class="history-shot-label">${t('history.temp')}</span>
+        <span class="history-shot-value">${tempStr}</span>
       </span>
       <span class="history-shot-cell history-shot-cell--time">
         <span class="history-shot-label">${t('history.time')}</span>
@@ -1574,7 +1713,7 @@ function _renderShotRows(shots) {
       <span class="history-shot-rating-cell">
         <span class="history-shot-label">${t('history.rating')}</span>
         <span class="history-shot-rating-row">
-          <span class="history-shot-value">${ratingDisplay}</span>
+          ${ratingDisplay}
           ${isFav ? _starFilledSvg : ''}
         </span>
       </span>
@@ -1634,6 +1773,16 @@ function renderHistoryAccordion(recipes, selectedIndex, selectedShots) {
   }).join('');
 }
 
+function renderHistoryShotList(shots) {
+  const listEl = document.getElementById('history-accordion-list');
+  if (!listEl) return;
+  if (!Array.isArray(shots) || shots.length === 0) {
+    listEl.innerHTML = `<li class="history-accordion-empty">${t('history.empty')}</li>`;
+    return;
+  }
+  listEl.innerHTML = `<li class="history-shots-flat"><ul class="history-shots-list">${_renderShotRows(shots, { showRecipe: true })}</ul></li>`;
+}
+
 function updateHistoryShotDuration(shotId, seconds) {
   const el = document.querySelector(`#history-accordion-list .history-shot-duration[data-shot-id="${shotId}"]`);
   if (el) el.textContent = Number.isFinite(seconds) ? `${seconds.toFixed(0)}s` : '—';
@@ -1665,6 +1814,7 @@ window.NSXUI = {
   updateRecipeListFade,
   updateActiveWorkflowCardHistoricalValues,
   renderHistoryAccordion,
+  renderHistoryShotList,
   updateHistoryShotDuration,
   updateRecipeRating,
   setOnRecipesRendered,
