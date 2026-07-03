@@ -87,6 +87,26 @@ export interface StoreSettings { [k: string]: any; }
 
 // ── Event map (NSXCore.on) ────────────────────────────────────────────────────
 
+/**
+ * Reaprime BLE connection-error taxonomy (devices WS, connectionStatus.error).
+ * "Sticky" kinds (adapterOff, bluetoothPermissionDenied, scanFailed) persist
+ * across phase transitions until the environment recovers. "Transient" kinds
+ * (scaleConnectFailed, machineConnectFailed, scaleDisconnected,
+ * machineDisconnected) auto-clear when the phase moves on. The same error can
+ * repeat across several `devices` messages while unresolved — dedupe by
+ * kind+timestamp before surfacing it to the user.
+ */
+export interface DeviceError {
+  kind: string;
+  severity: string;
+  timestamp: string;
+  deviceId?: string;
+  deviceName?: string;
+  message: string;
+  suggestion?: string;
+  details?: Record<string, any>;
+}
+
 export interface NSXCoreEventMap {
   // gateway-bridged
   machineConnected: boolean;
@@ -94,7 +114,12 @@ export interface NSXCoreEventMap {
   scaleWeight: { weight: number; weightFlow: number | null };
   machineState: { state: string; substate?: string };
   waterLevel: { currentLevel: number; refillLevel: number };
-  devices: { devices: any[]; machineConnected: boolean; scaleConnected: boolean; connectionStatus: any };
+  devices: {
+    devices: any[];
+    machineConnected: boolean;
+    scaleConnected: boolean;
+    connectionStatus: { phase: string; error: DeviceError | null } | null;
+  };
   /** Raw machine snapshot (state.state, groupTemperature, pressure, flow, profileFrame, …). */
   liveShot: any;
   timeToReady: { remainingMs: number | null };

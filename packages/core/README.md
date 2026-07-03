@@ -171,6 +171,21 @@ and/or push to the gateway and emit `*Changed` events the UI re-renders from.
 > `NSXCore.on("scaleWeight"/"scaleConnected", …)` handlers, updating its
 > `#scale-weight` element.) Core no longer touches the DOM at all.
 
+> **Wake-lock override auto-releases when `ws/v1/display` closes.** If a skin
+> calls `NSXApi.requestWakeLockOverride()` (REST) or sends `{"command":
+> "requestWakeLock"}` over its own `ws/v1/display` connection, the gateway drops
+> that override the instant *that specific WebSocket* closes — this prevents an
+> orphaned lock from a disconnected skin. **Any skin that opens its own
+> `ws/v1/display` connection and tracks wake-lock state locally (to dedupe
+> redundant requests) must re-assert the lock after a reconnect** — the gateway
+> has already forgotten it, but a naive local cache won't know that. NSX hits
+> this in `setupDisplayControl()`/`screensaver.js`: on a display-WS reconnect
+> (not the first connect) it calls `invalidateWakeLock()` to clear its dedup
+> cache before the next `syncWakeLock()`, so a locked screensaver doesn't
+> silently lose its lock after a brief network blip. `api.js` itself doesn't
+> hold a persistent `ws/v1/display` socket — this is entirely a skin-side
+> concern.
+
 ## Event payloads (`NSXCore.on(name, cb)`)
 
 Gateway-bridged events (payloads as emitted by `api.js`):
@@ -182,9 +197,18 @@ Gateway-bridged events (payloads as emitted by `api.js`):
 | `scaleWeight`      | `{ weight: number, weightFlow: number \| null }` |
 | `machineState`     | `{ state: string, substate?: string }` |
 | `waterLevel`       | `{ currentLevel: number, refillLevel: number }` |
-| `devices`          | `{ devices: any[], machineConnected: boolean, scaleConnected: boolean, connectionStatus: any }` |
+| `devices`          | `{ devices: any[], machineConnected: boolean, scaleConnected: boolean, connectionStatus: { phase: string, error: DeviceError \| null } \| null }` |
 | `liveShot`         | the raw machine **snapshot** object — commonly used fields: `state.state`, `state.substate`, `timestamp`, `groupTemperature`, `steamTemperature`, `pressure`, `flow`, `targetPressure`, `targetFlow`, `profileFrame` |
 | `timeToReady`      | `{ remainingMs: number \| null }` |
+
+`connectionStatus.error` (Reaprime BLE error taxonomy) — `{ kind, severity, timestamp, deviceId?, deviceName?, message, suggestion, details? }`.
+**"Sticky" kinds** (`adapterOff`, `bluetoothPermissionDenied`, `scanFailed`) persist across phase
+transitions until the environment recovers (adapter on / permission granted / scan starts
+successfully). **Transient kinds** (`scaleConnectFailed`, `machineConnectFailed`,
+`scaleDisconnected`, `machineDisconnected`) auto-clear when the phase moves to `scanning`,
+`connectingMachine`, `connectingScale`, or `ready`. The same error can repeat across several
+`devices` messages while unresolved — dedupe by `kind`+`timestamp` before surfacing it (NSX
+does this in its `devices` handler, showing `suggestion` as a toast once per occurrence).
 
 Domain-emitted events (fire after a command mutates that domain):
 

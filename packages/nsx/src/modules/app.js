@@ -1518,6 +1518,7 @@ function setupPresenceTracking() {
 /* ── Display Control (Reaprime Best Practice) ─────────────– */
 function setupDisplayControl() {
   const wsUrl = WS_BASE + '/ws/v1/display';
+  let _everConnected = false;
 
   const connect = () => {
     try {
@@ -1525,6 +1526,16 @@ function setupDisplayControl() {
 
       displayWs.onopen = () => {
         displayReconnectDelay = 1000;
+        // The gateway auto-releases any wake-lock override held on this socket
+        // when it closes. On a genuine reconnect (not the first connect), the
+        // override is already gone server-side even though the screensaver may
+        // still believe it's held — force a re-request so a locked screensaver
+        // doesn't silently lose its wake-lock after a brief network blip.
+        if (_everConnected) {
+          window.NSXScreensaver?.invalidateWakeLock();
+          window.NSXScreensaver?.syncWakeLock();
+        }
+        _everConnected = true;
       };
 
       displayWs.onmessage = (event) => {
@@ -1589,6 +1600,16 @@ NSXCore.on("scaleConnected", (connected) => {
   if (scaleConnected !== wasConnected) _schedulePushCurrentSkinState();
 });
 
+// Reaprime devices-WS error taxonomy: connectionStatus.error carries
+// {kind, severity, message, suggestion, deviceName, timestamp, details}.
+// "Sticky" kinds (adapterOff, bluetoothPermissionDenied, scanFailed) persist
+// across phase transitions until the environment recovers; "transient" kinds
+// (scaleConnectFailed, machineConnectFailed, scaleDisconnected,
+// machineDisconnected) auto-clear on the next operation. Either way the same
+// error object can arrive on repeated devices-WS messages — dedupe by
+// kind+timestamp so we toast once per occurrence, not once per message.
+let _lastDeviceErrorKey = null;
+
 NSXCore.on("devices", (d) => {
   const machineConnected = Boolean(d?.machineConnected);
   const scaleIsConnected = Boolean(d?.scaleConnected);
@@ -1601,6 +1622,13 @@ NSXCore.on("devices", (d) => {
 
   const toggle = document.getElementById('scale-connect-toggle');
   if (toggle) toggle.checked = scaleConnected;
+
+  const err = d?.connectionStatus?.error ?? null;
+  const errKey = err ? `${err.kind ?? ''}|${err.timestamp ?? ''}` : null;
+  if (errKey && errKey !== _lastDeviceErrorKey) {
+    showToast(err.suggestion || err.message || err.kind, 6000);
+  }
+  _lastDeviceErrorKey = errKey;
 });
 
 let _lastAutoTareAt = 0;
