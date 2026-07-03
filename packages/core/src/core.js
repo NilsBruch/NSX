@@ -11,7 +11,7 @@
  * The contract (stable names):
  *   Events (core -> presentation, via NSXCore.on(name, cb)):
  *     machineConnected, scaleConnected, scaleWeight, machineState, waterLevel,
- *     liveShot, devices, timeToReady,
+ *     liveShot, devices, timeToReady, gatewayLog (opt-in, see NSXApi.startLogStream),
  *     workflowsChanged, selectedWorkflow, shotsChanged, needsWater, syncState, toast
  *   Commands (presentation -> core, attached as NSXCore.<name>(...)):
  *     selectWorkflow, pushSteamTemp, tareScale, startSteam, saveRecipe, ...
@@ -70,6 +70,7 @@
   bridge("gateway:devices",      "devices",          d => d);
   bridge("gateway:snapshot",     "liveShot",         d => d);
   bridge("gateway:timeToReady",  "timeToReady",      d => d);
+  bridge("gateway:log",          "gatewayLog",       d => d); // opt-in — see NSXApi.startLogStream()
 
   window.NSXCore = NSXCore;
 })();

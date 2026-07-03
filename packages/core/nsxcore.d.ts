@@ -123,6 +123,8 @@ export interface NSXCoreEventMap {
   /** Raw machine snapshot (state.state, groupTemperature, pressure, flow, profileFrame, …). */
   liveShot: any;
   timeToReady: { remainingMs: number | null };
+  /** Opt-in — only fires after NSXApi.startLogStream(). REA's raw internal log feed. */
+  gatewayLog: { timestamp: string | null; level: string | null; message: string };
   // domain-emitted
   steamChanged: void;
   pitcherChanged: void;
@@ -303,6 +305,9 @@ export interface NSXApi {
   initiateScaleConnect(): Promise<void>;
   initiateDE1Connect(): Promise<void>;
   disconnectScale(): void;
+  /** Opens ws/v1/logs (auto-reconnects while started); subscribe via NSXCore.on("gatewayLog", ...). */
+  startLogStream(): void;
+  stopLogStream(): void;
   fetchSchedules(): Promise<any>;
   createSchedule(s: any): Promise<any>;
   updateSchedule(id: string, s: any): Promise<any>;

@@ -200,6 +200,14 @@ Gateway-bridged events (payloads as emitted by `api.js`):
 | `devices`          | `{ devices: any[], machineConnected: boolean, scaleConnected: boolean, connectionStatus: { phase: string, error: DeviceError \| null } \| null }` |
 | `liveShot`         | the raw machine **snapshot** object — commonly used fields: `state.state`, `state.substate`, `timestamp`, `groupTemperature`, `steamTemperature`, `pressure`, `flow`, `targetPressure`, `targetFlow`, `profileFrame` |
 | `timeToReady`      | `{ remainingMs: number \| null }` |
+| `gatewayLog`       | `{ timestamp: string \| null, level: string \| null, message: string }` — **opt-in**, see below |
+
+> **`gatewayLog` is opt-in (`ws/v1/logs`).** Unlike every other stream above,
+> nothing connects to REA's raw internal log feed (state-machine transitions,
+> BLE chatter, etc.) by default — it's diagnostic-only, not something a normal
+> UI renders. Call `NSXApi.startLogStream()` to open the socket (auto-reconnects
+> with the same backoff as the other streams while started) and subscribe to
+> `NSXCore.on("gatewayLog", ...)`; call `NSXApi.stopLogStream()` to close it.
 
 `connectionStatus.error` (Reaprime BLE error taxonomy) — `{ kind, severity, timestamp, deviceId?, deviceName?, message, suggestion, details? }`.
 **"Sticky" kinds** (`adapterOff`, `bluetoothPermissionDenied`, `scanFailed`) persist across phase

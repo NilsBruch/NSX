@@ -329,6 +329,54 @@ function connectTimeToReady() {
   };
 }
 
+/* ── Logs WebSocket (opt-in, diagnostic only) ─────────── */
+// Unlike the streams above, nothing subscribes to this by default — it's REA's
+// raw internal log feed (state machine transitions, BLE chatter, etc.), useful
+// for a debug/diagnostics panel, not for driving UI features. Call
+// NSXApi.startLogStream() to open it; NSXApi.stopLogStream() to close it.
+let logsWs = null;
+let logsReconnectDelay = 1000;
+let logsAutoReconnect = false;
+
+function connectLogs() {
+  logsWs = new WebSocket(`${WS_BASE}/ws/v1/logs`);
+
+  logsWs.onopen = () => {
+    logsReconnectDelay = 1000;
+  };
+
+  logsWs.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      window.dispatchEvent(new CustomEvent("gateway:log", {
+        detail: { timestamp: d?.timestamp ?? null, level: d?.level ?? null, message: d?.message ?? "" },
+      }));
+    } catch (_) {}
+  };
+
+  logsWs.onerror = () => {};
+
+  logsWs.onclose = () => {
+    if (logsAutoReconnect) {
+      setTimeout(connectLogs, logsReconnectDelay);
+      logsReconnectDelay = Math.min(logsReconnectDelay * 2, MAX_DELAY);
+    }
+  };
+}
+
+function startLogStream() {
+  logsAutoReconnect = true;
+  logsReconnectDelay = 1000;
+  if (!logsWs || logsWs.readyState === WebSocket.CLOSED) {
+    connectLogs();
+  }
+}
+
+function stopLogStream() {
+  logsAutoReconnect = false;
+  if (logsWs) logsWs.close();
+}
+
 /* ── REST helpers ─────────────────────────────────────── */
 
 /**
@@ -762,6 +810,8 @@ window.NSXApi = {
   initiateScaleConnect,
   initiateDE1Connect,
   disconnectScale,
+  startLogStream,
+  stopLogStream,
   setDisplayBrightness,
   fetchDisplayState,
   fetchPresenceSettings,
