@@ -10,7 +10,7 @@
   } = window.NSXApi || {};
 
   const SS_IMAGES = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15]
-    .map(n => `src/ui/screensaver/Screen_saver_Decent_${n}.jpg`);
+    .map(n => `ui/screensaver/Screen_saver_Decent_${n}.jpg`);
 
   let ssActive = false;
   let ssImgIndex = 0;
@@ -76,6 +76,18 @@
     const onErr = () => { _wakeLockHeld = null; }; // allow retry if the request failed
     if (wantLock) requestWakeLockOverride?.().catch(onErr);
     else releaseWakeLockOverride?.().catch(onErr);
+  }
+
+  // The gateway auto-releases a held wake-lock override when the ws/v1/display
+  // connection that requested it closes (Reaprime best practice, prevents
+  // orphaned locks from a disconnected skin). If that socket reconnects, the
+  // gateway has already forgotten the override, but our dedup cache above
+  // still thinks it's held — so a later syncWakeLock() call with an unchanged
+  // desired state would silently no-op instead of re-asserting it. Call this
+  // right after a display-WS reconnect (before syncWakeLock()) to force the
+  // next call through.
+  function invalidateWakeLock() {
+    _wakeLockHeld = null;
   }
 
   function show(animateSlideReset = false, animateOverlay = false) {
@@ -279,6 +291,7 @@
     suppressForToggleSleep,
     clearSuppressions,
     syncWakeLock,
+    invalidateWakeLock,
     setScalePowerMode(mode) { scalePowerMode = mode || 'disabled'; },
     setEnabled(v) {
       ssEnabled = Boolean(v);

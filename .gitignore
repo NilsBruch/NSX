@@ -12,6 +12,10 @@ ios/
 dist/
 build/
 
+# Dev: shared core synced into the NSX skin's served root.
+# Source of truth is packages/core/src — run `npm run sync-core` to (re)create.
+packages/nsx/src/core/
+
 # IDE
 .vscode/
 .idea/
@@ -28,7 +32,3 @@ Thumbs.db
 
 # Dev/personal files
 .claude/
-
-# Monorepo refactor (lives on monorepo-multi-skin branch only)
-packages/
-scripts/

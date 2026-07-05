@@ -13,7 +13,8 @@
 (() => {
 const { GATEWAY, WS_BASE } = window.NSXConfig || {};
 
-const weightEl = document.getElementById("scale-weight");
+// api.js is DOM-free: the live scale weight is published via the "scale:weight"
+// and "scale:status" events; each skin renders its own weight display from those.
 
 let scaleWs;
 let waterWs;
@@ -120,22 +121,17 @@ function connectScale() {
       const d = JSON.parse(e.data);
 
       if (d?.status === "connected") {
-        weightEl.classList.remove("offline");
         emitScaleStatus(true);
         return;
       }
 
       if (d?.status === "disconnected") {
-        weightEl.classList.add("offline");
-        weightEl.textContent = "–";
         emitScaleStatus(false);
         return;
       }
 
       if (Number.isFinite(d.weight)) {
-        weightEl.classList.remove("offline");
         emitScaleStatus(true);
-        weightEl.textContent = `${d.weight.toFixed(1)} g`;
         window.dispatchEvent(new CustomEvent("scale:weight", {
           detail: { weight: d.weight, weightFlow: d.weightFlow ?? null },
         }));
@@ -146,8 +142,6 @@ function connectScale() {
   };
 
   scaleWs.onclose = () => {
-    weightEl.classList.add("offline");
-    weightEl.textContent = "–";
     emitScaleStatus(false);
     if (scaleAutoReconnect) {
       setTimeout(connectScale, reconnectDelay);
@@ -333,6 +327,54 @@ function connectTimeToReady() {
     setTimeout(connectTimeToReady, ttrReconnectDelay);
     ttrReconnectDelay = Math.min(ttrReconnectDelay * 2, MAX_DELAY);
   };
+}
+
+/* ── Logs WebSocket (opt-in, diagnostic only) ─────────── */
+// Unlike the streams above, nothing subscribes to this by default — it's REA's
+// raw internal log feed (state machine transitions, BLE chatter, etc.), useful
+// for a debug/diagnostics panel, not for driving UI features. Call
+// NSXApi.startLogStream() to open it; NSXApi.stopLogStream() to close it.
+let logsWs = null;
+let logsReconnectDelay = 1000;
+let logsAutoReconnect = false;
+
+function connectLogs() {
+  logsWs = new WebSocket(`${WS_BASE}/ws/v1/logs`);
+
+  logsWs.onopen = () => {
+    logsReconnectDelay = 1000;
+  };
+
+  logsWs.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      window.dispatchEvent(new CustomEvent("gateway:log", {
+        detail: { timestamp: d?.timestamp ?? null, level: d?.level ?? null, message: d?.message ?? "" },
+      }));
+    } catch (_) {}
+  };
+
+  logsWs.onerror = () => {};
+
+  logsWs.onclose = () => {
+    if (logsAutoReconnect) {
+      setTimeout(connectLogs, logsReconnectDelay);
+      logsReconnectDelay = Math.min(logsReconnectDelay * 2, MAX_DELAY);
+    }
+  };
+}
+
+function startLogStream() {
+  logsAutoReconnect = true;
+  logsReconnectDelay = 1000;
+  if (!logsWs || logsWs.readyState === WebSocket.CLOSED) {
+    connectLogs();
+  }
+}
+
+function stopLogStream() {
+  logsAutoReconnect = false;
+  if (logsWs) logsWs.close();
 }
 
 /* ── REST helpers ─────────────────────────────────────── */
@@ -768,6 +810,8 @@ window.NSXApi = {
   initiateScaleConnect,
   initiateDE1Connect,
   disconnectScale,
+  startLogStream,
+  stopLogStream,
   setDisplayBrightness,
   fetchDisplayState,
   fetchPresenceSettings,

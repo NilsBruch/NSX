@@ -13,11 +13,12 @@
 "use strict";
 
 (() => {
+const NSXCore = window.NSXCore;
+const storeSettings = NSXCore.getStore();
 const { GATEWAY, WS_BASE } = window.NSXConfig || {};
 const {
   fetchCurrentWorkflow,
   fetchMachineInfo,
-  fetchShotDetails,
   fetchShots,
   pushWorkflow,
   pushSteamSettings,
@@ -35,9 +36,6 @@ const {
   initiateScaleConnect,
   initiateDE1Connect,
   disconnectScale,
-  deleteShotById,
-  updateShotRecord,
-  updateShotMetadata,
   fetchBeans,
   createBean,
   updateBean,
@@ -50,12 +48,10 @@ const {
   archiveBean,
   unarchiveBean,
   fetchProfiles,
-  fetchProfilesIncludingHidden,
   fetchProfileById,
   saveProfile,
   deleteProfile,
   setProfileVisibility,
-  fetchDeletedProfiles,
   purgeProfile,
   restoreProfile,
   fetchGrinders,
@@ -105,7 +101,21 @@ const {
 } = window.NSXUI || {};
 
 /* ── Translations ─────────────────────────────────────── */
-const { t, setLang, getLang, applyTranslations } = window.NSXI18n || {};
+const { t, setLang, getLang } = window.NSXI18n || {};
+
+// Apply the current language to this skin's data-i18n DOM (core's NSXI18n is
+// DOM-free and only provides t()/setLang()/getLang()).
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  });
+}
 
 /* ── Confirm Dialog ───────────────────────────────────── */
 function showConfirm(message, okLabel = null) {
@@ -177,8 +187,6 @@ let shots = [];
 let historyShots = [];
 let workflowItems = [];
 let workflowSearchQuery = '';
-const shotDetailsCache = new Map();
-let currentMachineState = 'idle';
 let _workflowPushNonce = 0;
 let displayWs = null;
 let displayReconnectDelay = 1000;
@@ -210,9 +218,7 @@ let _skipStepLastSentAt = 0;
 const SKIP_STEP_MIN_INTERVAL_MS = 800;
 let _skipStepRecoveryTimer = null;
 
-function _isEspressoLikeState(state) {
-  return state === 'espresso' || state === 'skipStep';
-}
+const _isEspressoLikeState = (state) => NSXCore.isEspressoLikeState(state);
 
 function _clearSkipStepRecoveryTimer() {
   if (_skipStepRecoveryTimer !== null) {
@@ -225,7 +231,7 @@ function _scheduleSkipStepRecovery() {
   _clearSkipStepRecoveryTimer();
   _skipStepRecoveryTimer = setTimeout(() => {
     _skipStepRecoveryTimer = null;
-    if (currentMachineState === 'skipStep' && liveShot) {
+    if (NSXCore.getMachineState() === 'skipStep' && liveShot) {
       setMachineState?.('espresso').catch(() => {});
     }
   }, 700);
@@ -238,12 +244,15 @@ const machineStateBannerEl = document.getElementById("machine-state-banner");
 const machineStateTextEl   = document.getElementById("machine-state-text");
 const readyInChipEl        = document.getElementById("ready-in-chip");
 
-function formatMmSs(ms) {
-  const totalSec = Math.max(0, Math.ceil(ms / 1000));
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+// The shot/workflow pure-mapping helpers below (formatMmSs, calcRatio,
+// _resolveProfileTemp, mapApiWorkflowToDisplay, mapShotToWorkflow,
+// normalizeWorkflowKeyPart, getWorkflowKey, normalizeShotData,
+// getShotDurationSeconds, buildShotDiffData, buildWorkflowItemsFromShots,
+// findShotsForWorkflow/findShotsForHistoryWorkflow) now live in
+// core/domains/mapping.js — thin delegates so their many call sites are
+// unchanged. Live app-state they used to read directly (shots, the rating
+// cache) is now passed in explicitly at the delegate boundary.
+const formatMmSs = (ms) => NSXCore.formatMmSs(ms);
 
 function updateMachineStateBanner(state, substate) {
   if (!machineStateTextEl) return;
@@ -265,26 +274,11 @@ function updateMachineStateBanner(state, substate) {
 }
 
 /* ── Machine State Validation (Reaprime Best Practice) ─────– */
-const ALLOWED_OPERATIONS = {
-  idle: ['setState', 'uploadProfile', 'updateSettings', 'setWorkflow'],
-  booting: ['setState'],
-  sleeping: ['setState'],
-  heating: ['setState'],
-  preheating: ['setState'],
-  espresso: ['stopShot'],
-  hotWater: ['setState'],
-  flush: ['setState'],
-  steam: ['setState'],
-  steamRinse: ['setState'],
-  cleaning: ['setState'],
-  descaling: ['setState'],
-  error: ['setState'],
-  needsWater: ['setState'],
-};
-
-function canExecuteOperation(operation, state = currentMachineState) {
-  return ALLOWED_OPERATIONS[state]?.includes(operation) ?? false;
-}
+// ALLOWED_OPERATIONS + canExecuteOperation now live in core/domains/machine.js
+// (NSXCore.canExecuteOperation) — pure machine business rule, reusable by any
+// skin. Thin delegate so the call sites below are unchanged; state omitted
+// here so core applies its own current-state default.
+const canExecuteOperation = (operation, state) => NSXCore.canExecuteOperation(operation, state);
 
 /* ── Workflow Search & Filter ─────────────────────────── */
 
@@ -493,84 +487,11 @@ document.getElementById('history-search')?.addEventListener('input', e => {
 
 /* ── API mapping helpers ──────────────────────────────– */
 
-function calcRatio(dose, yield_) {
-  return dose > 0 ? `1:${(yield_ / dose).toFixed(1)}` : "—";
-}
-
-function _resolveProfileTemp(prof) {
-  // groupTemp (set by editor), then first frame temp, then tank_temperature
-  const g = Number(prof?.groupTemp);
-  if (Number.isFinite(g) && g > 0) return g;
-  const frames = prof?.steps ?? prof?.frames ?? [];
-  if (Array.isArray(frames)) {
-    for (const f of frames) {
-      const t = Number(f?.temperature);
-      if (Number.isFinite(t) && t > 0) return t;
-    }
-  }
-  const tank = Number(prof?.tank_temperature);
-  return (Number.isFinite(tank) && tank > 0) ? tank : null;
-}
-
-function mapApiWorkflowToDisplay(wf) {
-  const ctx = wf?.context || {};
-  const dose = ctx.targetDoseWeight || 0;
-  const yield_ = ctx.targetYield || 0;
-  const prof = wf?.profile || {};
-  const resolvedTemp = _resolveProfileTemp(prof);
-  return {
-    coffeeRoaster: ctx.coffeeRoaster || "—",
-    coffeeName: ctx.coffeeName || "—",
-    grinderModel: ctx.grinderModel || "—",
-    grinderSetting: ctx.grinderSetting || "—",
-    targetDoseWeight: dose,
-    targetYield: yield_,
-    ratio: calcRatio(dose, yield_),
-    profileTitle: prof.title || wf?.name || "—",
-    profileTemp: resolvedTemp != null ? `${resolvedTemp}°C` : "—",
-    beverageType: String(prof.beverage_type || "") || "—",
-    gatewayWorkflow: wf || null,
-  };
-}
-
-function mapShotToWorkflow(shot) {
-  const ctx = shot?.workflow?.context || {};
-  const dose = ctx.targetDoseWeight || 0;
-  const yield_ = ctx.targetYield || 0;
-  const profileTitle =
-    shot?.workflow?.profile?.title ||
-    shot?.workflow?.profileTitle ||
-    shot?.profileTitle ||
-    shot?.workflow?.name ||
-    "—";
-
-  const shotProf = shot?.workflow?.profile || shot?.profile || {};
-  const shotTemp = _resolveProfileTemp(shotProf);
-  return {
-    coffeeRoaster: ctx.coffeeRoaster || "—",
-    coffeeName: ctx.coffeeName || "—",
-    grinderModel: ctx.grinderModel || "—",
-    grinderSetting: ctx.grinderSetting || "—",
-    targetDoseWeight: dose,
-    targetYield: yield_,
-    ratio: calcRatio(dose, yield_),
-    profileTitle,
-    profileTemp: shotTemp != null ? `${shotTemp}°C` : "—",
-  };
-}
-
-function normalizeWorkflowKeyPart(value) {
-  return String(value || "—").trim().toLocaleLowerCase("de-DE");
-}
-
-function getWorkflowKey(workflow) {
-  return [
-    normalizeWorkflowKeyPart(workflow?.coffeeRoaster),
-    normalizeWorkflowKeyPart(workflow?.coffeeName),
-    normalizeWorkflowKeyPart(workflow?.grinderModel),
-    normalizeWorkflowKeyPart(workflow?.profileTitle),
-  ].join("||");
-}
+const _resolveProfileTemp = (prof) => NSXCore.resolveProfileTemp(prof);
+const mapApiWorkflowToDisplay = (wf) => NSXCore.mapApiWorkflowToDisplay(wf);
+const mapShotToWorkflow = (shot) => NSXCore.mapShotToWorkflow(shot);
+const normalizeWorkflowKeyPart = (value) => NSXCore.normalizeWorkflowKeyPart(value);
+const getWorkflowKey = (workflow) => NSXCore.getWorkflowKey(workflow);
 
 function formatShotDateShort(timestamp) {
   if (!timestamp) return "--.--.----";
@@ -590,12 +511,7 @@ function getShotDetailsCached(shotId) {
     return Promise.reject(new Error("Ungültige Shot-ID"));
   }
 
-  if (shotDetailsCache.has(shotId)) {
-    return Promise.resolve(shotDetailsCache.get(shotId));
-  }
-
-  return fetchShotDetails(shotId).then((fullShot) => {
-    shotDetailsCache.set(shotId, fullShot);
+  return NSXCore.getShotDetails(shotId).then((fullShot) => {
     const listShot = shots.find(s => s.id === shotId) || historyShots.find(s => s.id === shotId);
     if (listShot) {
       if (fullShot.annotations) listShot.annotations = fullShot.annotations;
@@ -605,331 +521,23 @@ function getShotDetailsCached(shotId) {
   });
 }
 
-function getShotDurationSeconds(fullShot) {
-  const normalized = normalizeShotData(fullShot);
-  if (!normalized?.elapsed?.length) return null;
-  const last = normalized.elapsed[normalized.elapsed.length - 1];
-  return Number.isFinite(last) ? Math.max(0, last) : null;
-}
+const getShotDurationSeconds = (fullShot) => NSXCore.getShotDurationSeconds(fullShot);
+const normalizeShotData = (shot) => NSXCore.normalizeShotData(shot);
 
-function normalizeShotData(shot) {
-  if (!shot) return null;
+const buildShotDiffData = (currentShot, latestShot, currentDurationSec, latestDurationSec) =>
+  NSXCore.buildShotDiffData(currentShot, latestShot, currentDurationSec, latestDurationSec);
 
-  const toFiniteNumber = (value, fallback = 0) => {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-
-  const normalizeTemperatureCelsius = (value) => {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return 0;
-    // Some records store deci-degrees (e.g. 890 => 89.0 C), others store C directly.
-    return n > 200 ? n / 10 : n;
-  };
-
-  const frames = (() => {
-    const profile = shot?.workflow?.profile || shot?.profile || null;
-    const list = profile?.steps ?? profile?.frames ?? [];
-    return Array.isArray(list) ? list : [];
-  })();
-
-  const rebaseElapsedToZero = (values) => {
-    if (!Array.isArray(values) || values.length === 0) return [];
-    const numeric = values.map((v) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
-    });
-    const first = numeric.find((v) => v !== null);
-    const base = first != null ? first : 0;
-    return numeric.map((v) => {
-      if (v === null) return 0;
-      return Math.max(0, v - base);
-    });
-  };
-
-  if (shot.elapsed?.length) {
-    const elapsed = rebaseElapsedToZero(shot.elapsed);
-    return {
-      ...shot,
-      elapsed,
-      scaleRate:
-        shot.scaleRate ||
-        shot.weightFlow ||
-        shot.weight_flow ||
-        shot.weightflow ||
-        Array.from({ length: elapsed.length }, () => 0),
-    };
-  }
-
-  const measurements = shot.measurements;
-  if (!Array.isArray(measurements) || measurements.length === 0) return null;
-
-  const elapsed = [];
-  const pressure = [];
-  const targetPressure = [];
-  const flow = [];
-  const targetFlow = [];
-  const temperature = [];
-  const targetTemperature = [];
-  const scaleRate = [];
-  const substates = [];
-  const rawProfileFrames = [];
-
-  let shotStartTime = null;
-
-  for (const m of measurements) {
-    const machine = m.machine;
-    if (!machine || !machine.state) continue;
-
-    if (machine.state.substate !== 'preinfusion' && machine.state.substate !== 'pouring') {
-      continue;
-    }
-
-    const timestamp = new Date(machine.timestamp).getTime();
-    if (!Number.isFinite(timestamp)) continue;
-    if (shotStartTime == null) shotStartTime = timestamp;
-    const time = (timestamp - shotStartTime) / 1000;
-    if (time < 0) continue;
-
-    elapsed.push(time);
-    pressure.push(machine.pressure || 0);
-    targetPressure.push(machine.targetPressure || 0);
-    flow.push(machine.flow || 0);
-    targetFlow.push(machine.targetFlow || 0);
-    temperature.push(normalizeTemperatureCelsius(machine.groupTemperature));
-    targetTemperature.push(normalizeTemperatureCelsius(machine.targetGroupTemperature));
-    substates.push(machine.state?.substate || '');
-
-    const rawProfileFrame =
-      machine.profileFrame ??
-      machine.profile_frame ??
-      machine.state?.profileFrame ??
-      machine.state?.profile_frame;
-    const profileFrame = Number(rawProfileFrame);
-    rawProfileFrames.push(Number.isFinite(profileFrame) ? profileFrame : null);
-
-    const rawWeightFlow =
-      m.scale?.weightFlow ??
-      m.scale?.weight_flow ??
-      m.scale?.flow ??
-      machine.weightFlow ??
-      machine.weight_flow ??
-      m.weightFlow ??
-      m.weight_flow;
-
-    scaleRate.push(toFiniteNumber(rawWeightFlow, 0));
-  }
-
-  const phaseMarkers = [];
-  let lastProfileFrame = null;
-  for (let i = 0; i < rawProfileFrames.length; i += 1) {
-    const profileFrame = rawProfileFrames[i];
-    if (!Number.isFinite(profileFrame)) continue;
-    if (profileFrame === lastProfileFrame) continue;
-
-    const frameDef = frames[profileFrame] ?? null;
-    const frameLabel = String(frameDef?.name || `Step ${profileFrame + 1}`);
-    phaseMarkers.push({
-      time: Math.max(0, Number(elapsed[i]) || 0),
-      label: frameLabel,
-    });
-    lastProfileFrame = profileFrame;
-  }
-
-  return {
-    elapsed,
-    pressure,
-    targetPressure,
-    flow,
-    targetFlow,
-    temperature,
-    targetTemperature,
-    scaleRate,
-    substates,
-    phaseMarkers,
-  };
-}
-
-function buildShotDiffData(currentShot, latestShot, currentDurationSec, latestDurationSec) {
-  const current = mapShotToWorkflow(currentShot);
-  const latest = mapShotToWorkflow(latestShot);
-
-  const rows = [];
-  const toNumberOrNull = (value) => {
-    const n = Number(String(value ?? "").replace(",", "."));
-    return Number.isFinite(n) ? n : null;
-  };
-  const formatSigned = (value, decimals = 1, unit = "") => {
-    if (!Number.isFinite(value)) return "--";
-    const sign = value > 0 ? "+" : "";
-    return `${sign}${value.toFixed(decimals)}${unit}`;
-  };
-
-  const currentGrind = String(current.grinderSetting ?? "—").trim();
-  const latestGrind = String(latest.grinderSetting ?? "—").trim();
-  if (currentGrind !== latestGrind) {
-    const currentGrindNum = toNumberOrNull(current.grinderSetting);
-    const latestGrindNum = toNumberOrNull(latest.grinderSetting);
-    const grindDelta =
-      currentGrindNum !== null && latestGrindNum !== null
-        ? ` (${formatSigned(currentGrindNum - latestGrindNum, 2)})`
-        : "";
-    rows.push({ label: t('recipe.grindSize'), value: `${current.grinderSetting || "—"}${grindDelta}` });
-  }
-
-  const currentDose = Number(current.targetDoseWeight || 0);
-  const latestDose = Number(latest.targetDoseWeight || 0);
-  if (Math.abs(currentDose - latestDose) > 0.0001) {
-    const doseDelta = formatSigned(currentDose - latestDose, 1, "g");
-    rows.push({ label: t('recipeEdit.dose'), value: `${currentDose.toFixed(1)}g (${doseDelta})` });
-  }
-
-  const currentYield = Number(current.targetYield || 0);
-  const latestYield = Number(latest.targetYield || 0);
-  const currentRatio = current.ratio || "—";
-  const latestRatio = latest.ratio || "—";
-  if (Math.abs(currentYield - latestYield) > 0.0001 || currentRatio !== latestRatio) {
-    const yieldDelta = formatSigned(currentYield - latestYield, 1, "g");
-    const currentRatioNum = currentDose > 0 ? currentYield / currentDose : null;
-    const latestRatioNum = latestDose > 0 ? latestYield / latestDose : null;
-    const ratioDelta =
-      currentRatioNum !== null && latestRatioNum !== null
-        ? formatSigned(currentRatioNum - latestRatioNum, 2)
-        : "--";
-    rows.push({
-      label: t('recipe.beverage'),
-      value: `${currentYield.toFixed(1)}g (${currentRatio}) (${yieldDelta}, ${ratioDelta})`,
-    });
-  }
-
-  const hasCurrentDuration = Number.isFinite(currentDurationSec);
-  const hasLatestDuration = Number.isFinite(latestDurationSec);
-  if (hasCurrentDuration && (!hasLatestDuration || Math.abs(currentDurationSec - latestDurationSec) > 0.049)) {
-    const durationDelta = hasLatestDuration
-      ? formatSigned(currentDurationSec - latestDurationSec, 1, "s")
-      : "--";
-    rows.push({ label: t('recipe.duration'), value: `${currentDurationSec.toFixed(1)}s (${durationDelta})` });
-  }
-
-  return rows;
-}
-
-function buildWorkflowItemsFromShots(shotItems) {
-  const grouped = new Map();
-
-  for (const shot of shotItems) {
-    const mapped = mapShotToWorkflow(shot);
-    const key = [
-      normalizeWorkflowKeyPart(mapped.coffeeRoaster),
-      normalizeWorkflowKeyPart(mapped.coffeeName),
-      normalizeWorkflowKeyPart(mapped.grinderModel),
-      normalizeWorkflowKeyPart(mapped.profileTitle),
-    ].join("||");
-
-    const timestamp = shot?.timestamp ? Date.parse(shot.timestamp) : 0;
-    const latestTimestamp = Number.isFinite(timestamp) ? timestamp : 0;
-    const existing = grouped.get(key);
-
-    const rv = Number(shot?.annotations?.enjoyment ?? shot?.metadata?.rating);
-    const prevMax = existing?.ratingMax ?? null;
-    const prevCount = existing?.ratingCount ?? 0;
-    // ratingCount = how many shots share the maximum rating (not total rated shots)
-    let ratingMax = prevMax;
-    let ratingCount = prevCount;
-    if (Number.isFinite(rv)) {
-      if (prevMax === null || rv > prevMax) { ratingMax = rv; ratingCount = 1; }
-      else if (rv === prevMax) { ratingCount = prevCount + 1; }
-    }
-
-    if (!existing || latestTimestamp >= existing.latestTimestamp) {
-      grouped.set(key, {
-        ...mapped,
-        latestTimestamp,
-        gatewayWorkflow: shot?.workflow || null,
-        ratingMax,
-        ratingCount,
-      });
-    } else {
-      existing.ratingMax = ratingMax;
-      existing.ratingCount = ratingCount;
-    }
-  }
-
-  return Array.from(grouped.values())
-    .sort((a, b) => b.latestTimestamp - a.latestTimestamp)
-    .map(({ latestTimestamp, ratingMax, ratingCount, ...item }) => {
-      const cached = _recipeRatingCache.get(getWorkflowKey(item));
-      item.maxRating  = cached ? cached.max   : (ratingMax ?? null);
-      item.ratedCount = cached ? cached.count : (ratingCount || 0);
-      return item;
-    });
-}
-
-
-function findShotsForWorkflow(workflow) {
-  const source = shots;
-  if (!workflow || !Array.isArray(source) || source.length === 0) {
-    return [];
-  }
-
-  const key = getWorkflowKey(workflow);
-
-  return source
-    .filter((shot) => {
-      const mapped = mapShotToWorkflow(shot);
-      return getWorkflowKey(mapped) === key;
-    })
-    .sort((a, b) => {
-      const tsA = Date.parse(a?.timestamp || 0);
-      const tsB = Date.parse(b?.timestamp || 0);
-      return (Number.isFinite(tsB) ? tsB : 0) - (Number.isFinite(tsA) ? tsA : 0);
-    });
-}
-
-function findShotsForHistoryWorkflow(workflow, source) {
-  if (!workflow || !Array.isArray(source) || source.length === 0) {
-    return [];
-  }
-
-  const key = getWorkflowKey(workflow);
-
-  return source
-    .filter((shot) => {
-      const mapped = mapShotToWorkflow(shot);
-      return getWorkflowKey(mapped) === key;
-    })
-    .sort((a, b) => {
-      const tsA = Date.parse(a?.timestamp || 0);
-      const tsB = Date.parse(b?.timestamp || 0);
-      return (Number.isFinite(tsB) ? tsB : 0) - (Number.isFinite(tsA) ? tsA : 0);
-    });
-}
+const buildWorkflowItemsFromShots = (shotItems) => NSXCore.buildWorkflowItemsFromShots(shotItems, _recipeRatingCache);
+const findShotsForWorkflow = (workflow) => NSXCore.findShotsForWorkflow(workflow, shots);
+const findShotsForHistoryWorkflow = (workflow, source) => NSXCore.findShotsForWorkflow(workflow, source);
 
 /* ── Recipe Store (Bridge KV) ─────────────────────────── */
-
-const _RECIPE_NS  = 'NSX';
-const _RECIPE_KEY = 'recipes';
-
-async function _loadRecipesFromStore() {
-  try {
-    const data = await getStoreValue?.(_RECIPE_NS, _RECIPE_KEY);
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
-
-async function _saveRecipesToStore(recipes) {
-  try {
-    await setStoreValue?.(_RECIPE_NS, _RECIPE_KEY, recipes);
-  } catch (err) {
-    console.warn('Rezepte konnten nicht gespeichert werden:', err?.message);
-  }
-}
-
-function _makeRecipeId() {
-  return `recipe-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
+// Recipe-store I/O + id generation live in core/domains/workflow.js
+// (NSXCore.loadRecipes/saveRecipes/makeRecipeId); these are thin delegators
+// so the ~7 call sites below stay unchanged.
+const _loadRecipesFromStore = () => NSXCore.loadRecipes();
+const _saveRecipesToStore   = (recipes) => NSXCore.saveRecipes(recipes);
+const _makeRecipeId         = () => NSXCore.makeRecipeId();
 
 /* ── Workflow Management ──────────────────────────────── */
 
@@ -938,8 +546,9 @@ function _getLiveProfileFrames() {
   const title = profile?.title;
 
   // Prefer the profiles cache — it has frame names; the gateway payload often doesn't.
-  if (title && _profileRecordsCache) {
-    const match = _profileRecordsCache.find(r => String(r.profile?.title || '').trim() === title.trim());
+  const profileCache = NSXCore.getProfiles();
+  if (title && profileCache) {
+    const match = profileCache.find(r => String(r.profile?.title || '').trim() === title.trim());
     const cacheFrames = match?.profile?.steps ?? match?.profile?.frames;
     if (cacheFrames?.length) return cacheFrames;
   }
@@ -948,131 +557,18 @@ function _getLiveProfileFrames() {
   return profile?.steps ?? profile?.frames ?? [];
 }
 
-function workflowToGatewayPayload(workflow) {
-  if (workflow?._resolvedPayload) return workflow._resolvedPayload;
-  if (workflow?.gatewayWorkflow && typeof workflow.gatewayWorkflow === "object") {
-    return workflow.gatewayWorkflow;
-  }
-  return {
-    profile: { title: workflow?.profileTitle || "—" },
-    context: {
-      coffeeRoaster: workflow?.coffeeRoaster || "—",
-      coffeeName: workflow?.coffeeName || "—",
-      grinderModel: workflow?.grinderModel || "—",
-      grinderSetting: workflow?.grinderSetting || "—",
-      targetDoseWeight: Number(workflow?.targetDoseWeight || 0),
-      targetYield: Number(workflow?.targetYield || 0),
-    },
-  };
-}
 
-async function _buildRecipeGatewayPayload(workflow) {
-  const title = String(workflow?.profileTitle || '').trim();
-  const storedProfileId = String(workflow?.selectedProfileId || '').trim();
-  const expectedProfile = Boolean(storedProfileId || (title && title !== '—'));
-  let profileObj = null;
-  let profileId  = null;
-
-  const matchFrom = (records) => {
-    const match =
-      (storedProfileId && records.find(r => String(r.id || '') === storedProfileId)) ||
-      (title && title !== '—' && (
-        records.find(r => _isUserOwnedProfile(r) && String(r.profile?.title || '').trim() === title) ||
-        records.find(r => String(r.profile?.title || '').trim() === title)
-      ));
-    if (!match) return false;
-    // Prefer the user-owned copy with the same title and the highest version number.
-    const matchTitle = String(match.profile?.title || '').trim();
-    const userCopies = matchTitle
-      ? records.filter(r => _isUserOwnedProfile(r) && String(r.profile?.title || '').trim() === matchTitle)
-      : [];
-    const bestUserCopy = userCopies.length
-      ? userCopies.reduce((best, r) => (Number(r.profile?.version) || 0) > (Number(best.profile?.version) || 0) ? r : best)
-      : null;
-    const effective = bestUserCopy || match;
-    profileObj = effective.profile;
-    profileId  = effective.id ?? null;
-    return true;
-  };
-
-  if (expectedProfile) {
-    try { matchFrom(await _ensureProfilesLoaded()); } catch { /* fall through */ }
-    // If the cache was empty/stale (e.g. right after wake), force a fresh load and retry once.
-    if (!profileObj) {
-      try { matchFrom(await _ensureProfilesLoaded(true)); } catch { /* fall through */ }
-    }
-    // Refuse to push a frameless profile — it would start the shot then immediately
-    // stop it (and the gateway records nothing). Signal failure to the caller instead.
-    if (!profileObj) return null;
-  }
-
-  let resolvedProfile;
-  if (profileObj) {
-    const desiredTemp = Number(workflow.groupTemp);
-    const baseline    = _profileEditorGroupTemp(profileObj);
-    const delta       = Number.isFinite(desiredTemp) && desiredTemp > 0 && Number.isFinite(baseline) && baseline > 0
-      ? desiredTemp - baseline
-      : 0;
-    const stepsKey = Array.isArray(profileObj.steps) ? 'steps' : 'frames';
-    const adjustedSteps = delta !== 0
-      ? _extractFrames(profileObj).map(f => {
-          const t = Number(f.temperature);
-          return { ...f, temperature: Number.isFinite(t) ? Math.round((t + delta) * 10) / 10 : f.temperature };
-        })
-      : _extractFrames(profileObj);
-    resolvedProfile = { ...profileObj, [stepsKey]: adjustedSteps, groupTemp: desiredTemp > 0 ? desiredTemp : (profileObj.groupTemp ?? baseline) };
-  } else {
-    resolvedProfile = { title };
-  }
-
-  if (!scaleConnected) {
-    if (workflow.useVolumeStopWhenNoScale) {
-      const factor = workflow.volumeCalibration?.factor ?? 1.0;
-      const yield_ = Number(workflow.targetYield || 0);
-      if (yield_ > 0 && factor > 0) {
-        resolvedProfile = { ...resolvedProfile, target_volume: Math.round(yield_ * factor) };
-      }
-    } else {
-      resolvedProfile = { ...resolvedProfile, target_volume: 0 };
-    }
-  }
-
-  const tags = Array.isArray(workflow.tags) ? workflow.tags : [];
-  const workflowName = [workflow.coffeeRoaster, workflow.coffeeName, resolvedProfile?.title || workflow.profileTitle]
-    .map(v => String(v || '').trim())
-    .filter(v => v && v !== '—')
-    .join(' · ') || '—';
-  const payload = {
-    name: workflowName,
-    profile: resolvedProfile,
-    profileId,
-    context: {
-      coffeeRoaster:    workflow.coffeeRoaster    || '—',
-      coffeeName:       workflow.coffeeName       || '—',
-      grinderModel:     workflow.grinderModel     || '—',
-      grinderSetting:   workflow.grinderSetting   || '—',
-      targetDoseWeight: Number(workflow.targetDoseWeight || 0),
-      targetYield:      Number(workflow.targetYield      || 0),
-      ...(workflow.grinderId   ? { grinderId:   workflow.grinderId   } : {}),
-      ...(workflow.beanBatchId ? { beanBatchId: workflow.beanBatchId } : {}),
-      extras: tags.length > 0 ? { tags } : null,
-    },
-    // Bundle the machine-function settings into the same atomic workflow update so the
-    // gateway applies them in ONE PUT (instead of 4 racing PUTs that get "Queue Cancelled").
-    steamSettings: { targetTemperature: _steamEnabled ? steamTemp : 0, flow: _steamEnabled ? steamFlow : 0, duration: steamDuration },
-    hotWaterData:  { targetTemperature: hotwaterTemp, volume: hotwaterVolume },
-    rinseData:     { flow: flushFlow, duration: flushDuration },
-  };
-
-  workflow._resolvedPayload = payload;
-  return payload;
-}
+// The real push-time gateway payload builder now lives in
+// core/domains/workflow.js (NSXCore.buildGatewayPayload) — this delegate
+// passes the current live scale-connection state as an explicit param so
+// core doesn't need to read the app.js `scaleConnected` global directly.
+const _buildRecipeGatewayPayload = (workflow) => NSXCore.buildGatewayPayload(workflow, { scaleConnected });
 
 async function pushSelectedWorkflowToMachine(workflow) {
   if (!workflow) return;
 
   if (!canExecuteOperation('setWorkflow')) {
-    showToast(t('toast.recipeStateError').replace('{state}', currentMachineState));
+    showToast(t('toast.recipeStateError').replace('{state}', NSXCore.getMachineState()));
     setWorkflowSyncState?.('error');
     return;
   }
@@ -1125,17 +621,17 @@ async function _pushCurrentSkinStateToMachine(bypassStateCheck = false) {
   }
   // No recipe selected — still sync the standalone machine-function settings.
   try {
-    await pushSteamSettings(_steamEnabled ? steamTemp : 0, _steamEnabled ? steamFlow : 0);
+    await pushSteamSettings(NSXCore.isSteamEnabled() ? NSXCore.getSteamTemp() : 0, NSXCore.isSteamEnabled() ? NSXCore.getSteamFlow() : 0);
   } catch (err) {
     console.warn('Steam-Sync fehlgeschlagen:', err?.message);
   }
   try {
-    await pushHotwaterSettings(hotwaterTemp, hotwaterVolume);
+    await pushHotwaterSettings(NSXCore.getHotwaterTemp(), NSXCore.getHotwaterVolume());
   } catch (err) {
     console.warn('Hotwater-Sync fehlgeschlagen:', err?.message);
   }
   try {
-    await pushFlushSettings(flushFlow, flushDuration);
+    await pushFlushSettings(NSXCore.getFlushFlow(), NSXCore.getFlushDuration());
   } catch (err) {
     console.warn('Flush-Sync fehlgeschlagen:', err?.message);
   }
@@ -1427,7 +923,7 @@ function _scheduleEspressoFullscreenReturn() {
   _clearEspressoFullscreenCloseTimer();
   _espressoFullscreenCloseTimer = setTimeout(() => {
     _espressoFullscreenCloseTimer = null;
-    if (currentMachineState === 'espresso') return;
+    if (NSXCore.getMachineState() === 'espresso') return;
     closeEspressoFullscreen();
     window.NSXRouter?.setTab(1);
   }, 2000);
@@ -1566,7 +1062,7 @@ function startLiveShotSession() {
     substates: [],
     phaseMarkers: [],
     lastProfileFrame: null,
-    workflow: workflowToGatewayPayload(workflow),
+    workflow: NSXCore.workflowToGatewayPayload(workflow),
     lastSnap: null,
   };
   liveWeight = 0;
@@ -1689,7 +1185,7 @@ async function endLiveShotSession() {
         const roundedYield = Math.round(estimatedYield * 10) / 10;
         const existingAnn = newShot.annotations ?? {};
         const existingExtras = existingAnn.extras ?? {};
-        updateShotMetadata(newShot.id, {
+        NSXCore.updateShotMeta(newShot.id, {
           rating: existingAnn.enjoyment,
           favorite: existingExtras.favorite,
           notes: existingAnn.espressoNotes,
@@ -1803,6 +1299,7 @@ function startSteamSession() {
   if (cornerEl)        cornerEl.hidden = false;
 
   steamTimerInterval = setInterval(() => {
+    const steamDuration = NSXCore.getSteamDuration();
     const sec = Math.floor((Date.now() - steamSession.startTime) / 1000);
     const remaining = Math.max(0, steamDuration - sec);
     if (cornerElapsedEl) cornerElapsedEl.textContent = String(remaining);
@@ -1847,7 +1344,7 @@ function startHotWaterSession() {
   const doneEl        = document.getElementById('hotwater-done-overlay');
   if (centerEl)       centerEl.hidden = false;
   if (dispensedEl)    dispensedEl.textContent = '0';
-  if (targetLabelEl)  targetLabelEl.textContent = hotwaterVolume > 0 ? `/ ${hotwaterVolume} ml` : '/ — ml';
+  if (targetLabelEl)  targetLabelEl.textContent = NSXCore.getHotwaterVolume() > 0 ? `/ ${NSXCore.getHotwaterVolume()} ml` : '/ — ml';
   if (progressEl)     progressEl.style.strokeDashoffset = String(HW_CIRCUMFERENCE);
   if (doneEl)         doneEl.hidden = true;
   if (overlayEl)      overlayEl.hidden = false;
@@ -1878,6 +1375,7 @@ function startFlushSession() {
 
   _flushTimerInterval = setInterval(() => {
     const elapsed = (Date.now() - _flushStartTime) / 1000;
+    const flushDuration = NSXCore.getFlushDuration();
     if (elapsedEl) elapsedEl.textContent = String(Math.max(0, flushDuration - Math.floor(elapsed)));
     if (progressEl && flushDuration > 0) {
       const pct = Math.min(elapsed / flushDuration, 1);
@@ -1939,9 +1437,8 @@ async function loadApiData() {
   try {
     const schedules = await fetchSchedules();
     const existing = Array.isArray(schedules) ? schedules[0] : schedules?.items?.[0];
-    if (existing?.id && !scheduleState.scheduleId) {
-      scheduleState.scheduleId = existing.id;
-      saveScheduleState();
+    if (existing?.id && !NSXCore.getScheduleState().scheduleId) {
+      NSXCore.setScheduleId(existing.id);
       console.log('[Schedule] Loaded existing schedule id from API:', existing.id);
     }
   } catch (e) {
@@ -2021,6 +1518,7 @@ function setupPresenceTracking() {
 /* ── Display Control (Reaprime Best Practice) ─────────────– */
 function setupDisplayControl() {
   const wsUrl = WS_BASE + '/ws/v1/display';
+  let _everConnected = false;
 
   const connect = () => {
     try {
@@ -2028,6 +1526,16 @@ function setupDisplayControl() {
 
       displayWs.onopen = () => {
         displayReconnectDelay = 1000;
+        // The gateway auto-releases any wake-lock override held on this socket
+        // when it closes. On a genuine reconnect (not the first connect), the
+        // override is already gone server-side even though the screensaver may
+        // still believe it's held — force a re-request so a locked screensaver
+        // doesn't silently lose its wake-lock after a brief network blip.
+        if (_everConnected) {
+          window.NSXScreensaver?.invalidateWakeLock();
+          window.NSXScreensaver?.syncWakeLock();
+        }
+        _everConnected = true;
       };
 
       displayWs.onmessage = (event) => {
@@ -2064,21 +1572,27 @@ window.addEventListener('ui:seriesVisibilityChanged', ({ detail }) => {
   }
 });
 
-window.addEventListener("gateway:status", (event) => {
-  machineConnectedState = Boolean(event.detail?.connected);
+NSXCore.on("machineConnected", (connected) => {
+  machineConnectedState = Boolean(connected);
   setMachineConnected(machineConnectedState);
   updateEspressoFullscreen();
-  if (!event.detail?.connected && machineStateBannerEl) {
+  if (!connected && machineStateBannerEl) {
     machineStateBannerEl.hidden = true;
   }
 });
 
 let scaleConnected = false;
 
-window.addEventListener("scale:status", (event) => {
+NSXCore.on("scaleConnected", (connected) => {
   const wasConnected = scaleConnected;
-  scaleConnected = Boolean(event.detail?.connected);
+  scaleConnected = Boolean(connected);
   setScaleConnected(scaleConnected);
+  // Machine-status weight readout (formerly written by core api.js, now skin-side).
+  const scaleWeightEl = document.getElementById('scale-weight');
+  if (scaleWeightEl) {
+    scaleWeightEl.classList.toggle('offline', !scaleConnected);
+    if (!scaleConnected) scaleWeightEl.textContent = '–';
+  }
   const toggle = document.getElementById('scale-connect-toggle');
   if (toggle) toggle.checked = scaleConnected;
   const scalePill = document.getElementById('workflow-scale-pill');
@@ -2086,9 +1600,19 @@ window.addEventListener("scale:status", (event) => {
   if (scaleConnected !== wasConnected) _schedulePushCurrentSkinState();
 });
 
-window.addEventListener("gateway:devices", (event) => {
-  const machineConnected = Boolean(event.detail?.machineConnected);
-  const scaleIsConnected = Boolean(event.detail?.scaleConnected);
+// Reaprime devices-WS error taxonomy: connectionStatus.error carries
+// {kind, severity, message, suggestion, deviceName, timestamp, details}.
+// "Sticky" kinds (adapterOff, bluetoothPermissionDenied, scanFailed) persist
+// across phase transitions until the environment recovers; "transient" kinds
+// (scaleConnectFailed, machineConnectFailed, scaleDisconnected,
+// machineDisconnected) auto-clear on the next operation. Either way the same
+// error object can arrive on repeated devices-WS messages — dedupe by
+// kind+timestamp so we toast once per occurrence, not once per message.
+let _lastDeviceErrorKey = null;
+
+NSXCore.on("devices", (d) => {
+  const machineConnected = Boolean(d?.machineConnected);
+  const scaleIsConnected = Boolean(d?.scaleConnected);
 
   machineConnectedState = machineConnected;
   setMachineConnected(machineConnected);
@@ -2098,6 +1622,13 @@ window.addEventListener("gateway:devices", (event) => {
 
   const toggle = document.getElementById('scale-connect-toggle');
   if (toggle) toggle.checked = scaleConnected;
+
+  const err = d?.connectionStatus?.error ?? null;
+  const errKey = err ? `${err.kind ?? ''}|${err.timestamp ?? ''}` : null;
+  if (errKey && errKey !== _lastDeviceErrorKey) {
+    showToast(err.suggestion || err.message || err.kind, 6000);
+  }
+  _lastDeviceErrorKey = errKey;
 });
 
 let _lastAutoTareAt = 0;
@@ -2105,19 +1636,25 @@ function _maybeAutoTareNegative(weight) {
   if (storeSettings.nsx_tare_on_negative === false) return;
   if (!scaleConnected || !Number.isFinite(weight) || weight >= -1.0) return;
   // Don't interfere while the machine is actively dispensing.
-  if (['espresso', 'steam', 'hotWater', 'flush'].includes(currentMachineState)) return;
+  if (['espresso', 'steam', 'hotWater', 'flush'].includes(NSXCore.getMachineState())) return;
   const now = Date.now();
   if (now - _lastAutoTareAt < 1500) return;
   _lastAutoTareAt = now;
   tareScale?.().catch(() => {});
 }
 
-window.addEventListener("scale:weight", (event) => {
-  const newWeight = event.detail?.weight ?? liveWeight;
-  const apiRate = event.detail?.weightFlow ?? event.detail?.weight_flow;
+NSXCore.on("scaleWeight", (d) => {
+  const newWeight = d?.weight ?? liveWeight;
+  const apiRate = d?.weightFlow ?? d?.weight_flow;
   currentScaleRate = Number.isFinite(apiRate) && apiRate >= 0 ? apiRate : 0;
   liveWeight = newWeight;
   _maybeAutoTareNegative(newWeight);
+  // Machine-status weight readout (formerly written by core api.js, now skin-side).
+  const scaleWeightEl = document.getElementById('scale-weight');
+  if (scaleWeightEl) {
+    scaleWeightEl.textContent = `${newWeight.toFixed(1)} g`;
+    scaleWeightEl.classList.remove('offline');
+  }
   const scalePill = document.getElementById('workflow-scale-pill');
   if (scalePill) scalePill.textContent = scaleConnected ? newWeight.toFixed(1) + 'g' : '';
   const dosePill = document.getElementById('workflow-dose-pill');
@@ -2133,7 +1670,7 @@ window.addEventListener("scale:weight", (event) => {
   const sbwPill = document.getElementById('workflow-sbw-pill');
   if (sbwPill) {
     const sbwWidget = document.getElementById('workflow-sbw-widget');
-    const pitcher = pitcherPresets[activePitcherIndex];
+    const pitcher = NSXCore.getPitcherPresets()[NSXCore.getActivePitcherIndex()];
     if (scaleConnected && sbwWidget && !sbwWidget.hidden && pitcher?.pitcherWeight != null) {
       sbwPill.textContent = `${(newWeight - pitcher.pitcherWeight).toFixed(1)}g`;
     } else {
@@ -2141,13 +1678,13 @@ window.addEventListener("scale:weight", (event) => {
     }
   }
   updateEspressoFullscreen();
-  if (currentMachineState === 'hotWater' && !_hotWaterDone) {
+  if (NSXCore.getMachineState() === 'hotWater' && !_hotWaterDone) {
     const dispensed = Math.max(0, newWeight - _hotWaterStartWeight);
     const dispensedEl = document.getElementById('hotwater-dispensed');
     const progressEl  = document.getElementById('hotwater-ring-progress');
     if (dispensedEl) dispensedEl.textContent = dispensed.toFixed(0);
-    if (progressEl && hotwaterVolume > 0) {
-      const pct = Math.min(dispensed / hotwaterVolume, 1);
+    if (progressEl && NSXCore.getHotwaterVolume() > 0) {
+      const pct = Math.min(dispensed / NSXCore.getHotwaterVolume(), 1);
       progressEl.style.strokeDashoffset = String(HW_CIRCUMFERENCE * (1 - pct));
       if (pct >= 1) {
         _hotWaterDone = true;
@@ -2181,9 +1718,9 @@ document.getElementById('machine-icon-area')?.addEventListener('click', () => {
   }
 });
 
-window.addEventListener("water:level", (event) => {
-  const level = Number(event.detail?.currentLevel);
-  const refillLevel = Number(event.detail?.refillLevel);
+NSXCore.on("waterLevel", (d) => {
+  const level = Number(d?.currentLevel);
+  const refillLevel = Number(d?.refillLevel);
   if (Number.isFinite(level)) {
     currentWaterLevelPct = level;
     setWaterLevel(level);
@@ -2194,10 +1731,10 @@ window.addEventListener("water:level", (event) => {
   }
 });
 
-window.addEventListener("gateway:timeToReady", (event) => {
+NSXCore.on("timeToReady", (d) => {
   if (!readyInChipEl) return;
-  const { remainingMs } = event.detail;
-  const isWarmingUp = currentMachineState === 'heating' || currentMachineState === 'preheating';
+  const { remainingMs } = d || {};
+  const isWarmingUp = NSXCore.getMachineState() === 'heating' || NSXCore.getMachineState() === 'preheating';
   if (isWarmingUp && typeof remainingMs === 'number' && remainingMs > 0) {
     readyInChipEl.textContent = t('machine.readyIn').replace('{time}', formatMmSs(remainingMs));
     readyInChipEl.hidden = false;
@@ -2217,13 +1754,13 @@ const MACHINE_STATE_LABELS = {
   descaleNeeded:  () => t('machine.state.descaleNeeded'),
 };
 
-window.addEventListener("gateway:machineState", (event) => {
-  const state = event.detail?.state || 'idle';
-  const substate = event.detail?.substate;
-  const prevState = currentMachineState;
+NSXCore.on("machineState", (d) => {
+  const state = d?.state || 'idle';
+  const substate = d?.substate;
+  const prevState = NSXCore.getMachineState(); // read before overwriting — see machine.js header
   const wasEspressoLike = _isEspressoLikeState(prevState);
   const isEspressoLike = _isEspressoLikeState(state);
-  currentMachineState = state;
+  NSXCore.setMachineState(state);
   setMachineStateText(state);
   _updatePhoneMachineCard();
 
@@ -2288,8 +1825,7 @@ window.addEventListener("gateway:machineState", (event) => {
 });
 
 
-window.addEventListener("gateway:snapshot", (event) => {
-  const snap = event.detail;
+NSXCore.on("liveShot", (snap) => {
   if (Number.isFinite(snap?.groupTemperature)) {
     _phoneGroupTemp = snap.groupTemperature;
     setBrewGroupTemperature(snap.groupTemperature);
@@ -3282,13 +2818,13 @@ document.getElementById("btn-sleep").addEventListener("click", async () => {
   signalUserPresence();
   window.NSXScreensaver?.show(false, true);
   window.NSXScreensaver?.clearSuppressions();
-  if (currentMachineState === 'sleeping') {
+  if (NSXCore.getMachineState() === 'sleeping') {
     setMachineStateText("sleeping");
     return;
   }
   try {
     const alertStates = ['needsWater', 'error', 'descaling', 'cleanMeSoon', 'descaleNeeded'];
-    if (alertStates.includes(currentMachineState)) {
+    if (alertStates.includes(NSXCore.getMachineState())) {
       await setMachineState("idle");
     }
     await setMachineState("sleeping");
@@ -3323,169 +2859,55 @@ if (powerToggleEl) {
 
 /* ── Preset Active State Persistence ─────────────────── */
 
-const STORE_NAMESPACE = 'NSX';
-const STORE_KEY = 'ui-settings';
-const LEGACY_STORAGE_KEYS = [
-  'nsx_steam_presets',
-  'nsx_steam_active_preset',
-  'nsx_hotwater_presets',
-  'nsx_hotwater_active_preset',
-  'nsx_flush_presets',
-  'nsx_flush_active_preset',
-  'nsx_schedule',
-];
-let storeSettings = {};
-let storePersistTimer = null;
-
-function scheduleStorePersist() {
-  if (typeof setStoreValue !== 'function') return;
-  clearTimeout(storePersistTimer);
-  storePersistTimer = setTimeout(() => {
-    setStoreValue(STORE_NAMESPACE, STORE_KEY, storeSettings)
-      .catch((err) => console.debug('Store save failed:', err?.message || err));
-  }, 300);
-}
+// Settings store lives in core/store.js. `storeSettings` is the core's single,
+// stable object (mutated in place by NSXCore.patchStore/replaceStore), so this
+// alias (declared at the top of the IIFE) and the ~80 reads below stay valid
+// for the app's lifetime.
 
 function patchStoreSettings(patch) {
-  if (!patch || typeof patch !== 'object') return;
-  storeSettings = Object.assign({}, storeSettings, patch);
-  scheduleStorePersist();
+  NSXCore.patchStore(patch);
 }
 
 function saveActivePresetName(storageKey, name) {
-  patchStoreSettings({ [storageKey]: name });
+  NSXCore.saveActivePresetName(storageKey, name);
 }
 
-function readLegacyLocalStorageValue(key, mode = 'json') {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw == null) return undefined;
-    return mode === 'json' ? JSON.parse(raw) : raw;
-  } catch {
-    return undefined;
-  }
-}
+/* ── Steam State (domain in core/domains/steam.js) ──────── */
 
-function removeLegacyLocalStorageValues() {
-  try {
-    for (const key of LEGACY_STORAGE_KEYS) {
-      localStorage.removeItem(key);
-    }
-  } catch {
-    // ignore cleanup errors
-  }
-}
+NSXCore.on('steamChanged', () => {
+  setSteamWidget(NSXCore.getSteamTemp(), NSXCore.getSteamFlow(), NSXCore.getSteamDuration());
+  _updateSteamPresetButtons();
+  _applySteamEnabledDOM();
+});
 
-function collectLegacySettingsFromLocalStorage() {
-  const legacy = {};
-
-  const steamPresets = readLegacyLocalStorageValue('nsx_steam_presets', 'json');
-  if (steamPresets && typeof steamPresets === 'object') legacy.nsx_steam_presets = steamPresets;
-
-  const steamActive = readLegacyLocalStorageValue('nsx_steam_active_preset', 'string');
-  if (typeof steamActive === 'string' && steamActive) legacy.nsx_steam_active_preset = steamActive;
-
-  const hotwaterPresets = readLegacyLocalStorageValue('nsx_hotwater_presets', 'json');
-  if (hotwaterPresets && typeof hotwaterPresets === 'object') legacy.nsx_hotwater_presets = hotwaterPresets;
-
-  const hotwaterActive = readLegacyLocalStorageValue('nsx_hotwater_active_preset', 'string');
-  if (typeof hotwaterActive === 'string' && hotwaterActive) legacy.nsx_hotwater_active_preset = hotwaterActive;
-
-  const flushPresets = readLegacyLocalStorageValue('nsx_flush_presets', 'json');
-  if (flushPresets && typeof flushPresets === 'object') legacy.nsx_flush_presets = flushPresets;
-
-  const flushActive = readLegacyLocalStorageValue('nsx_flush_active_preset', 'string');
-  if (typeof flushActive === 'string' && flushActive) legacy.nsx_flush_active_preset = flushActive;
-
-  const schedule = readLegacyLocalStorageValue('nsx_schedule', 'json');
-  if (schedule && typeof schedule === 'object') legacy.nsx_schedule = schedule;
-
-  return legacy;
-}
-
-async function migrateLegacyLocalSettingsToStore() {
-  if (typeof getStoreValue !== 'function' || typeof setStoreValue !== 'function') return;
-
-  const legacy = collectLegacySettingsFromLocalStorage();
-  if (!Object.keys(legacy).length) return;
-
-  try {
-    let current = {};
-    try {
-      const storeData = await getStoreValue(STORE_NAMESPACE, STORE_KEY);
-      if (storeData && typeof storeData === 'object') {
-        current = storeData;
-      }
-    } catch {
-      // missing store key is expected on first run
-    }
-
-    const merged = Object.assign({}, legacy, current);
-    await setStoreValue(STORE_NAMESPACE, STORE_KEY, merged);
-    removeLegacyLocalStorageValues();
-    console.debug('Legacy localStorage settings migrated to gateway store');
-  } catch (err) {
-    console.debug('Legacy settings migration skipped:', err?.message || err);
-  }
-}
-
-/* ── Steam State ──────────────────────────────────────── */
-
-const STEAM_PRESET_DEFAULTS = {
-  schwach: { name: 'Weak',   temp: 165, flow: 0.6, duration: 60, calibFactor: null },
-  normal:  { name: 'Normal', temp: 165, flow: 1.0, duration: 60, calibFactor: null },
-  stark:   { name: 'Strong', temp: 165, flow: 1.5, duration: 60, calibFactor: null },
-};
-
-function loadSteamPresets() {
-  return Object.assign({}, STEAM_PRESET_DEFAULTS);
-}
-
-function saveSteamPresets(presets) {
-  patchStoreSettings({ nsx_steam_presets: presets });
-}
-
-let steamPresets = loadSteamPresets();
-let activeSteamPreset = 'normal';
-const _sp = steamPresets[activeSteamPreset] ?? steamPresets.normal;
-let steamTemp     = _sp.temp;
-let steamFlow     = _sp.flow;
-let steamDuration = _sp.duration ?? 60;
-
-function _updateSteamWidget() {
-  setSteamWidget(steamTemp, steamFlow, steamDuration);
-}
+NSXCore.on('pitcherChanged', () => {
+  _updateSbwWidget();
+});
 
 function _updateSteamPresetButtons() {
+  const presets = NSXCore.getSteamPresets();
+  const active  = NSXCore.getActiveSteamPreset();
   document.querySelectorAll('.steam-card .steam-preset-btn').forEach(btn => {
     const key = btn.dataset.preset;
-    btn.classList.toggle('is-active', btn.dataset.preset === activeSteamPreset);
-    if (steamPresets[key]?.name) btn.textContent = steamPresets[key].name;
+    btn.classList.toggle('is-active', key === active);
+    if (presets[key]?.name) btn.textContent = presets[key].name;
   });
 }
 
-function _deactivateSteamPreset() {
-  activeSteamPreset = null;
-  saveActivePresetName('nsx_steam_active_preset', '');
-  _updateSteamPresetButtons();
-}
-
-function selectSteamPreset(presetName) {
-  if (!steamPresets[presetName]) return;
-  activeSteamPreset = presetName;
-  saveActivePresetName('nsx_steam_active_preset', presetName);
-  steamTemp     = steamPresets[presetName].temp;
-  steamFlow     = steamPresets[presetName].flow;
-  steamDuration = steamPresets[presetName].duration ?? 60;
-  _updateSteamPresetButtons();
-  _updateSteamWidget();
-  pushSteam();
+function _applySteamEnabledDOM() {
+  const enabled  = NSXCore.isSteamEnabled();
+  const toggle   = document.getElementById('steam-power-toggle');
+  const controls = document.querySelector('.steam-controls');
+  const presetsEl = document.querySelector('.steam-presets');
+  if (toggle)   toggle.checked = enabled;
+  if (controls) controls.style.opacity = enabled ? '' : '0.4';
+  if (presetsEl) presetsEl.style.opacity = enabled ? '' : '0.4';
 }
 
 document.querySelectorAll('.steam-card .steam-preset-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     _clearSbwState(false); // manual preset choice supersedes auto-steam; drop its active state without reverting
-    selectSteamPreset(btn.dataset.preset);
+    NSXCore.selectSteamPreset(btn.dataset.preset);
   });
 });
 
@@ -3501,10 +2923,10 @@ function _renderSteamPurgeToggle(mode) {
 }
 
 function _openSteamSettingsModal() {
-  _steamSettingsDraft = JSON.parse(JSON.stringify(steamPresets));
-  _pitcherDraft = pitcherPresets.map(p => ({ ...p }));
-  _calibDraft = JSON.parse(JSON.stringify(steamCalibration));
-  _calibActivePreset = activeSteamPreset ?? 'normal';
+  _steamSettingsDraft = JSON.parse(JSON.stringify(NSXCore.getSteamPresets()));
+  _pitcherDraft = NSXCore.getPitcherPresets().map(p => ({ ...p }));
+  _calibDraft = JSON.parse(JSON.stringify(NSXCore.getSteamCalibration()));
+  _calibActivePreset = NSXCore.getActiveSteamPreset() ?? 'normal';
   const presetEls = steamSettingsModalEl?.querySelectorAll('.steam-settings-preset') ?? [];
   presetEls.forEach(el => {
     const key = el.dataset.preset;
@@ -3611,19 +3033,8 @@ document.getElementById('btn-calib-info')?.addEventListener('click', () => {
 
 /* ── Steam Calibration ───────────────────────────────── */
 
-const STEAM_CALIB_DEFAULTS = {
-  schwach: { milkWeight: null, steamingTime: null },
-  normal:  { milkWeight: null, steamingTime: null },
-  stark:   { milkWeight: null, steamingTime: null },
-};
-
-let steamCalibration = JSON.parse(JSON.stringify(STEAM_CALIB_DEFAULTS));
 let _calibDraft = null;
 let _calibActivePreset = 'normal';
-
-function _saveCalibration() {
-  patchStoreSettings({ nsx_steam_calibration: steamCalibration });
-}
 
 function _renderCalibCard() {
   const draft = _calibDraft;
@@ -3632,7 +3043,7 @@ function _renderCalibCard() {
   // Preset buttons
   const btnsEl = document.getElementById('calib-preset-btns');
   if (btnsEl) {
-    btnsEl.innerHTML = Object.entries(steamPresets).map(([key, sp]) =>
+    btnsEl.innerHTML = Object.entries(NSXCore.getSteamPresets()).map(([key, sp]) =>
       `<button type="button" class="grinder-toggle-btn${_calibActivePreset === key ? ' is-active' : ''}" data-key="${key}">${sp.name ?? key}</button>`
     ).join('');
     btnsEl.querySelectorAll('.grinder-toggle-btn').forEach(btn => {
@@ -3698,23 +3109,12 @@ document.getElementById('calib-steam-time')?.addEventListener('input', e => {
 
 /* ── Pitcher Presets ─────────────────────────────────── */
 
-const PITCHER_PRESET_DEFAULTS = [
-  { name: 'Pitcher 1', steamPreset: 'normal', pitcherWeight: null },
-  { name: 'Pitcher 2', steamPreset: 'normal', pitcherWeight: null },
-  { name: 'Pitcher 3', steamPreset: 'normal', pitcherWeight: null },
-];
-
-let pitcherPresets = PITCHER_PRESET_DEFAULTS.map(p => ({ ...p }));
 let _pitcherDraft = null;
-
-function _savePitcherPresets() {
-  patchStoreSettings({ nsx_pitcher_presets: pitcherPresets });
-}
 
 function _renderPitcherPresetCards() {
   const cards = steamSettingsModalEl?.querySelectorAll('.pitcher-preset-card[data-pitcher]') ?? [];
   cards.forEach((card, idx) => {
-    const p = _pitcherDraft?.[idx] ?? pitcherPresets[idx];
+    const p = _pitcherDraft?.[idx] ?? NSXCore.getPitcherPresets()[idx];
     if (!p) return;
 
     card.querySelector('.pitcher-preset-name').value = p.name ?? `Pitcher ${idx + 1}`;
@@ -3723,7 +3123,7 @@ function _renderPitcherPresetCards() {
     weightEl.textContent = p.pitcherWeight != null ? p.pitcherWeight.toFixed(1) + ' g' : '— g';
 
     const btnsEl = card.querySelector('.pitcher-steam-preset-btns');
-    btnsEl.innerHTML = Object.entries(steamPresets).map(([key, sp]) =>
+    btnsEl.innerHTML = Object.entries(NSXCore.getSteamPresets()).map(([key, sp]) =>
       `<button type="button" class="grinder-toggle-btn${p.steamPreset === key ? ' is-active' : ''}" data-key="${key}">${sp.name ?? key}</button>`
     ).join('');
     btnsEl.querySelectorAll('.grinder-toggle-btn').forEach(btn => {
@@ -3755,16 +3155,7 @@ document.getElementById('btn-steam-settings-save')?.addEventListener('click', ()
       _steamSettingsDraft[key].name = el.querySelector('.steam-settings-name-input').value.trim() || key;
     }
   });
-  steamPresets = _steamSettingsDraft;
-  saveSteamPresets(steamPresets);
-  _updateSteamPresetButtons();
-  if (activeSteamPreset && steamPresets[activeSteamPreset]) {
-    steamTemp     = steamPresets[activeSteamPreset].temp;
-    steamFlow     = steamPresets[activeSteamPreset].flow;
-    steamDuration = steamPresets[activeSteamPreset].duration ?? 60;
-    _updateSteamWidget();
-    pushSteam();
-  }
+  NSXCore.setSteamPresets(_steamSettingsDraft);
 
   // Save pitcher presets
   if (_pitcherDraft) {
@@ -3773,158 +3164,68 @@ document.getElementById('btn-steam-settings-save')?.addEventListener('click', ()
         _pitcherDraft[idx].name = card.querySelector('.pitcher-preset-name').value.trim() || `Pitcher ${idx + 1}`;
       }
     });
-    pitcherPresets = _pitcherDraft;
-    _savePitcherPresets();
-    _updateSbwWidget();
+    NSXCore.setPitcherPresets(_pitcherDraft);
   }
 
   if (_calibDraft) {
-    steamCalibration = _calibDraft;
-    _saveCalibration();
-    Object.entries(steamCalibration).forEach(([key, c]) => {
-      if (steamPresets[key] && c.milkWeight > 0 && c.steamingTime > 0) {
-        steamPresets[key].calibFactor = c.steamingTime / c.milkWeight;
-      }
-    });
-    saveSteamPresets(steamPresets);
-    _updateSbwWidget();
+    NSXCore.setSteamCalibration(_calibDraft);
   }
 
   if (steamSettingsModalEl) steamSettingsModalEl.hidden = true;
 });
 
-let _steamEnabled = true;
-
-function _setSteamEnabled(enabled, push = true) {
-  _steamEnabled = enabled;
-  patchStoreSettings({ nsx_steam_enabled: enabled });
-  const toggle = document.getElementById('steam-power-toggle');
-  if (toggle) toggle.checked = enabled;
-  const controls = document.querySelector('.steam-controls');
-  const presets = document.querySelector('.steam-presets');
-  if (controls) controls.style.opacity = enabled ? '' : '0.4';
-  if (presets) presets.style.opacity = enabled ? '' : '0.4';
-  if (!push) return;
-  if (enabled) {
-    pushSteamSettings(steamTemp, steamFlow).catch(() => {});
-  } else {
-    pushSteamSettings(0, 0).catch(() => {});
-  }
-}
-
 document.getElementById('steam-power-toggle')?.addEventListener('change', (e) => {
-  _setSteamEnabled(e.target.checked);
+  NSXCore.setSteamEnabled(e.target.checked);
 });
 
-document.getElementById('btn-steam-temp-up')?.addEventListener('click', () => {
-  steamTemp = Math.min(steamTemp + 5, 165);
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamTemp();
-});
-document.getElementById('btn-steam-temp-down')?.addEventListener('click', () => {
-  steamTemp = Math.max(steamTemp - 5, 100);
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamTemp();
-});
-document.getElementById('btn-steam-flow-up')?.addEventListener('click', () => {
-  steamFlow = Math.round(Math.min(steamFlow + 0.1, 4.0) * 10) / 10;
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamFlow();
-});
-document.getElementById('btn-steam-flow-down')?.addEventListener('click', () => {
-  steamFlow = Math.round(Math.max(steamFlow - 0.1, 0.5) * 10) / 10;
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamFlow();
-});
-document.getElementById('btn-steam-dur-up')?.addEventListener('click', () => {
-  steamDuration = Math.min(steamDuration + 1, 180);
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamDuration();
-});
-document.getElementById('btn-steam-dur-down')?.addEventListener('click', () => {
-  steamDuration = Math.max(steamDuration - 1, 1);
-  _deactivateSteamPreset(); _updateSteamWidget(); pushSteamDuration();
-});
+document.getElementById('btn-steam-temp-up')?.addEventListener('click', () =>
+  NSXCore.setSteamTemp(NSXCore.getSteamTemp() + 5));
+document.getElementById('btn-steam-temp-down')?.addEventListener('click', () =>
+  NSXCore.setSteamTemp(NSXCore.getSteamTemp() - 5));
+document.getElementById('btn-steam-flow-up')?.addEventListener('click', () =>
+  NSXCore.setSteamFlow(NSXCore.getSteamFlow() + 0.1));
+document.getElementById('btn-steam-flow-down')?.addEventListener('click', () =>
+  NSXCore.setSteamFlow(NSXCore.getSteamFlow() - 0.1));
+document.getElementById('btn-steam-dur-up')?.addEventListener('click', () =>
+  NSXCore.setSteamDuration(NSXCore.getSteamDuration() + 1));
+document.getElementById('btn-steam-dur-down')?.addEventListener('click', () =>
+  NSXCore.setSteamDuration(NSXCore.getSteamDuration() - 1));
 
 /* ── Hotwater State ───────────────────────────────────── */
 
-const HOTWATER_PRESET_DEFAULTS = {
-  klein:  { name: 'Little', temp: 80, flow: 5.0, volume: 40  },
-  mittel: { name: 'Medium', temp: 80, flow: 5.0, volume: 100 },
-  gross:  { name: 'Large',  temp: 80, flow: 5.0, volume: 150 },
-};
+/* ── Hotwater State (domain in core/domains/hotwater.js) ── */
 
-function loadHotwaterPresets() {
-  return Object.assign({}, HOTWATER_PRESET_DEFAULTS);
-}
-
-function saveHotwaterPresets(presets) {
-  patchStoreSettings({ nsx_hotwater_presets: presets });
-}
-
-let hotwaterPresets = loadHotwaterPresets();
-let activeHotwaterPreset = 'mittel';
-const _hp = hotwaterPresets[activeHotwaterPreset] ?? hotwaterPresets.mittel;
-let hotwaterTemp   = _hp.temp;
-let hotwaterFlow   = _hp.flow ?? 1.5;
-let hotwaterVolume = _hp.volume;
+NSXCore.on('hotwaterChanged', () => {
+  setHotwaterWidget(NSXCore.getHotwaterTemp(), NSXCore.getHotwaterFlow(), NSXCore.getHotwaterVolume());
+  _updateHotwaterPresetButtons();
+});
 
 function _updateHotwaterPresetButtons() {
+  const presets = NSXCore.getHotwaterPresets();
+  const active  = NSXCore.getActiveHotwaterPreset();
   document.querySelectorAll('.hotwater-card .steam-preset-btn').forEach(btn => {
     const key = btn.dataset.preset;
-    btn.textContent = hotwaterPresets[key]?.name ?? key;
-    btn.classList.toggle('is-active', key === activeHotwaterPreset);
+    btn.textContent = presets[key]?.name ?? key;
+    btn.classList.toggle('is-active', key === active);
   });
 }
 
-function _deactivateHotwaterPreset() {
-  activeHotwaterPreset = null;
-  saveActivePresetName('nsx_hotwater_active_preset', '');
-  _updateHotwaterPresetButtons();
-}
-
-function saveHotwaterState() {
-  setHotwaterWidget(hotwaterTemp, hotwaterFlow, hotwaterVolume);
-}
-
-function applyHotwaterState() {
-  saveHotwaterState();
-  pushHotwater();
-}
-
-function selectHotwaterPreset(presetName) {
-  activeHotwaterPreset = presetName;
-  saveActivePresetName('nsx_hotwater_active_preset', presetName);
-  hotwaterTemp   = hotwaterPresets[presetName].temp;
-  hotwaterFlow   = hotwaterPresets[presetName].flow ?? 1.5;
-  hotwaterVolume = hotwaterPresets[presetName].volume;
-  _updateHotwaterPresetButtons();
-  applyHotwaterState();
-}
-
 document.querySelectorAll('.hotwater-card .steam-preset-btn').forEach(btn => {
-  btn.addEventListener('click', () => selectHotwaterPreset(btn.dataset.preset));
+  btn.addEventListener('click', () => NSXCore.selectHotwaterPreset(btn.dataset.preset));
 });
 
-document.getElementById('btn-hotwater-temp-up')?.addEventListener('click', () => {
-  hotwaterTemp = Math.min(hotwaterTemp + 5, 100);
-  _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterTemp();
-});
-document.getElementById('btn-hotwater-temp-down')?.addEventListener('click', () => {
-  hotwaterTemp = Math.max(hotwaterTemp - 5, 50);
-  _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterTemp();
-});
-document.getElementById('btn-hotwater-flow-up')?.addEventListener('click', () => {
-  hotwaterFlow = Math.round(Math.min(hotwaterFlow + 1.0, 10.0) * 10) / 10;
-  _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterFlow();
-});
-document.getElementById('btn-hotwater-flow-down')?.addEventListener('click', () => {
-  hotwaterFlow = Math.round(Math.max(hotwaterFlow - 1.0, 0.5) * 10) / 10;
-  _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterFlow();
-});
-document.getElementById('btn-hotwater-vol-up')?.addEventListener('click', () => {
-  hotwaterVolume = Math.min(hotwaterVolume + 10, 500);
-  _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterVolume();
-});
-document.getElementById('btn-hotwater-vol-down')?.addEventListener('click', () => {
-  hotwaterVolume = Math.max(hotwaterVolume - 10, 10);
-  _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterVolume();
-});
+document.getElementById('btn-hotwater-temp-up')?.addEventListener('click', () =>
+  NSXCore.setHotwaterTemp(NSXCore.getHotwaterTemp() + 5));
+document.getElementById('btn-hotwater-temp-down')?.addEventListener('click', () =>
+  NSXCore.setHotwaterTemp(NSXCore.getHotwaterTemp() - 5));
+document.getElementById('btn-hotwater-flow-up')?.addEventListener('click', () =>
+  NSXCore.setHotwaterFlow(NSXCore.getHotwaterFlow() + 1.0));
+document.getElementById('btn-hotwater-flow-down')?.addEventListener('click', () =>
+  NSXCore.setHotwaterFlow(NSXCore.getHotwaterFlow() - 1.0));
+document.getElementById('btn-hotwater-vol-up')?.addEventListener('click', () =>
+  NSXCore.setHotwaterVolume(NSXCore.getHotwaterVolume() + 10));
+document.getElementById('btn-hotwater-vol-down')?.addEventListener('click', () =>
+  NSXCore.setHotwaterVolume(NSXCore.getHotwaterVolume() - 10));
 
 /* ── Hotwater Settings Modal ─────────────────────────── */
 
@@ -3932,7 +3233,7 @@ const hotwaterSettingsModalEl = document.getElementById('hotwater-settings-modal
 let _hotwaterSettingsDraft = null;
 
 function _openHotwaterSettingsModal() {
-  _hotwaterSettingsDraft = JSON.parse(JSON.stringify(hotwaterPresets));
+  _hotwaterSettingsDraft = JSON.parse(JSON.stringify(NSXCore.getHotwaterPresets()));
   const presetEls = hotwaterSettingsModalEl?.querySelectorAll('.hotwater-settings-preset') ?? [];
   presetEls.forEach(el => {
     const key = el.dataset.preset;
@@ -4004,99 +3305,48 @@ document.getElementById('btn-hotwater-settings-save')?.addEventListener('click',
     const nameVal = el.querySelector('.steam-settings-name-input')?.value.trim();
     _hotwaterSettingsDraft[key].name = nameVal || key;
   });
-  hotwaterPresets = _hotwaterSettingsDraft;
-  saveHotwaterPresets(hotwaterPresets);
-  _updateHotwaterPresetButtons();
-  if (activeHotwaterPreset && hotwaterPresets[activeHotwaterPreset]) {
-    hotwaterTemp   = hotwaterPresets[activeHotwaterPreset].temp;
-    hotwaterFlow   = hotwaterPresets[activeHotwaterPreset].flow ?? 1.5;
-    hotwaterVolume = hotwaterPresets[activeHotwaterPreset].volume;
-    applyHotwaterState();
-  }
+  NSXCore.setHotwaterPresets(_hotwaterSettingsDraft);
   if (hotwaterSettingsModalEl) hotwaterSettingsModalEl.hidden = true;
 });
 
-/* ── Flush State ──────────────────────────────────────── */
+/* ── Flush State (domain in core/domains/flush.js) ────── */
 
-const FLUSH_PRESET_DEFAULTS = {
-  kurz:   { name: 'Short',  flow: 10, duration: 3  },
-  normal: { name: 'Normal', flow: 10, duration: 5  },
-  lang:   { name: 'Long',   flow: 10, duration: 10 },
-};
-
-function loadFlushPresets() {
-  return Object.assign({}, FLUSH_PRESET_DEFAULTS);
-}
-
-function saveFlushPresets(presets) {
-  patchStoreSettings({ nsx_flush_presets: presets });
-}
-
-let flushPresets = loadFlushPresets();
-let activeFlushPreset = 'normal';
-const _fp = flushPresets[activeFlushPreset] ?? flushPresets.normal;
-let flushFlow     = _fp.flow;
-let flushDuration = _fp.duration;
+// Flush state + machine push live in core. This skin renders on 'flushChanged'
+// and drives the domain via NSXCore commands; all DOM stays here.
+NSXCore.on('flushChanged', () => {
+  updateFlushDisplay();
+  _updateFlushPresetButtons();
+});
 
 function updateFlushDisplay() {
   const flowEl = document.getElementById('flush-flow');
   const durEl  = document.getElementById('flush-duration');
-  if (flowEl) flowEl.textContent = `${flushFlow} ml/s`;
-  if (durEl)  durEl.textContent  = `${flushDuration} s`;
+  if (flowEl) flowEl.textContent = `${NSXCore.getFlushFlow()} ml/s`;
+  if (durEl)  durEl.textContent  = `${NSXCore.getFlushDuration()} s`;
 }
 
 function _updateFlushPresetButtons() {
+  const presets = NSXCore.getFlushPresets();
+  const active  = NSXCore.getActiveFlushPreset();
   document.querySelectorAll('.cleaning-card .steam-preset-btn').forEach(btn => {
     const key = btn.dataset.preset;
-    btn.textContent = flushPresets[key]?.name ?? key;
-    btn.classList.toggle('is-active', key === activeFlushPreset);
+    btn.textContent = presets[key]?.name ?? key;
+    btn.classList.toggle('is-active', key === active);
   });
 }
 
-function _deactivateFlushPreset() {
-  activeFlushPreset = null;
-  saveActivePresetName('nsx_flush_active_preset', '');
-  _updateFlushPresetButtons();
-}
-
-function saveFlushState() {
-  updateFlushDisplay();
-}
-
-function applyFlushState() {
-  saveFlushState();
-  pushFlush();
-}
-
-function selectFlushPreset(presetName) {
-  activeFlushPreset = presetName;
-  saveActivePresetName('nsx_flush_active_preset', presetName);
-  flushFlow     = flushPresets[presetName].flow;
-  flushDuration = flushPresets[presetName].duration;
-  _updateFlushPresetButtons();
-  applyFlushState();
-}
-
 document.querySelectorAll('.cleaning-card .steam-preset-btn').forEach(btn => {
-  btn.addEventListener('click', () => selectFlushPreset(btn.dataset.preset));
+  btn.addEventListener('click', () => NSXCore.selectFlushPreset(btn.dataset.preset));
 });
 
-document.getElementById('btn-flush-flow-up')?.addEventListener('click', () => {
-  flushFlow = Math.min(flushFlow + 1, 10);
-  _deactivateFlushPreset(); saveFlushState(); pushFlushFlow();
-});
-document.getElementById('btn-flush-flow-down')?.addEventListener('click', () => {
-  flushFlow = Math.max(flushFlow - 1, 1);
-  _deactivateFlushPreset(); saveFlushState(); pushFlushFlow();
-});
-document.getElementById('btn-flush-duration-up')?.addEventListener('click', () => {
-  flushDuration = Math.min(flushDuration + 1, 60);
-  _deactivateFlushPreset(); saveFlushState(); pushFlushDuration();
-});
-document.getElementById('btn-flush-duration-down')?.addEventListener('click', () => {
-  flushDuration = Math.max(flushDuration - 1, 1);
-  _deactivateFlushPreset(); saveFlushState(); pushFlushDuration();
-});
+document.getElementById('btn-flush-flow-up')?.addEventListener('click', () =>
+  NSXCore.setFlushFlow(NSXCore.getFlushFlow() + 1));
+document.getElementById('btn-flush-flow-down')?.addEventListener('click', () =>
+  NSXCore.setFlushFlow(NSXCore.getFlushFlow() - 1));
+document.getElementById('btn-flush-duration-up')?.addEventListener('click', () =>
+  NSXCore.setFlushDuration(NSXCore.getFlushDuration() + 1));
+document.getElementById('btn-flush-duration-down')?.addEventListener('click', () =>
+  NSXCore.setFlushDuration(NSXCore.getFlushDuration() - 1));
 
 /* ── Flush Settings Modal ────────────────────────────── */
 
@@ -4113,7 +3363,7 @@ function _renderFlushMachineSettings() {
 }
 
 function _openFlushSettingsModal() {
-  _flushSettingsDraft = JSON.parse(JSON.stringify(flushPresets));
+  _flushSettingsDraft = JSON.parse(JSON.stringify(NSXCore.getFlushPresets()));
   flushSettingsModalEl?.querySelectorAll('.flush-settings-preset').forEach(el => {
     const key = el.dataset.preset;
     const p = _flushSettingsDraft[key];
@@ -4204,14 +3454,7 @@ document.getElementById('btn-flush-settings-save')?.addEventListener('click', ()
     const nameVal = el.querySelector('.steam-settings-name-input')?.value.trim();
     _flushSettingsDraft[key].name = nameVal || key;
   });
-  flushPresets = _flushSettingsDraft;
-  saveFlushPresets(flushPresets);
-  _updateFlushPresetButtons();
-  if (activeFlushPreset && flushPresets[activeFlushPreset]) {
-    flushFlow     = flushPresets[activeFlushPreset].flow;
-    flushDuration = flushPresets[activeFlushPreset].duration;
-    applyFlushState();
-  }
+  NSXCore.setFlushPresets(_flushSettingsDraft);
   updateMachineSettings?.({ flushTemp: _flushMachineTemp, flushTimeout: _flushMachineTimeout }).catch(() => {});
   if (flushSettingsModalEl) flushSettingsModalEl.hidden = true;
 });
@@ -4219,123 +3462,53 @@ document.getElementById('btn-flush-settings-save')?.addEventListener('click', ()
 /* ── Tap-to-edit for Steam / Hotwater / Flush values ──── */
 {
   document.getElementById('steam-temp')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(130, 165, 5), steamTemp, v => { steamTemp = v; saveSteamState(); pushSteamTemp(); }));
+    openNumberPicker(_npMakeRange(130, 165, 5), NSXCore.getSteamTemp(), v => NSXCore.setSteamTemp(v)));
   document.getElementById('steam-flow')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(0.5, 2.5, 0.1), steamFlow, v => { steamFlow = v; saveSteamState(); pushSteamFlow(); }, 1));
+    openNumberPicker(_npMakeRange(0.5, 2.5, 0.1), NSXCore.getSteamFlow(), v => NSXCore.setSteamFlow(v), 1));
   document.getElementById('steam-duration')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(1, 180, 1), steamDuration, v => { steamDuration = v; saveSteamState(); pushSteamDuration(); }));
+    openNumberPicker(_npMakeRange(1, 180, 1), NSXCore.getSteamDuration(), v => NSXCore.setSteamDuration(v)));
 
   document.getElementById('hotwater-temp')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(50, 100, 5), hotwaterTemp, v => { hotwaterTemp = v; _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterTemp(); }));
+    openNumberPicker(_npMakeRange(50, 100, 5), NSXCore.getHotwaterTemp(), v => NSXCore.setHotwaterTemp(v)));
   document.getElementById('hotwater-flow')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(0.5, 10.0, 0.1), hotwaterFlow, v => { hotwaterFlow = v; _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterFlow(); }, 1));
+    openNumberPicker(_npMakeRange(0.5, 10.0, 0.1), NSXCore.getHotwaterFlow(), v => NSXCore.setHotwaterFlow(v), 1));
   document.getElementById('hotwater-volume')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(10, 500, 10), hotwaterVolume, v => { hotwaterVolume = v; _deactivateHotwaterPreset(); saveHotwaterState(); pushHotwaterVolume(); }));
+    openNumberPicker(_npMakeRange(10, 500, 10), NSXCore.getHotwaterVolume(), v => NSXCore.setHotwaterVolume(v)));
 
   document.getElementById('flush-flow')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(1, 10, 1), flushFlow, v => { flushFlow = v; _deactivateFlushPreset(); saveFlushState(); pushFlushFlow(); }));
+    openNumberPicker(_npMakeRange(1, 10, 1), NSXCore.getFlushFlow(), v => NSXCore.setFlushFlow(v)));
   document.getElementById('flush-duration')?.addEventListener('click', () =>
-    openNumberPicker(_npMakeRange(1, 60, 1), flushDuration, v => { flushDuration = v; _deactivateFlushPreset(); saveFlushState(); pushFlushDuration(); }));
+    openNumberPicker(_npMakeRange(1, 60, 1), NSXCore.getFlushDuration(), v => NSXCore.setFlushDuration(v)));
 }
 
 /* ── Machine Settings Push ────────────────────────────── */
 
-function push(payload) {
-  if (typeof pushWorkflow !== 'function') return;
-  pushWorkflow(payload).catch(err => {
-    showToast(t('toast.settingsFailed') + ': ' + err.message);
-  });
-}
+// push() / debounced() live in core/push.js. Core emits 'toast' on push errors;
+// render it here where the DOM lives.
+const push = NSXCore.push;
+const debounced = NSXCore.debounced;
+NSXCore.on('toast', (msg) => showToast(msg));
 
-const _debounce = {};
-function debounced(key, fn, ms = 1000) {
-  clearTimeout(_debounce[key]);
-  _debounce[key] = setTimeout(fn, ms);
-}
 
-function pushSteamTemp()     { debounced('steamTemp',     () => push({ steamSettings: { targetTemperature: parseFloat(steamTemp) } })); }
-function pushSteamFlow()     { debounced('steamFlow',     () => push({ steamSettings: { flow: parseFloat(steamFlow) } })); }
-function pushSteamDuration() { debounced('steamDuration', () => push({ steamSettings: { duration: parseFloat(steamDuration) } })); }
-function pushSteam()         { debounced('steam',         () => push({ steamSettings: { targetTemperature: parseFloat(steamTemp), flow: parseFloat(steamFlow), duration: parseFloat(steamDuration) } })); }
 
-function pushHotwaterTemp()   { debounced('hwTemp',   () => push({ hotWaterData: { targetTemperature: parseFloat(hotwaterTemp) } })); }
-function pushHotwaterFlow()   { debounced('hwFlow',   () => push({ hotWaterData: { flow: parseFloat(hotwaterFlow) } })); }
-function pushHotwaterVolume() { debounced('hwVolume', () => push({ hotWaterData: { volume: parseFloat(hotwaterVolume) } })); }
-function pushHotwater()       { debounced('hotwater', () => push({ hotWaterData: { targetTemperature: parseFloat(hotwaterTemp), flow: parseFloat(hotwaterFlow), volume: parseFloat(hotwaterVolume) } })); }
-
-function pushFlushFlow()     { debounced('flushFlow', () => push({ rinseData: { flow: parseFloat(flushFlow) } })); }
-function pushFlushDuration() { debounced('flushDur',  () => push({ rinseData: { duration: parseFloat(flushDuration) } })); }
-function pushFlush()         { debounced('flush',     () => push({ rinseData: { flow: parseFloat(flushFlow), duration: parseFloat(flushDuration) } })); }
 
 /* ── Schedule State ───────────────────────────────────── */
 
-const SCHEDULE_DEFAULTS = {
-  enabled: false,
-  days: [1, 2, 3, 4, 5],
-  onHour: 6, onMinute: 0,
-  offHour: 22, offMinute: 0,
-  scheduleId: null,
-};
+/* ── Schedule State (domain in core/domains/schedule.js) ── */
 
-function loadScheduleState() {
-  return Object.assign({}, SCHEDULE_DEFAULTS);
-}
-
-function saveScheduleState() {
-  patchStoreSettings({ nsx_schedule: scheduleState });
-}
-
-let scheduleState = loadScheduleState();
+NSXCore.on('scheduleChanged', () => renderScheduleUI());
 
 function applyPresetButtonStates() {
-  document.querySelectorAll('.steam-card .steam-preset-btn').forEach(btn => {
-    btn.classList.toggle('is-active', btn.dataset.preset === activeSteamPreset);
-  });
+  _updateSteamPresetButtons();
   _updateHotwaterPresetButtons();
   _updateFlushPresetButtons();
 }
 
 async function hydrateUiSettingsFromStore() {
-  if (typeof getStoreValue !== 'function') return;
-
   try {
-    const data = await getStoreValue(STORE_NAMESPACE, STORE_KEY);
-    if (!data || typeof data !== 'object') return;
-    storeSettings = data;
+    if (!(await NSXCore.loadStore())) return;
 
-    if (storeSettings.nsx_steam_presets && typeof storeSettings.nsx_steam_presets === 'object') {
-      steamPresets = {
-        schwach: { ...STEAM_PRESET_DEFAULTS.schwach, ...storeSettings.nsx_steam_presets.schwach },
-        normal:  { ...STEAM_PRESET_DEFAULTS.normal,  ...storeSettings.nsx_steam_presets.normal  },
-        stark:   { ...STEAM_PRESET_DEFAULTS.stark,   ...storeSettings.nsx_steam_presets.stark   },
-      };
-    }
-    const savedActive = storeSettings.nsx_steam_active_preset;
-    if (typeof savedActive === 'string' && steamPresets[savedActive]) {
-      activeSteamPreset = savedActive;
-    } else if (savedActive === '' || savedActive === null) {
-      activeSteamPreset = null;
-    }
-
-    if (storeSettings.nsx_steam_calibration && typeof storeSettings.nsx_steam_calibration === 'object') {
-      steamCalibration = {
-        schwach: { ...STEAM_CALIB_DEFAULTS.schwach, ...storeSettings.nsx_steam_calibration.schwach },
-        normal:  { ...STEAM_CALIB_DEFAULTS.normal,  ...storeSettings.nsx_steam_calibration.normal  },
-        stark:   { ...STEAM_CALIB_DEFAULTS.stark,   ...storeSettings.nsx_steam_calibration.stark   },
-      };
-    }
-
-    if (Array.isArray(storeSettings.nsx_pitcher_presets)) {
-      pitcherPresets = storeSettings.nsx_pitcher_presets.map((p, i) => ({
-        ...PITCHER_PRESET_DEFAULTS[i],
-        ...p,
-      })).slice(0, 3);
-      while (pitcherPresets.length < 3) pitcherPresets.push({ ...PITCHER_PRESET_DEFAULTS[pitcherPresets.length] });
-    }
-
-    if (typeof storeSettings.nsx_active_pitcher === 'number' && storeSettings.nsx_active_pitcher >= 0 && storeSettings.nsx_active_pitcher <= 2) {
-      activePitcherIndex = storeSettings.nsx_active_pitcher;
-    }
+    NSXCore.hydrateSteam();
 
     if (storeSettings.nsx_sbw_enabled === true) {
       sbwEnabled = true;
@@ -4348,41 +3521,10 @@ async function hydrateUiSettingsFromStore() {
       _batchFreezeEnabled = true;
     }
 
-    if (storeSettings.nsx_hotwater_presets && typeof storeSettings.nsx_hotwater_presets === 'object') {
-      const stored = storeSettings.nsx_hotwater_presets;
-      hotwaterPresets = {
-        klein:  { ...HOTWATER_PRESET_DEFAULTS.klein,  ...stored.klein  },
-        mittel: { ...HOTWATER_PRESET_DEFAULTS.mittel, ...stored.mittel },
-        gross:  { ...HOTWATER_PRESET_DEFAULTS.gross,  ...stored.gross  },
-      };
-    }
-    if (typeof storeSettings.nsx_hotwater_active_preset === 'string') {
-      if (hotwaterPresets[storeSettings.nsx_hotwater_active_preset]) {
-        activeHotwaterPreset = storeSettings.nsx_hotwater_active_preset;
-      } else if (storeSettings.nsx_hotwater_active_preset === '') {
-        activeHotwaterPreset = null;
-      }
-    }
+    NSXCore.hydrateHotwater();
+    NSXCore.hydrateFlush();
 
-    if (storeSettings.nsx_flush_presets && typeof storeSettings.nsx_flush_presets === 'object') {
-      const stored = storeSettings.nsx_flush_presets;
-      flushPresets = {
-        kurz:   { ...FLUSH_PRESET_DEFAULTS.kurz,   ...stored.kurz   },
-        normal: { ...FLUSH_PRESET_DEFAULTS.normal, ...stored.normal },
-        lang:   { ...FLUSH_PRESET_DEFAULTS.lang,   ...stored.lang   },
-      };
-    }
-    if (typeof storeSettings.nsx_flush_active_preset === 'string') {
-      if (flushPresets[storeSettings.nsx_flush_active_preset]) {
-        activeFlushPreset = storeSettings.nsx_flush_active_preset;
-      } else if (storeSettings.nsx_flush_active_preset === '') {
-        activeFlushPreset = null;
-      }
-    }
-
-    if (storeSettings.nsx_schedule && typeof storeSettings.nsx_schedule === 'object') {
-      scheduleState = Object.assign({}, SCHEDULE_DEFAULTS, storeSettings.nsx_schedule);
-    }
+    NSXCore.hydrateSchedule();
 
     if (typeof storeSettings.nsx_presence_enabled === 'boolean') {
       _presenceEnabled = storeSettings.nsx_presence_enabled;
@@ -4428,40 +3570,23 @@ async function hydrateUiSettingsFromStore() {
     window.NSXScreensaver?.setUnlockCallback(() => {
       // Land on the configured start page (Home or Recipes) when unlocking.
       window.NSXRouter?.setTab(storeSettings.nsx_start_tab === 'recipe' ? 1 : 0, false);
-      if (storeSettings.nsx_wake_on_unlock !== false && currentMachineState === 'sleeping') {
+      if (storeSettings.nsx_wake_on_unlock !== false && NSXCore.getMachineState() === 'sleeping') {
         setMachineState('idle')
           .then(() => _schedulePushCurrentSkinState(true))
           .catch(() => {});
       }
     });
 
-    if (typeof storeSettings.nsx_steam_enabled === 'boolean') {
-      _setSteamEnabled(storeSettings.nsx_steam_enabled, false);
-    }
-
     _pushScreensaverConfig();
 
-    const steamState = steamPresets[activeSteamPreset] ?? steamPresets.normal;
-    steamTemp = steamState.temp;
-    steamFlow = steamState.flow;
-    steamDuration = steamState.duration ?? 60;
-
-    const hotwaterState = hotwaterPresets[activeHotwaterPreset] ?? hotwaterPresets.mittel;
-    hotwaterTemp = hotwaterState.temp;
-    hotwaterFlow = hotwaterState.flow ?? 1.5;
-    hotwaterVolume = hotwaterState.volume;
-
-    const flushState = flushPresets[activeFlushPreset] ?? flushPresets.normal;
-    flushFlow = flushState.flow;
-    flushDuration = flushState.duration;
-
-    setSteamWidget(steamTemp, steamFlow, steamDuration);
+    setSteamWidget(NSXCore.getSteamTemp(), NSXCore.getSteamFlow(), NSXCore.getSteamDuration());
+    _applySteamEnabledDOM();
     _updateSteamPresetButtons();
     _updateSbwWidget();
     _applySbwEnabled();
     _applyRatioDoseVisible();
     _applyShowRecipeCardRating();
-    setHotwaterWidget(hotwaterTemp, hotwaterFlow, hotwaterVolume);
+    setHotwaterWidget(NSXCore.getHotwaterTemp(), NSXCore.getHotwaterFlow(), NSXCore.getHotwaterVolume());
     updateFlushDisplay();
     renderScheduleUI();
     applyPresetButtonStates();
@@ -4483,121 +3608,61 @@ async function hydrateUiSettingsFromStore() {
 function pad2(n) { return String(n).padStart(2, '0'); }
 
 function renderScheduleUI() {
+  const s = NSXCore.getScheduleState();
   const toggleEl = document.getElementById('schedule-enabled');
-  if (toggleEl) toggleEl.checked = scheduleState.enabled;
+  if (toggleEl) toggleEl.checked = s.enabled;
 
   document.querySelectorAll('.schedule-day-btn').forEach(btn => {
-    btn.classList.toggle('is-active', scheduleState.days.includes(Number(btn.dataset.day)));
+    btn.classList.toggle('is-active', s.days.includes(Number(btn.dataset.day)));
   });
 
   const onH  = document.getElementById('schedule-on-hour');
   const onM  = document.getElementById('schedule-on-minute');
   const offH = document.getElementById('schedule-off-hour');
   const offM = document.getElementById('schedule-off-minute');
-  if (onH)  onH.textContent  = pad2(scheduleState.onHour);
-  if (onM)  onM.textContent  = pad2(scheduleState.onMinute);
-  if (offH) offH.textContent = pad2(scheduleState.offHour);
-  if (offM) offM.textContent = pad2(scheduleState.offMinute);
-}
-
-async function syncScheduleToApi() {
-  if (!scheduleState.enabled) {
-    if (scheduleState.scheduleId) {
-      try {
-        await updateSchedule(scheduleState.scheduleId, { id: scheduleState.scheduleId, enabled: false });
-      } catch {}
-    }
-    return;
-  }
-  const days = scheduleState.days.length > 0 ? scheduleState.days : [1, 2, 3, 4, 5, 6, 7];
-  const time = `${pad2(scheduleState.onHour)}:${pad2(scheduleState.onMinute)}`;
-  if (scheduleState.scheduleId) {
-    try {
-      await updateSchedule(scheduleState.scheduleId, {
-        id: scheduleState.scheduleId,
-        time,
-        daysOfWeek: days,
-        enabled: true,
-        keepAwakeFor: 0,
-      });
-      return;
-    } catch {
-      scheduleState.scheduleId = null;
-      saveScheduleState();
-    }
-  }
-  try {
-    const created = await createSchedule({
-      time,
-      daysOfWeek: days,
-      enabled: true,
-      keepAwakeFor: 0,
-    });
-    scheduleState.scheduleId = created?.id || null;
-    saveScheduleState();
-  } catch (err) {
-    showToast(t('toast.scheduleFailed') + ': ' + err.message);
-  }
-}
-
-function applyScheduleState() {
-  saveScheduleState();
-  renderScheduleUI();
-  syncScheduleToApi();
+  if (onH)  onH.textContent  = pad2(s.onHour);
+  if (onM)  onM.textContent  = pad2(s.onMinute);
+  if (offH) offH.textContent = pad2(s.offHour);
+  if (offM) offM.textContent = pad2(s.offMinute);
 }
 
 // Toggle schedule enabled
 document.getElementById('schedule-enabled')?.addEventListener('change', (e) => {
-  scheduleState.enabled = e.target.checked;
-  applyScheduleState();
+  NSXCore.applySchedule({ enabled: e.target.checked });
 });
 
 // Day buttons
 document.querySelectorAll('.schedule-day-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    const s = NSXCore.getScheduleState();
     const day = Number(btn.dataset.day);
-    const idx = scheduleState.days.indexOf(day);
-    if (idx >= 0) scheduleState.days.splice(idx, 1);
-    else scheduleState.days.push(day);
-    applyScheduleState();
+    const days = s.days.slice();
+    const idx = days.indexOf(day);
+    if (idx >= 0) days.splice(idx, 1);
+    else days.push(day);
+    NSXCore.applySchedule({ days });
   });
 });
 
 // On-time buttons
-document.getElementById('btn-sch-on-h-up')?.addEventListener('click', () => {
-  scheduleState.onHour = (scheduleState.onHour + 1) % 24;
-  applyScheduleState();
-});
-document.getElementById('btn-sch-on-h-down')?.addEventListener('click', () => {
-  scheduleState.onHour = (scheduleState.onHour + 23) % 24;
-  applyScheduleState();
-});
-document.getElementById('btn-sch-on-m-up')?.addEventListener('click', () => {
-  scheduleState.onMinute = (scheduleState.onMinute + 15) % 60;
-  applyScheduleState();
-});
-document.getElementById('btn-sch-on-m-down')?.addEventListener('click', () => {
-  scheduleState.onMinute = (scheduleState.onMinute + 45) % 60;
-  applyScheduleState();
-});
+document.getElementById('btn-sch-on-h-up')?.addEventListener('click', () =>
+  NSXCore.applySchedule({ onHour: (NSXCore.getScheduleState().onHour + 1) % 24 }));
+document.getElementById('btn-sch-on-h-down')?.addEventListener('click', () =>
+  NSXCore.applySchedule({ onHour: (NSXCore.getScheduleState().onHour + 23) % 24 }));
+document.getElementById('btn-sch-on-m-up')?.addEventListener('click', () =>
+  NSXCore.applySchedule({ onMinute: (NSXCore.getScheduleState().onMinute + 15) % 60 }));
+document.getElementById('btn-sch-on-m-down')?.addEventListener('click', () =>
+  NSXCore.applySchedule({ onMinute: (NSXCore.getScheduleState().onMinute + 45) % 60 }));
 
 // Off-time buttons (client-side sleep, no API endpoint for sleep schedules)
-document.getElementById('btn-sch-off-h-up')?.addEventListener('click', () => {
-  scheduleState.offHour = (scheduleState.offHour + 1) % 24;
-  applyScheduleState();
-});
-document.getElementById('btn-sch-off-h-down')?.addEventListener('click', () => {
-  scheduleState.offHour = (scheduleState.offHour + 23) % 24;
-  applyScheduleState();
-});
-document.getElementById('btn-sch-off-m-up')?.addEventListener('click', () => {
-  scheduleState.offMinute = (scheduleState.offMinute + 15) % 60;
-  applyScheduleState();
-});
-document.getElementById('btn-sch-off-m-down')?.addEventListener('click', () => {
-  scheduleState.offMinute = (scheduleState.offMinute + 45) % 60;
-  applyScheduleState();
-});
+document.getElementById('btn-sch-off-h-up')?.addEventListener('click', () =>
+  NSXCore.applySchedule({ offHour: (NSXCore.getScheduleState().offHour + 1) % 24 }));
+document.getElementById('btn-sch-off-h-down')?.addEventListener('click', () =>
+  NSXCore.applySchedule({ offHour: (NSXCore.getScheduleState().offHour + 23) % 24 }));
+document.getElementById('btn-sch-off-m-up')?.addEventListener('click', () =>
+  NSXCore.applySchedule({ offMinute: (NSXCore.getScheduleState().offMinute + 15) % 60 }));
+document.getElementById('btn-sch-off-m-down')?.addEventListener('click', () =>
+  NSXCore.applySchedule({ offMinute: (NSXCore.getScheduleState().offMinute + 45) % 60 }));
 
 // Client-side sleep timer (checks every minute)
 
@@ -4909,17 +3974,7 @@ async function _loadMoreHistory() {
 
 const _recipeRatingCache = new Map(); // key: getWorkflowKey → { max:number|null, count:number }
 
-function _computeMaxRating(shotList) {
-  // count = how many shots share the maximum rating (not total rated shots)
-  let max = null, count = 0;
-  for (const s of shotList || []) {
-    const r = Number(s?.annotations?.enjoyment ?? s?.metadata?.rating);
-    if (!Number.isFinite(r)) continue;
-    if (max === null || r > max) { max = r; count = 1; }
-    else if (r === max) { count++; }
-  }
-  return { max, count };
-}
+const _computeMaxRating = (shotList) => NSXCore.computeMaxRating(shotList);
 
 async function _fetchAllRecipeShots(params) {
   const all = [];
@@ -5080,11 +4135,10 @@ document.getElementById('history-accordion-list')?.addEventListener('click', e =
         return;
       }
       try {
-        await Promise.all(recipeShotIds.map(id => deleteShotById(id)));
+        await Promise.all(recipeShotIds.map(id => NSXCore.deleteShot(id)));
         shots = shots.filter(s => !recipeShotIds.includes(s.id));
         historyShots = historyShots.filter(s => !recipeShotIds.includes(s.id));
         _shotsTotalCount = Math.max(0, _shotsTotalCount - recipeShotIds.length);
-        recipeShotIds.forEach(id => shotDetailsCache.delete(id));
         _recipeRatingCache.clear();
         historySelectedRecipeIndex = -1;
         renderHistory();
@@ -5131,11 +4185,10 @@ function _confirmDeleteHistoryShot(shotId) {
 
 async function _deleteHistoryShot(shotId) {
   try {
-    await deleteShotById(shotId);
+    await NSXCore.deleteShot(shotId);
     shots = shots.filter(s => s.id !== shotId);
     historyShots = historyShots.filter(s => s.id !== shotId);
     if (_shotsTotalCount > 0) _shotsTotalCount--;
-    shotDetailsCache.delete(shotId);
     _recipeRatingCache.clear();
     if (historySelectedRecipeIndex >= workflowItems.length) {
       historySelectedRecipeIndex = workflowItems.length > 0 ? 0 : -1;
@@ -5150,12 +4203,7 @@ async function _deleteHistoryShot(shotId) {
 
 /* ── Steam by Weight – recipe page widget ──────────────── */
 
-let activePitcherIndex = 0;
 let sbwEnabled = false;
-
-function _saveActivePitcher() {
-  setStoreValue?.('skin', 'nsx_active_pitcher', activePitcherIndex).catch(() => {});
-}
 
 function _saveSbwEnabled() {
   patchStoreSettings({ nsx_sbw_enabled: sbwEnabled });
@@ -5168,12 +4216,6 @@ function _applySbwEnabled() {
   if (bottom) bottom.classList.toggle('sbw-disabled', !sbwEnabled);
   const toggle = document.getElementById('sbw-enabled-toggle');
   if (toggle) toggle.checked = sbwEnabled;
-}
-
-function _sbwCalibFactor() {
-  const pitcher = pitcherPresets[activePitcherIndex];
-  if (!pitcher?.steamPreset) return null;
-  return steamPresets[pitcher.steamPreset]?.calibFactor ?? null;
 }
 
 /* ── Dose Scaling ────────────────────────────────────── */
@@ -5253,11 +4295,13 @@ document.getElementById('btn-dose-scale')?.addEventListener('click', () => {
 });
 
 function _updateSbwWidget() {
-  const pitcher = pitcherPresets[activePitcherIndex];
+  const pitchers = NSXCore.getPitcherPresets();
+  const idx = NSXCore.getActivePitcherIndex();
+  const pitcher = pitchers[idx];
   const nameEl = document.getElementById('sbw-pitcher-label');
-  if (nameEl) nameEl.textContent = pitcher?.name || `Pitcher ${activePitcherIndex + 1}`;
+  if (nameEl) nameEl.textContent = pitcher?.name || `Pitcher ${idx + 1}`;
   const btn = document.getElementById('btn-steam-by-weight');
-  const hasCalib = _sbwCalibFactor() != null && pitcher?.pitcherWeight != null;
+  const hasCalib = NSXCore.getSbwCalibFactor() != null && pitcher?.pitcherWeight != null;
   btn?.classList.toggle('is-ready', hasCalib);
 }
 
@@ -5266,14 +4310,7 @@ let _sbwSaved = null;
 function _clearSbwState(restore = true) {
   if (_sbwSaved === null) return;
   if (restore) {
-    activeSteamPreset = _sbwSaved.preset;
-    steamTemp     = _sbwSaved.temp;
-    steamFlow     = _sbwSaved.flow;
-    steamDuration = _sbwSaved.duration;
-    saveActivePresetName('nsx_steam_active_preset', _sbwSaved.preset ?? '');
-    _updateSteamPresetButtons();
-    _updateSteamWidget();
-    pushSteam();
+    NSXCore.applySteamSnapshot(_sbwSaved);
   }
   _sbwSaved = null;
   document.getElementById('btn-steam-by-weight')?.classList.remove('is-active');
@@ -5288,15 +4325,16 @@ function _toggleSbwPreset() {
 }
 
 function _applySbwPreset() {
-  const pitcher = pitcherPresets[activePitcherIndex];
+  const pitchers = NSXCore.getPitcherPresets();
+  const pitcher = pitchers[NSXCore.getActivePitcherIndex()];
   if (!pitcher) return;
   if (pitcher.pitcherWeight == null) {
     showAlert('Pitcher weight not set.\n\nMeasure the empty pitcher weight in Steam Settings → pitcher card.');
     return;
   }
-  const calibFactor = _sbwCalibFactor();
+  const calibFactor = NSXCore.getSbwCalibFactor();
   if (calibFactor == null) {
-    const presetName = steamPresets[pitcher.steamPreset]?.name ?? pitcher.steamPreset ?? '—';
+    const presetName = NSXCore.getSteamPresets()[pitcher.steamPreset]?.name ?? pitcher.steamPreset ?? '—';
     showAlert(`No calibration for preset "${presetName}".\n\nOpen Steam Settings → Calibration card, select this preset, measure the milk weight and enter the steaming time.`);
     return;
   }
@@ -5304,12 +4342,11 @@ function _applySbwPreset() {
   if (milkWeight <= 0) { showToast('Place filled pitcher on scale and tare it first'); return; }
 
   // Remember current steam settings so a second tap can revert (toggle, like auto-dose).
-  _sbwSaved = { preset: activeSteamPreset, temp: steamTemp, flow: steamFlow, duration: steamDuration };
+  _sbwSaved = NSXCore.saveSteamSnapshot();
 
-  selectSteamPreset(pitcher.steamPreset);
+  NSXCore.selectSteamPreset(pitcher.steamPreset);
   const newDuration = Math.max(5, Math.round(milkWeight * calibFactor));
-  steamDuration = newDuration;
-  _updateSteamWidget();
+  NSXCore.setSteamDurationRaw(newDuration);
   document.getElementById('btn-steam-by-weight')?.classList.add('is-active');
   showToast(`Steam time set to ${newDuration}s for ${milkWeight.toFixed(0)}g milk`);
 }
@@ -5325,8 +4362,10 @@ function _applySbwPreset() {
   let hoveredIdx = null;
 
   function renderStrip() {
-    strip.innerHTML = pitcherPresets.map((p, i) =>
-      `<div class="sbw-strip-item${i === activePitcherIndex ? ' is-active' : ''}" data-idx="${i}">${p.name || `Pitcher ${i + 1}`}</div>`
+    const _pitchers = NSXCore.getPitcherPresets();
+    const _activeIdx = NSXCore.getActivePitcherIndex();
+    strip.innerHTML = _pitchers.map((p, i) =>
+      `<div class="sbw-strip-item${i === _activeIdx ? ' is-active' : ''}" data-idx="${i}">${p.name || `Pitcher ${i + 1}`}</div>`
     ).join('');
   }
 
@@ -5341,10 +4380,8 @@ function _applySbwPreset() {
   function closeStrip(select) {
     strip.hidden = true;
     stripOpen = false;
-    if (select && hoveredIdx != null && hoveredIdx !== activePitcherIndex) {
-      activePitcherIndex = hoveredIdx;
-      _saveActivePitcher();
-      _updateSbwWidget();
+    if (select && hoveredIdx != null && hoveredIdx !== NSXCore.getActivePitcherIndex()) {
+      NSXCore.setActivePitcher(hoveredIdx);
     }
     hoveredIdx = null;
   }
@@ -5910,7 +4947,7 @@ document.getElementById('btn-shot-review-reference')?.addEventListener('click', 
   } else {
     _reviewReferenceActive = true;
     _reviewReferenceId = _reviewShotId;
-    _reviewReferenceFull = _reviewCurrentFull || shotDetailsCache.get(_reviewShotId) || null;
+    _reviewReferenceFull = _reviewCurrentFull || NSXCore.getCachedShotDetails(_reviewShotId);
     if (!_reviewReferenceFull && _reviewShotId) {
       try { _reviewReferenceFull = await getShotDetailsCached(_reviewShotId); } catch {}
     }
@@ -5959,7 +4996,7 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
   };
   const doseVal = d.actualDoseWeight;
   // Build full merged workflow so a top-level partial PUT doesn't drop the profile
-  const cachedShot = shotDetailsCache.get(id);
+  const cachedShot = NSXCore.getCachedShotDetails(id);
   const mergedWorkflow = cachedShot
     ? { ...(cachedShot.workflow || {}), context: { ...(cachedShot.workflow?.context || {}), ...ctxPatch } }
     : null;
@@ -5980,7 +5017,7 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
       },
       ...(mergedWorkflow ? { workflow: mergedWorkflow } : {}),
     };
-    await updateShotRecord(id, patch);
+    await NSXCore.updateShot(id, patch);
     const shot = shots.find(s => s.id === id);
     if (shot) {
       shot.annotations = {
@@ -5994,7 +5031,6 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
       };
       if (shot.workflow?.context) Object.assign(shot.workflow.context, ctxPatch);
     }
-    shotDetailsCache.delete(id);
     _recipeRatingCache.clear();
     renderHistory();
     showToast(t('toast.shotSaved'));
@@ -6049,12 +5085,8 @@ let _editTags = [];
 let _editUseVolumeStop = false;
 let _editBeanAgeRequestId = 0;
 let _originalIdentity = null;
-let _grindersCache = [];
 let _editSelectedProfileId = null;
 let _editSelectedProfileObj = null;
-let _profileRecordsCache = null;
-let _profileRecordsCacheAll = null;
-let _deletedProfilesCache = null;
 let _profilePickerSelectedRecord = null;
 let _profilePickerContext = 'editor'; // 'editor' | 'home'
 let _profileFavorites = new Set();
@@ -6298,55 +5330,15 @@ function _matchesProfileSearch(record, query) {
   return title.includes(q) || author.includes(q);
 }
 
-function _normalizeProfileRecord(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  if (raw.profile && typeof raw.profile === 'object') return raw;
-  const profile = raw.steps || raw.frames || raw.title ? raw : null;
-  if (!profile) return null;
-  return {
-    id: raw.id || null,
-    profile,
-    metadata: raw.metadata || null,
-    isDefault: raw.isDefault === true,
-  };
-}
-
-async function _ensureProfilesLoaded(force = false) {
-  if (!fetchProfiles) return [];
-  if (_profileRecordsCache?.length && !force) return _profileRecordsCache;
-  const data = await fetchProfiles();
-  const list = Array.isArray(data) ? data : (data?.items ?? data?.records ?? []);
-  const records = list
-    .map(_normalizeProfileRecord)
-    .filter(Boolean)
-    .filter(r => r.profile);
-  // Never cache an empty result: the gateway can transiently return no profiles
-  // (e.g. just after wake while it re-initializes). Caching [] would persist a
-  // broken state — every recipe push would then send a frameless profile.
-  if (records.length) _profileRecordsCache = records;
-  return records;
-}
-
-async function _ensureProfilesWithHiddenLoaded(force = false) {
-  if (_profileRecordsCacheAll?.length && !force) return _profileRecordsCacheAll;
-  const data = await fetchProfilesIncludingHidden();
-  const list = Array.isArray(data) ? data : (data?.items ?? data?.records ?? []);
-  const records = list.map(_normalizeProfileRecord).filter(Boolean).filter(r => r.profile);
-  if (records.length) _profileRecordsCacheAll = records;
-  return records;
-}
-
-async function _ensureDeletedProfilesLoaded(force = false) {
-  if (!fetchDeletedProfiles) return [];
-  if (_deletedProfilesCache && !force) return _deletedProfilesCache;
-  const data = await fetchDeletedProfiles();
-  const list = Array.isArray(data) ? data : (data?.items ?? data?.records ?? []);
-  _deletedProfilesCache = list
-    .map(_normalizeProfileRecord)
-    .filter(Boolean)
-    .filter(r => r.profile);
-  return _deletedProfilesCache;
-}
+// Profile caches (visible/all/deleted) + normalize + load now live in
+// core/domains/profile.js; these are thin delegates so the many call sites
+// below stay unchanged. Direct cache-variable reads/writes elsewhere in this
+// file use NSXCore.getProfiles()/getProfilesAll()/getDeletedProfiles() and
+// NSXCore.invalidateProfiles()/invalidateProfilesAll()/invalidateDeletedProfiles().
+const _normalizeProfileRecord = (raw) => NSXCore.normalizeProfileRecord(raw);
+const _ensureProfilesLoaded = (force = false) => NSXCore.loadProfiles(force);
+const _ensureProfilesWithHiddenLoaded = (force = false) => NSXCore.loadProfilesWithHidden(force);
+const _ensureDeletedProfilesLoaded = (force = false) => NSXCore.loadDeletedProfiles(force);
 
 function _profileMetrics(profile) {
   const frames = _extractFrames(profile);
@@ -6649,7 +5641,7 @@ function _setupProfileSparkInteraction(containerEl) {
 }
 
 function _findRecordById(id) {
-  return (_profileRecordsCache || []).find(r => String(r.id) === String(id));
+  return (NSXCore.getProfiles() || []).find(r => String(r.id) === String(id));
 }
 
 function _profileLooksActive(record) {
@@ -6769,17 +5761,17 @@ function _renderProfilePreview(record) {
     const currentlyHidden = btn?.getAttribute('data-hidden') === 'true';
     const newVisibility = currentlyHidden ? 'visible' : 'hidden';
     const srcList = currentlyHidden
-      ? (Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : []).filter(r => r.visibility === 'hidden')
-      : (Array.isArray(_profileRecordsCache) ? _profileRecordsCache : []);
+      ? (Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : []).filter(r => r.visibility === 'hidden')
+      : (Array.isArray(NSXCore.getProfiles()) ? NSXCore.getProfiles() : []);
     const nextId = _pickNextId(srcList, profileId);
     try {
       await setProfileVisibility(profileId, newVisibility);
-      _profileRecordsCache = null;
-      _profileRecordsCacheAll = null;
+      NSXCore.invalidateProfiles();
+      NSXCore.invalidateProfilesAll();
       await Promise.all([_ensureProfilesLoaded(true), _ensureProfilesWithHiddenLoaded()]);
       const newList = currentlyHidden
-        ? (Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : []).filter(r => r.visibility === 'hidden')
-        : (Array.isArray(_profileRecordsCache) ? _profileRecordsCache : []);
+        ? (Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : []).filter(r => r.visibility === 'hidden')
+        : (Array.isArray(NSXCore.getProfiles()) ? NSXCore.getProfiles() : []);
       _applyNextSelection(newList, nextId);
       showToast(currentlyHidden ? t('toast.presetVisible') : t('toast.presetHidden'));
     } catch (err) {
@@ -6793,15 +5785,15 @@ function _renderProfilePreview(record) {
   document.getElementById('btn-profile-preview-restore')?.addEventListener('click', async (e) => {
     const profileId = e.target.closest('[data-profile-id]')?.getAttribute('data-profile-id') || recordId;
     const title = _profilePickerSelectedRecord?.profile?.title || t('profileEditor.unnamed');
-    const nextId = _pickNextId(Array.isArray(_deletedProfilesCache) ? _deletedProfilesCache : [], profileId);
+    const nextId = _pickNextId(Array.isArray(NSXCore.getDeletedProfiles()) ? NSXCore.getDeletedProfiles() : [], profileId);
     try {
       await restoreProfile(profileId);
-      _deletedProfilesCache = null;
-      _profileRecordsCache = null;
-      _profileRecordsCacheAll = null;
+      NSXCore.invalidateDeletedProfiles();
+      NSXCore.invalidateProfiles();
+      NSXCore.invalidateProfilesAll();
       showToast(t('toast.profileRestored').replace('{name}', title));
       await Promise.all([_ensureDeletedProfilesLoaded(), _ensureProfilesLoaded(true)]);
-      _applyNextSelection(Array.isArray(_deletedProfilesCache) ? _deletedProfilesCache : [], nextId);
+      _applyNextSelection(Array.isArray(NSXCore.getDeletedProfiles()) ? NSXCore.getDeletedProfiles() : [], nextId);
     } catch (err) {
       showToast(t('toast.error') + ': ' + err.message);
     }
@@ -6811,27 +5803,27 @@ function _renderProfilePreview(record) {
     if (_profilePickerMode === 'trash') {
       const title = _profilePickerSelectedRecord?.profile?.title || t('profileEditor.unnamed');
       if (!await showConfirm(t('confirm.purgeProfile').replace('{name}', title), t('action.purge'))) return;
-      const nextId = _pickNextId(Array.isArray(_deletedProfilesCache) ? _deletedProfilesCache : [], profileId);
+      const nextId = _pickNextId(Array.isArray(NSXCore.getDeletedProfiles()) ? NSXCore.getDeletedProfiles() : [], profileId);
       try {
         await purgeProfile(profileId);
-        _deletedProfilesCache = null;
+        NSXCore.invalidateDeletedProfiles();
         showToast(t('toast.profilePurged').replace('{name}', title));
         await _ensureDeletedProfilesLoaded();
-        _applyNextSelection(Array.isArray(_deletedProfilesCache) ? _deletedProfilesCache : [], nextId);
+        _applyNextSelection(Array.isArray(NSXCore.getDeletedProfiles()) ? NSXCore.getDeletedProfiles() : [], nextId);
       } catch (err) {
         showToast(t('toast.deleteFailed') + ': ' + err.message);
       }
     } else {
       if (!await showConfirm(t('confirm.deleteProfile'))) return;
-      const nextId = _pickNextId(Array.isArray(_profileRecordsCache) ? _profileRecordsCache : [], profileId);
+      const nextId = _pickNextId(Array.isArray(NSXCore.getProfiles()) ? NSXCore.getProfiles() : [], profileId);
       try {
         await deleteProfile(profileId);
         showToast(t('toast.profileDeleted'));
-        _profileRecordsCache = null;
-        _profileRecordsCacheAll = null;
-        _deletedProfilesCache = null;
+        NSXCore.invalidateProfiles();
+        NSXCore.invalidateProfilesAll();
+        NSXCore.invalidateDeletedProfiles();
         await _ensureProfilesLoaded();
-        _applyNextSelection(Array.isArray(_profileRecordsCache) ? _profileRecordsCache : [], nextId);
+        _applyNextSelection(Array.isArray(NSXCore.getProfiles()) ? NSXCore.getProfiles() : [], nextId);
       } catch (err) {
         showToast(t('toast.deleteFailed') + ': ' + err.message);
       }
@@ -6868,19 +5860,19 @@ function _renderProfilePickerList() {
   const isCopy   = _profilePickerMode === 'copy';
   let list;
   if (isTrash) {
-    list = Array.isArray(_deletedProfilesCache) ? _deletedProfilesCache : [];
+    list = Array.isArray(NSXCore.getDeletedProfiles()) ? NSXCore.getDeletedProfiles() : [];
   } else if (isHidden) {
-    list = (Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : []).filter(r => r.visibility === 'hidden');
+    list = (Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : []).filter(r => r.visibility === 'hidden');
   } else if (isCopy) {
-    const all = Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : (Array.isArray(_profileRecordsCache) ? _profileRecordsCache : []);
+    const all = Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : (Array.isArray(NSXCore.getProfiles()) ? NSXCore.getProfiles() : []);
     list = all.filter(r => r.visibility !== 'deleted');
   } else if (_profilePickerShowHidden) {
     // includeHidden=true also returns soft-deleted (visibility:'deleted') records —
     // exclude them here so the eye toggle shows visible+hidden only, not the trash.
-    const all = Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : (Array.isArray(_profileRecordsCache) ? _profileRecordsCache : []);
+    const all = Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : (Array.isArray(NSXCore.getProfiles()) ? NSXCore.getProfiles() : []);
     list = all.filter(r => r.visibility !== 'deleted');
   } else {
-    list = Array.isArray(_profileRecordsCache) ? _profileRecordsCache : [];
+    list = Array.isArray(NSXCore.getProfiles()) ? NSXCore.getProfiles() : [];
   }
   const q = String(profilePickerSearchEl?.value || '').trim();
   const filtered = list.filter(r => _matchesProfileSearch(r, q));
@@ -6978,9 +5970,9 @@ function _renderProfileInfoBody(record, readOnly = false) {
       try {
         await deleteProfile(profileId);
         showToast(t('toast.profileDeleted'));
-        _profileRecordsCache = null;
-        _profileRecordsCacheAll = null;
-        _deletedProfilesCache = null;
+        NSXCore.invalidateProfiles();
+        NSXCore.invalidateProfilesAll();
+        NSXCore.invalidateDeletedProfiles();
         if (profileInfoModalEl) profileInfoModalEl.hidden = true;
         if (profilePickerModalEl && !profilePickerModalEl.hidden) {
           await _ensureProfilesLoaded();
@@ -7867,7 +6859,7 @@ function _peditorRenderFrames() {
 
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const allFrameNames = () => {
-    const all = Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : (_profileRecordsCache || []);
+    const all = Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : (NSXCore.getProfiles() || []);
     return uniq(all.flatMap(r => (r.profile?.steps ?? r.profile?.frames ?? []).map(s => s.name)));
   };
 
@@ -8179,7 +7171,7 @@ async function _peditorSave() {
     _peditorRecord = _normalizeProfileRecord(saved) || { id: saved?.id ?? _peditorRecord?.id ?? null, profile: payload };
     _peditorOriginalProfile = _peditorClone(_peditorRecord.profile) || _peditorClone(payload) || {};
     _peditorOriginalSnapshot = _peditorSnapshot();
-    _profileRecordsCache = null;
+    NSXCore.invalidateProfiles();
 
     // Bust cached gateway payload for every recipe that uses this profile title
     for (const recipe of workflowItems) {
@@ -8199,8 +7191,8 @@ async function _peditorSave() {
         try { await setProfileVisibility(originalId, 'hidden'); } catch { /* best-effort */ }
       }
       _peditorAttemptClose(true);
-      _profileRecordsCache = null;
-      _profileRecordsCacheAll = null;
+      NSXCore.invalidateProfiles();
+      NSXCore.invalidateProfilesAll();
       await _ensureProfilesLoaded(true);
       _setProfilePickerMode('my');
       const newRecord = _normalizeProfileRecord(saved);
@@ -8216,7 +7208,7 @@ async function _peditorSave() {
     } else {
       showToast(t('toast.profileSaved').replace('{name}', _peditorTitle));
       _setProfilePickerMode('my');
-      _profileRecordsCache = null;
+      NSXCore.invalidateProfiles();
       await _ensureProfilesLoaded();
       _renderProfilePickerList();
       _peditorAttemptClose(true);
@@ -8867,7 +7859,7 @@ async function openProfilePickerModal(context = 'editor') {
       if (cancelBtn) cancelBtn.textContent = t('action.cancel');
     }
     if (isRecipe) {
-      const records = Array.isArray(_profileRecordsCache) ? _profileRecordsCache : [];
+      const records = Array.isArray(NSXCore.getProfiles()) ? NSXCore.getProfiles() : [];
       let match = _editSelectedProfileId
         ? records.find(r => String(r.id) === String(_editSelectedProfileId))
         : null;
@@ -8891,7 +7883,7 @@ async function openProfilePickerModal(context = 'editor') {
 }
 
 function _getGrinderSteps() {
-  const g = _grindersCache.find(g => g.id === _editPickedGrinderId);
+  const g = NSXCore.getGrinders().find(g => g.id === _editPickedGrinderId);
   const small = (g?.settingSmallStep > 0) ? g.settingSmallStep : 0.5;
   const big   = (g?.settingBigStep   > 0) ? g.settingBigStep   : 1;
   return { small, big };
@@ -8970,11 +7962,8 @@ function openWorkflowEditModal(index) {
   updateBeanPickerDisplay();
   _resolveEditBeanDetails();
   updateGrinderPickerDisplay();
-  if (_editPickedGrinderId && !_grindersCache?.find(g => g.id === _editPickedGrinderId)) {
-    fetchGrinders().then(res => {
-      _grindersCache = Array.isArray(res) ? res : (res?.items ?? []);
-      updateGrinderPickerDisplay();
-    }).catch(() => {});
+  if (_editPickedGrinderId && !NSXCore.getGrinders().find(g => g.id === _editPickedGrinderId)) {
+    NSXCore.loadGrinders().then(() => updateGrinderPickerDisplay()).catch(() => {});
   }
   document.getElementById('edit-profile').value = workflow.profileTitle !== '—' ? workflow.profileTitle : '';
 
@@ -8990,10 +7979,10 @@ function openWorkflowEditModal(index) {
   _editSelectedProfileId = gwf?.profileId ?? null;
   _syncProfileDisplay();
 
-  _setEditSteamTemp(steamTemp);
-  _setEditSteamDur(steamDuration);
-  _setEditHwTemp(hotwaterTemp);
-  _setEditHwVol(hotwaterVolume);
+  _setEditSteamTemp(NSXCore.getSteamTemp());
+  _setEditSteamDur(NSXCore.getSteamDuration());
+  _setEditHwTemp(NSXCore.getHotwaterTemp());
+  _setEditHwVol(NSXCore.getHotwaterVolume());
   _setEditGroupTemp(Number(workflow.groupTemp || gwf?.profile?.groupTemp) || 93);
 
   _originalIdentity = {
@@ -9045,15 +8034,12 @@ function openWorkflowCreateModal() {
     }
     updateGrinderPickerDisplay();
   };
-  if (_grindersCache.length > 0) {
-    _applyAutoGrinder(_grindersCache);
+  const _cachedGrinders = NSXCore.getGrinders();
+  if (_cachedGrinders.length > 0) {
+    _applyAutoGrinder(_cachedGrinders);
   } else {
     updateGrinderPickerDisplay();
-    fetchGrinders().then(res => {
-      const grinders = Array.isArray(res) ? res : (res?.items ?? []);
-      _grindersCache = grinders;
-      _applyAutoGrinder(grinders);
-    }).catch(() => {});
+    NSXCore.loadGrinders().then(() => _applyAutoGrinder(NSXCore.getGrinders())).catch(() => {});
   }
   document.getElementById('edit-profile').value = '';
   _syncProfileDisplay();
@@ -9062,10 +8048,10 @@ function openWorkflowCreateModal() {
   _setEditYield(36);
   _setEditGrind(10);
   _setEditGroupTemp(93);
-  _setEditSteamTemp(steamTemp);
-  _setEditSteamDur(steamDuration);
-  _setEditHwTemp(hotwaterTemp);
-  _setEditHwVol(hotwaterVolume);
+  _setEditSteamTemp(NSXCore.getSteamTemp());
+  _setEditSteamDur(NSXCore.getSteamDuration());
+  _setEditHwTemp(NSXCore.getHotwaterTemp());
+  _setEditHwVol(NSXCore.getHotwaterVolume());
 
   document.getElementById('edit-card-bean')?.classList.remove('recipe-edit-card--identity-changed');
   document.getElementById('edit-card-grinder')?.classList.remove('recipe-edit-card--identity-changed');
@@ -9163,10 +8149,10 @@ profilePickerListEl?.addEventListener('click', (e) => {
   if (!item || !profilePickerListEl.contains(item)) return;
   const id = item.dataset.profileId;
   const cache = _profilePickerMode === 'trash'
-    ? (_deletedProfilesCache || [])
+    ? (NSXCore.getDeletedProfiles() || [])
     : (_profilePickerMode === 'hidden' || _profilePickerMode === 'copy' || _profilePickerShowHidden)
-      ? (_profileRecordsCacheAll || _profileRecordsCache || [])
-      : (_profileRecordsCache || []);
+      ? (NSXCore.getProfilesAll() || NSXCore.getProfiles() || [])
+      : (NSXCore.getProfiles() || []);
   const record = cache.find(r => String(r.id || '') === String(id || ''));
   if (!record) return;
   _profilePickerSelectedRecord = record;
@@ -9244,7 +8230,7 @@ async function _purgeSelectedProfile() {
   if (!confirm(t('confirm.purgeProfile').replace('{name}', title))) return;
   try {
     await purgeProfile(record.id);
-    _deletedProfilesCache = null;
+    NSXCore.invalidateDeletedProfiles();
     _profilePickerSelectedRecord = null;
     showToast(t('toast.profilePurged').replace('{name}', title));
     await _ensureDeletedProfilesLoaded();
@@ -9256,14 +8242,14 @@ async function _purgeSelectedProfile() {
 }
 
 document.getElementById('btn-profile-picker-empty-trash')?.addEventListener('click', async () => {
-  const records = _deletedProfilesCache || [];
+  const records = NSXCore.getDeletedProfiles() || [];
   if (!records.length) { showToast(t('toast.trashEmpty')); return; }
   if (!confirm(t('confirm.emptyTrash').replace('{count}', records.length))) return;
   let failed = 0;
   for (const record of records) {
     try { await purgeProfile(record.id); } catch { failed++; }
   }
-  _deletedProfilesCache = null;
+  NSXCore.invalidateDeletedProfiles();
   _profilePickerSelectedRecord = null;
   await _ensureDeletedProfilesLoaded();
   _renderProfilePickerList();
@@ -9325,7 +8311,7 @@ document.getElementById('profile-import-file-input')?.addEventListener('change',
       await setProfileVisibility(saved.id, 'visible').catch(() => {});
     }
 
-    _profileRecordsCache = null;
+    NSXCore.invalidateProfiles();
     await _ensureProfilesLoaded(true);
     _setProfilePickerMode('my');
 
@@ -9370,7 +8356,7 @@ async function _importFromVisualizer(shareCode) {
   if (saved?.id && saved?.visibility === 'deleted') {
     await setProfileVisibility(saved.id, 'visible').catch(() => {});
   }
-  _profileRecordsCache = null;
+  NSXCore.invalidateProfiles();
   await _ensureProfilesLoaded(true);
   _setProfilePickerMode('my');
   const newRecord = _normalizeProfileRecord(saved);
@@ -9680,14 +8666,13 @@ function updateBeanPickerDisplay() {
 
 async function _resolveEditBeanDetails() {
   if (!_editPickedRoaster && !_editPickedBeanName) return;
-  let bean = _beanManagerAllBeans.find(b =>
+  let bean = NSXCore.getBeans().find(b =>
     b.roaster === _editPickedRoaster && b.name === _editPickedBeanName
   );
   if (!bean) {
     try {
-      const data = await fetchBeans(true);
-      const list = Array.isArray(data) ? data : (data?.items ?? []);
-      bean = list.find(b => b.roaster === _editPickedRoaster && b.name === _editPickedBeanName);
+      await NSXCore.loadBeans(true);
+      bean = NSXCore.getBeans().find(b => b.roaster === _editPickedRoaster && b.name === _editPickedBeanName);
     } catch { /* ignore */ }
   }
   if (bean) {
@@ -9765,7 +8750,7 @@ function updateGrinderPickerDisplay() {
   const nameEl     = document.getElementById('edit-grinder-display-name');
   const burrsEl    = document.getElementById('edit-grinder-display-burrs');
   const burrsizeEl = document.getElementById('edit-grinder-display-burrsize');
-  const g = _grindersCache?.find(g => g.id === _editPickedGrinderId);
+  const g = NSXCore.getGrinders().find(g => g.id === _editPickedGrinderId);
   if (nameEl) nameEl.textContent = _editPickedGrinderModel || '—';
   if (burrsEl) burrsEl.textContent = g?.burrs || '—';
   if (burrsizeEl) burrsizeEl.textContent = g?.burrSize ? `${g.burrSize} mm` : '—';
@@ -9824,15 +8809,14 @@ async function _loadAndRenderGrinderPickerList() {
   if (!listEl) return;
   listEl.innerHTML = `<div class="bohnen-empty-state">${t('status.loading')}</div>`;
   try {
-    const grinders = await fetchGrinders();
-    _renderGrinderPickerTiles(Array.isArray(grinders) ? grinders : (grinders?.items ?? []));
+    await NSXCore.loadGrinders();
+    _renderGrinderPickerTiles(NSXCore.getGrinders());
   } catch {
     listEl.innerHTML = `<div class="bohnen-empty-state">${t('status.loadFailed')}</div>`;
   }
 }
 
 function _renderGrinderPickerTiles(grinders) {
-  _grindersCache = Array.isArray(grinders) ? grinders : [];
   const listEl = document.getElementById('grinder-picker-list');
   if (!listEl) return;
   if (!Array.isArray(grinders) || grinders.length === 0) {
@@ -9891,7 +8875,6 @@ const _getMonthName = (month1Based) =>
   new Intl.DateTimeFormat(getLang?.() === 'en' ? 'en-US' : 'de-DE', { month: 'long' })
     .format(new Date(2000, month1Based - 1));
 let _editingBean = null;
-let _allBeans = [];
 let _editingBatch = null;
 let _lastBatches = [];
 let _batchDateDraft = null;
@@ -10040,10 +9023,10 @@ let _fieldPickerOnConfirm = null;
 function _beanPickerOptions() {
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   return {
-    'bean-roaster':    uniq(_allBeans.map(b => b.roaster)),
-    'bean-country':    uniq(_allBeans.map(b => b.country)),
-    'bean-processing': uniq(_allBeans.map(b => b.processing)),
-    'bean-variety':    uniq(_allBeans.flatMap(b => Array.isArray(b.variety) ? b.variety : [])),
+    'bean-roaster':    uniq(NSXCore.getBeans().map(b => b.roaster)),
+    'bean-country':    uniq(NSXCore.getBeans().map(b => b.country)),
+    'bean-processing': uniq(NSXCore.getBeans().map(b => b.processing)),
+    'bean-variety':    uniq(NSXCore.getBeans().flatMap(b => Array.isArray(b.variety) ? b.variety : [])),
   };
 }
 
@@ -10461,8 +9444,8 @@ window.closeNumberPicker = closeNumberPicker;
 {
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const grinderTextInputs = {
-    'grinder-model':          () => uniq(_grindersCache.map(g => g.model)),
-    'grinder-burrs':          () => uniq(_grindersCache.map(g => g.burrs)),
+    'grinder-model':          () => uniq(NSXCore.getGrinders().map(g => g.model)),
+    'grinder-burrs':          () => uniq(NSXCore.getGrinders().map(g => g.burrs)),
     'grinder-setting-values': () => [],
   };
   Object.entries(grinderTextInputs).forEach(([id, getOptions]) => {
@@ -10477,7 +9460,7 @@ window.closeNumberPicker = closeNumberPicker;
 
 {
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
-  const allProfiles = () => Array.isArray(_profileRecordsCacheAll) ? _profileRecordsCacheAll : (_profileRecordsCache || []);
+  const allProfiles = () => Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : (NSXCore.getProfiles() || []);
   const profileEditorTextInputs = {
     'profile-editor-title':  () => uniq(allProfiles().map(r => r.profile?.title)),
     'profile-editor-author': () => uniq(allProfiles().map(r => r.profile?.author)),
@@ -10691,7 +9674,7 @@ function renderBatchList(batches) {
     const badge = formatBatchDateBadge(b.roastDate);
     return `
     <div class="batch-item" data-batch-index="${i}">
-      <img src="src/ui/graphics/Packung.png" class="batch-item-img" alt="${t('batchEditor.title')}" draggable="false" />
+      <img src="ui/graphics/Packung.png" class="batch-item-img" alt="${t('batchEditor.title')}" draggable="false" />
       <div class="batch-roast-badge">
         <span class="batch-roast-badge-day">${badge.day}</span>
         <span class="batch-roast-badge-month">${badge.month}</span>
@@ -10911,7 +9894,6 @@ document.getElementById('btn-batch-save')?.addEventListener('click', async () =>
 
 const beanManagerModalEl = document.getElementById('bean-manager-modal');
 let _beanManagerSelectedBean = null;
-let _beanManagerAllBeans = [];
 let _beanManagerShowArchived = false;
 let _beanManagerSearchQuery = '';
 let _beanManagerShowAllFields = false;
@@ -10924,7 +9906,7 @@ function _persistBeanManagerCollapsedRoasters() {
 
 function _beanManagerFilteredBeans() {
   const q = _beanManagerSearchQuery.toLowerCase().trim();
-  return _beanManagerAllBeans.filter(b => {
+  return NSXCore.getBeans().filter(b => {
     if (!_beanManagerShowArchived && b.archived) return false;
     if (!q) return true;
     return (b.name || '').toLowerCase().includes(q)
@@ -11020,9 +10002,9 @@ function _beanManagerSuggestions(field) {
   // (e.g. "Schokoladig, Nussig, Beerig") that practically never repeat verbatim,
   // so suggestions add no value there — open a plain text field instead.
   if (field === 'name' || field === 'notes') return [];
-  const fromBeans = (key) => [...new Set(_beanManagerAllBeans.map(b => b[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+  const fromBeans = (key) => [...new Set(NSXCore.getBeans().map(b => b[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   if (field === 'variety') {
-    return [...new Set(_beanManagerAllBeans.flatMap(b => Array.isArray(b.variety) ? b.variety : []).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    return [...new Set(NSXCore.getBeans().flatMap(b => Array.isArray(b.variety) ? b.variety : []).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   }
   return fromBeans(field);
 }
@@ -11073,7 +10055,7 @@ function _beanManagerSaveField(field, value) {
     notes:      bean.notes      || undefined,
   };
   _beanManagerApplyField(payload, field, value);
-  updateBean(bean.id, payload)
+  NSXCore.updateBean(bean.id, payload)
     .then(() => _beanManagerLoad())
     .catch(err => showToast(t('toast.error') + ': ' + err.message));
 }
@@ -11279,14 +10261,14 @@ async function _beanManagerLoad() {
   try {
     // Always load every bean (incl. archived) so autocomplete suggestions draw
     // from all beans; the list view hides archived ones via _beanManagerFilteredBeans().
-    const data = await fetchBeans(true);
-    _beanManagerAllBeans = Array.isArray(data) ? data : (data?.items ?? []);
+    await NSXCore.loadBeans(true);
+    const beans = NSXCore.getBeans();
     if (_beanManagerSelectedBean) {
-      _beanManagerSelectedBean = _beanManagerAllBeans.find(b => b.id === _beanManagerSelectedBean.id) ?? null;
+      _beanManagerSelectedBean = beans.find(b => b.id === _beanManagerSelectedBean.id) ?? null;
     }
     if (!_beanManagerSelectedBean && !_beanManagerPickCallback) {
       if (_beanManagerAutoSelectId) {
-        _beanManagerSelectedBean = _beanManagerAllBeans.find(b => b.id === _beanManagerAutoSelectId) ?? null;
+        _beanManagerSelectedBean = beans.find(b => b.id === _beanManagerAutoSelectId) ?? null;
       }
       if (!_beanManagerSelectedBean) {
         _beanManagerSelectedBean = _beanManagerFilteredBeans()[0] ?? null;
@@ -11420,10 +10402,10 @@ document.getElementById('bean-manager-detail')?.addEventListener('click', async 
     const saveBtn = e.target.closest('#btn-bm-save-new');
     if (saveBtn) saveBtn.textContent = '…';
     try {
-      const created = await createBean(payload);
+      const created = await NSXCore.createBean(payload);
       _beanManagerShowAllFields = false;
       await _beanManagerLoad();
-      const newBean = _beanManagerAllBeans.find(b => b.id === created?.id) ?? null;
+      const newBean = NSXCore.getBeans().find(b => b.id === created?.id) ?? null;
       if (newBean) _beanManagerSelectBean(newBean);
     } catch (err) {
       if (saveBtn) saveBtn.textContent = t('action.save');
@@ -11461,14 +10443,14 @@ document.getElementById('bean-manager-detail')?.addEventListener('click', async 
     if (!await showConfirm(t('confirm.deleteBean').replace('{name}', _beanManagerSelectedBean.name || t('beanEditor.unnamed')))) return;
     const deletedId = _beanManagerSelectedBean.id;
     try {
-      await deleteBean(deletedId);
+      await NSXCore.deleteBean(deletedId);
     } catch (err) {
       showToast(t('toast.error') + ': ' + err.message);
       return;
     }
     showToast(t('toast.beanDeleted'));
     _beanManagerSelectedBean = null;
-    _beanManagerAllBeans = _beanManagerAllBeans.filter(b => b.id !== deletedId);
+    NSXCore.setBeansCache(NSXCore.getBeans().filter(b => b.id !== deletedId));
     _beanManagerRenderList();
     const detailEl = document.getElementById('bean-manager-detail');
     const placeholderEl = document.getElementById('bean-manager-placeholder');
@@ -11605,7 +10587,7 @@ async function loadAndRenderGrinders() {
   try {
     const [grindersRes, peek] = await Promise.all([fetchGrinders(), fetchShots(1)]);
     const gList = Array.isArray(grindersRes) ? grindersRes : (grindersRes?.items ?? []);
-    _grindersCache = gList;
+    NSXCore.setGrindersCache(gList);
 
     // Fetch all shots to sum grams per grinder model
     const total = peek?.total || 0;
@@ -11709,7 +10691,7 @@ muehlenCreateModalEl?.addEventListener('click', (e) => {
 document.getElementById('btn-grinder-delete')?.addEventListener('click', async () => {
   if (!_editingGrinder?.id) return;
   try {
-    await deleteGrinder(_editingGrinder.id);
+    await NSXCore.deleteGrinder(_editingGrinder.id);
     if (muehlenCreateModalEl) muehlenCreateModalEl.hidden = true;
     showToast(t('toast.grinderDeleted').replace('{name}', _editingGrinder.model));
     loadAndRenderGrinders();
@@ -11762,9 +10744,9 @@ document.getElementById('btn-muehlen-save')?.addEventListener('click', async () 
 
   try {
     if (_editingGrinder?.id) {
-      await updateGrinder(_editingGrinder.id, payload);
+      await NSXCore.updateGrinder(_editingGrinder.id, payload);
     } else {
-      await createGrinder(payload);
+      await NSXCore.createGrinder(payload);
     }
     if (saveBtn) saveBtn.textContent = t('action.save');
     if (muehlenCreateModalEl) muehlenCreateModalEl.hidden = true;
@@ -11806,8 +10788,8 @@ function _updatePhoneMachineCard() {
 
   const statusWrap = document.getElementById('phone-machine-status');
   const statusText = document.getElementById('phone-machine-status-text');
-  if (statusWrap) statusWrap.dataset.state = currentMachineState;
-  if (statusText) statusText.textContent = _PHONE_STATE_LABELS[currentMachineState] || 'Ready';
+  if (statusWrap) statusWrap.dataset.state = NSXCore.getMachineState();
+  if (statusText) statusText.textContent = _PHONE_STATE_LABELS[NSXCore.getMachineState()] || 'Ready';
 }
 
 function _selectPhoneTab(tab) {
@@ -11842,8 +10824,8 @@ setMachineStateText("idle");
 setScaleConnected(false);
 setBrewGroupTemperature(91.5);
 setWaterLevel(0);
-setSteamWidget(steamTemp, steamFlow, steamDuration);
-setHotwaterWidget(hotwaterTemp, hotwaterFlow, hotwaterVolume);
+setSteamWidget(NSXCore.getSteamTemp(), NSXCore.getSteamFlow(), NSXCore.getSteamDuration());
+setHotwaterWidget(NSXCore.getHotwaterTemp(), NSXCore.getHotwaterFlow(), NSXCore.getHotwaterVolume());
 updateFlushDisplay();
 renderScheduleUI();
 applyPresetButtonStates();
@@ -11852,7 +10834,7 @@ _applyPhoneLayout();
 setupPresenceTracking();
 setupDisplayControl();
 
-migrateLegacyLocalSettingsToStore()
+NSXCore.migrateLegacyStore()
   .catch(() => {})
   .finally(() => {
     hydrateUiSettingsFromStore();
@@ -11881,6 +10863,7 @@ document.getElementById('btn-steam-corner-graph')?.addEventListener('click', () 
   const targetEl  = document.getElementById('steam-overlay-target');
   const progressEl= document.getElementById('steam-overlay-progress');
   if (cornerEl)  cornerEl.hidden  = true;
+  const steamDuration = NSXCore.getSteamDuration();
   if (targetEl && steamDuration > 0) targetEl.textContent = `/ ${steamDuration} s`;
   if (progressEl && steamDuration > 0) {
     const sec = steamSession ? Math.floor((Date.now() - steamSession.startTime) / 1000) : 0;
@@ -11906,7 +10889,7 @@ document.getElementById('btn-needswater-overlay-stop')?.addEventListener('click'
 });
 
 document.getElementById('btn-espresso-fs-exit')?.addEventListener('click', () => {
-  if (currentMachineState === 'espresso') {
+  if (NSXCore.getMachineState() === 'espresso') {
     setMachineState?.('idle').catch(() => {});
     return;
   }
@@ -11916,7 +10899,7 @@ document.getElementById('btn-espresso-fs-exit')?.addEventListener('click', () =>
 });
 
 document.getElementById('btn-espresso-fs-skip-step')?.addEventListener('click', () => {
-  if (currentMachineState !== 'espresso') {
+  if (NSXCore.getMachineState() !== 'espresso') {
     showToast(t('toast.skipStepOnly'));
     return;
   }
@@ -11953,7 +10936,7 @@ document.getElementById('btn-espresso-fs-skip-step')?.addEventListener('click', 
 
 document.querySelector('.workflow-graph-area')?.addEventListener('click', (e) => {
   if (!e.target.closest('#btn-wf-skip-step')) return;
-  if (currentMachineState !== 'espresso') {
+  if (NSXCore.getMachineState() !== 'espresso') {
     showToast(t('toast.skipPhaseOnly'));
     return;
   }
