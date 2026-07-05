@@ -3,7 +3,9 @@ name: Build and Release NSX Skin
 on:
   push:
     tags:
-      - 'nsx-v*'
+      # Single skin for now: plain v* tags (e.g. v0.3.2). The 'nsx-' prefix is
+      # still tolerated below, for when a second skin needs its own tag stream.
+      - 'v*'
 
 jobs:
   release:
@@ -17,7 +19,7 @@ jobs:
 
       - name: Set version from tag
         id: version
-        # nsx-v0.2.9 -> v0.2.9
+        # v0.3.2 -> v0.3.2 ; nsx-v0.3.2 -> v0.3.2 (prefix stripped if present)
         run: echo "VERSION=${GITHUB_REF_NAME#nsx-}" >> $GITHUB_OUTPUT
 
       - name: Assemble self-contained skin
