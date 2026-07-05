@@ -27,7 +27,10 @@ jobs:
         run: |
           cp -r packages/nsx/src staging
           mkdir -p staging/core
-          cp packages/core/src/*.js staging/core/
+          # Recursive copy — the core has a domains/ subfolder that a *.js glob
+          # would miss, which would ship a skin that can't boot (index.html loads
+          # core/domains/*.js). Mirrors `npm run sync-core`.
+          cp -r packages/core/src/. staging/core/
           jq '.version = "${{ steps.version.outputs.VERSION }}" | .repository = "${{ github.repository }}"' staging/manifest.json > staging/manifest.tmp.json
           mv staging/manifest.tmp.json staging/manifest.json
 
