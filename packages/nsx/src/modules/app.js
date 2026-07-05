@@ -3086,9 +3086,14 @@ function _renderCalibCard() {
 
 function _steamDurationFromMeasurements(measurements) {
   if (!Array.isArray(measurements) || measurements.length < 2) return null;
-  // Only the pouring phase — exclude heat-up — to match the live steam timer.
+  // Active steam = 'pouring' substate WHILE the machine is still commanding
+  // steam (targetFlow > 0). After the set duration the DE1 drops targetFlow to
+  // 0 but holds the 'pouring' substate for several more seconds while flow and
+  // pressure bleed off — that decay tail must not count (it inflated ~5s → ~12s).
   const steamMs = measurements
-    .filter(m => m?.machine?.state?.state === 'steam' && m?.machine?.state?.substate === 'pouring')
+    .filter(m => m?.machine?.state?.state === 'steam'
+      && m?.machine?.state?.substate === 'pouring'
+      && Number(m?.machine?.targetFlow) > 0)
     .map(m => new Date(m.machine.timestamp).getTime())
     .filter(t => Number.isFinite(t));
   if (steamMs.length < 2) return null;
