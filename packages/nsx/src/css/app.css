@@ -10567,6 +10567,29 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   flex: 1;
 }
 
+/* Numeric pad — replaces the QWERTY rows when .fp-keyboard--numeric is set. */
+.fp-numpad {
+  display: none;
+}
+
+.fp-keyboard--numeric .fp-kb-row {
+  display: none;
+}
+
+.fp-keyboard--numeric .fp-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.fp-numpad .fp-key {
+  height: 48px;
+  font-size: 20px;
+}
+
 /* ─── Number Picker Modal (iOS Drum Wheel) ────────────── */
 .number-picker-overlay {
   background: rgba(0, 0, 0, 0.5);

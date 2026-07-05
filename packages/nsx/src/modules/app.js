@@ -9140,7 +9140,7 @@ function _setupKeyboard(keyboardId, shiftBtnId, bsBtnId) {
     const key = e.target.closest('.fp-key');
     if (!key) return;
     if (key.id === shiftBtnId) { _fpKbSetShift(!_fpKbShift); return; }
-    if (key.id === bsBtnId) {
+    if (key.id === bsBtnId || key.classList.contains('fp-key--bs')) {
       _fpKbBackspace();
       _fpKbBsTimer = setTimeout(() => { _fpKbBsInterval = setInterval(_fpKbBackspace, 80); }, 400);
       return;
@@ -9196,6 +9196,9 @@ function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = nul
   const modal = document.getElementById('field-picker-modal');
   const pickerInput = document.getElementById('field-picker-input');
   if (!modal || !pickerInput) return;
+  // Numeric fields (inputMode 'numeric') swap the QWERTY layout for the numpad.
+  document.getElementById('field-picker-keyboard')
+    ?.classList.toggle('fp-keyboard--numeric', inputMode === 'numeric');
   pickerInput.value = initialValue !== null ? String(initialValue) : (inputEl?.value || '');
   _renderFieldPickerList(pickerInput.value);
   _fpKbActiveTarget = pickerInput;
@@ -9509,11 +9512,20 @@ window.closeNumberPicker = closeNumberPicker;
     'bean-altitude-min':  () => openNumberPicker(_npMakeRange(0, 4000, 100), parseFloat(document.getElementById('bean-altitude-min')?.value) || 0, v => { document.getElementById('bean-altitude-min').value = v; }),
     'bean-altitude-max':  () => openNumberPicker(_npMakeRange(0, 4000, 100), parseFloat(document.getElementById('bean-altitude-max')?.value) || 0, v => { document.getElementById('bean-altitude-max').value = v; }),
     'grinder-burr-size':  () => openNumberPicker(_npMakeRange(20, 140, 1),   parseFloat(document.getElementById('grinder-burr-size')?.value) || 64, v => { document.getElementById('grinder-burr-size').value = v; }),
-    'grinder-small-step': () => openNumberPicker(_npMakeRange(0, 10, 0.1),   parseFloat(document.getElementById('grinder-small-step')?.value) || 0, v => { document.getElementById('grinder-small-step').value = v; }, 1),
-    'grinder-big-step':   () => openNumberPicker(_npMakeRange(0, 50, 0.5),   parseFloat(document.getElementById('grinder-big-step')?.value) || 0, v => { document.getElementById('grinder-big-step').value = v; }, 1),
   };
   Object.entries(numberPickerInputs).forEach(([id, open]) => {
     document.getElementById(id)?.addEventListener('pointerdown', (e) => { e.preventDefault(); open(); });
+  });
+
+  // Grinder step sizes use the numeric keyboard (free-form entry) rather than
+  // the drum wheel — easier to type an exact step like 0.3 or 12.5.
+  ['grinder-small-step', 'grinder-big-step'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      openFieldPicker(el, [], { inputMode: 'numeric' });
+    });
   });
 }
 
