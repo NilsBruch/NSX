@@ -3086,8 +3086,9 @@ function _renderCalibCard() {
 
 function _steamDurationFromMeasurements(measurements) {
   if (!Array.isArray(measurements) || measurements.length < 2) return null;
+  // Only the pouring phase — exclude heat-up — to match the live steam timer.
   const steamMs = measurements
-    .filter(m => m?.machine?.state?.state === 'steam')
+    .filter(m => m?.machine?.state?.state === 'steam' && m?.machine?.state?.substate === 'pouring')
     .map(m => new Date(m.machine.timestamp).getTime())
     .filter(t => Number.isFinite(t));
   if (steamMs.length < 2) return null;
