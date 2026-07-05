@@ -1279,7 +1279,8 @@ async function endLiveShotSession() {
 
 function startSteamSession() {
   steamSession = {
-    startTime: Date.now(),
+    startTime: null,   // machine-clock anchor (ms), set from the first steam snapshot
+    elapsedSec: 0,     // machine-derived elapsed seconds (drives the countdown)
     elapsed: [],
     pressure: [],
     targetPressure: [],
@@ -1300,7 +1301,9 @@ function startSteamSession() {
 
   steamTimerInterval = setInterval(() => {
     const steamDuration = NSXCore.getSteamDuration();
-    const sec = Math.floor((Date.now() - steamSession.startTime) / 1000);
+    // Elapsed comes from the machine snapshot clock (see the liveShot handler),
+    // not Date.now(), so the countdown stays in sync with the graph and the DE1.
+    const sec = Math.floor(steamSession?.elapsedSec || 0);
     const remaining = Math.max(0, steamDuration - sec);
     if (cornerElapsedEl) cornerElapsedEl.textContent = String(remaining);
     if (cornerRingEl && steamDuration > 0) {
@@ -1837,7 +1840,14 @@ NSXCore.on("liveShot", (snap) => {
   _updatePhoneMachineCard();
 
   if (steamSession && snap?.state?.state === 'steam') {
-    const t = (Date.now() - steamSession.startTime) / 1000;
+    // Couple the steam timer to machine-snapshot time — the same basis the shot
+    // graph/timer use. The snapshot stream is shared across machine states, so
+    // snap.timestamp is authoritative for steam too; anchor on the first steam
+    // snapshot and derive elapsed from it (never the browser's Date.now()).
+    const snapTime = new Date(snap.timestamp).getTime();
+    if (steamSession.startTime === null) steamSession.startTime = snapTime;
+    const t = (snapTime - steamSession.startTime) / 1000;
+    steamSession.elapsedSec = t;
     steamSession.elapsed.push(t);
     steamSession.pressure.push(snap.pressure ?? 0);
     steamSession.targetPressure.push(null);
