@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "sync-core": "node scripts/sync-core.mjs"
+    "sync-core": "node scripts/sync-core.mjs",
+    "test": "node --test \"packages/core/test/*.test.mjs\""
   }
 }
