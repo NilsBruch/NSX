@@ -842,6 +842,11 @@ async function setStoreValue(namespace, key, value) {
   return request(pathWithId(`/api/v1/store/${encodeURIComponent(namespace)}`, key), "POST", value);
 }
 
+/** DELETE /api/v1/store/{namespace}/{key} */
+async function deleteStoreValue(namespace, key) {
+  return request(pathWithId(`/api/v1/store/${encodeURIComponent(namespace)}`, key), "DELETE");
+}
+
 window.NSXApi = {
   setMachineState,
   fetchCurrentWorkflow,
@@ -901,6 +906,7 @@ window.NSXApi = {
   deleteGrinder,
   getStoreValue,
   setStoreValue,
+  deleteStoreValue,
   getStoreNamespace,
   fetchLatestSteam,
   fetchSteamById,

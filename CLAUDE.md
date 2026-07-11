@@ -27,12 +27,15 @@ when assembling the ZIP.
 
 ```
 espresso-skins/                     # repo root (npm workspaces)
-├── package.json                    # workspaces + "sync-core" script
+├── package.json                    # workspaces + scripts: sync-core, test, dev:mock
 ├── scripts/sync-core.mjs           # copies packages/core/src -> packages/nsx/src/core
+├── tests/
+│   └── mock-gateway/               # dependency-light gateway stand-in (npm run dev:mock)
 ├── packages/
 │   ├── core/                       # shared, DOM-FREE package (SOURCE OF TRUTH)
 │   │   ├── README.md               # ← full NSXCore API docs (read this for core)
 │   │   ├── package.json
+│   │   ├── test/                   # node --test unit tests (npm test) + harness.mjs
 │   │   └── src/
 │   │       ├── config.js           # Constants (window.NSXConfig)
 │   │       ├── api.js              # REST + WebSocket gateway client (window.NSXApi)
@@ -144,6 +147,29 @@ skin wiring (the shared logic moved to NSXCore, above):
 - **Shot API**: only write `annotations`, not `metadata`/`shotNotes` (deprecated). The `extras` field merges at field level.
 - **UI language**: German labels, vanilla JS DOM manipulation (no virtual DOM)
 - **No build step**: edits to source files take effect immediately on reload
+- **Cross-device freshness (ETag)**: list reads go through `getWithEtag` in `api.js`
+  (profiles/beans/grinders/shots + `GET /store/<ns>?full=1`). A 304 returns the
+  *same payload reference*, so caches detect "unchanged" by identity and skip
+  re-render. `setupCrossDeviceRefresh` in `app.js` revalidates the open view on
+  tab-resume. Don't add a plain `request()` GET for a list that can change on
+  another device.
+- **Settings are per-field KV keys** (`nsx_*` in the `NSX` namespace), not one
+  blob — `patchStore` writes only the changed key. Never reintroduce a
+  whole-object write (it silently clobbers other tabs' fields). Recipes are one
+  key but `saveRecipes` does a 3-way merge so concurrent devices don't clobber.
+
+## Testing & running without a DE1
+
+- **`npm test`** — `node --test` unit tests for the DOM-free core
+  (`packages/core/test/*.test.mjs`). The core ships as browser IIFEs, so
+  `harness.mjs` stubs `window`/`WebSocket` and evaluates them; a test loads
+  `core.js` + the domain under test and mocks `window.NSXApi`. Prefer adding a
+  test here for any new pure core logic.
+- **`npm run dev:mock`** — serves `packages/nsx/src` and a mock gateway (REST +
+  WebSocket, faithful ETag semantics) so the skin runs without a machine. See
+  `tests/mock-gateway/README.md`. Note: `config.js` hardcodes port 8080; on any
+  other port open with `?gateway=http://localhost:<port>`.
+- `ws` is the repo's only (dev-only) dependency, used by the mock gateway.
 
 ## How the App Starts
 

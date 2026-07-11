@@ -23,7 +23,17 @@
   }
 
   const STORE_NAMESPACE = "NSX";
-  const STORE_KEY = "ui-settings";
+  // Settings used to live in one opaque "ui-settings" blob. That made every
+  // write a full-blob replace, so a stale tab writing any single field (e.g.
+  // nsx_last_recipe_id as a side effect of selecting a recipe) silently
+  // clobbered fields another tab had just changed (issue #3 follow-up). Each
+  // setting is now its own KV key in the NSX namespace, so a write only ever
+  // touches the field it changed. All settings keys are "nsx_"-prefixed, which
+  // distinguishes them from the namespace's other keys (recipes,
+  // profile-favorites) when reading the whole namespace back.
+  const LEGACY_BLOB_KEY = "ui-settings";
+  const SETTINGS_PREFIX = "nsx_";
+  const isSettingKey = (k) => typeof k === "string" && k.startsWith(SETTINGS_PREFIX);
   const LEGACY_STORAGE_KEYS = [
     "nsx_steam_presets",
     "nsx_steam_active_preset",
@@ -36,6 +46,8 @@
 
   // The one stable store object. Never reassigned — only mutated in place.
   const storeSettings = {};
+  // Keys changed since the last flush — only these get written, one KV key each.
+  const pendingKeys = new Set();
   let persistTimer = null;
 
   const api = () => window.NSXApi || {};
@@ -45,15 +57,22 @@
     if (typeof setStoreValue !== "function") return;
     clearTimeout(persistTimer);
     persistTimer = setTimeout(() => {
-      setStoreValue(STORE_NAMESPACE, STORE_KEY, storeSettings)
-        .catch((err) => console.debug("Store save failed:", err?.message || err));
+      const keys = [...pendingKeys];
+      pendingKeys.clear();
+      for (const key of keys) {
+        Promise.resolve(setStoreValue(STORE_NAMESPACE, key, storeSettings[key]))
+          .catch((err) => console.debug("Store save failed:", key, err?.message || err));
+      }
     }, 300);
   }
 
   /** Merge a partial patch into the store (in place) and schedule a persist. */
   function patchStore(patch) {
     if (!patch || typeof patch !== "object") return;
-    Object.assign(storeSettings, patch);
+    for (const [key, value] of Object.entries(patch)) {
+      storeSettings[key] = value;
+      pendingKeys.add(key);
+    }
     scheduleStorePersist();
   }
 
@@ -115,41 +134,85 @@
     return legacy;
   }
 
+  // Only the settings (nsx_*) fields of an object — never recipes /
+  // profile-favorites, which live under their own keys in the namespace.
+  function pickSettings(obj) {
+    const out = {};
+    if (obj && typeof obj === "object") {
+      for (const [k, v] of Object.entries(obj)) if (isSettingKey(k)) out[k] = v;
+    }
+    return out;
+  }
+
+  /**
+   * One-time migration to the per-field key layout:
+   *   1. fold in legacy localStorage settings (older format), then
+   *   2. split any remaining single "ui-settings" blob into per-field keys, and
+   *   3. delete the blob so it can't shadow future reads.
+   * Idempotent: a no-op once nothing legacy remains.
+   */
   async function migrateLegacyStore() {
-    const { getStoreValue, setStoreValue } = api();
+    const { getStoreValue, setStoreValue, deleteStoreValue } = api();
     if (typeof getStoreValue !== "function" || typeof setStoreValue !== "function") return;
 
-    const legacy = collectLegacySettingsFromLocalStorage();
-    if (!Object.keys(legacy).length) return;
-
     try {
-      let current = {};
+      let blob = null;
       try {
-        const storeData = await getStoreValue(STORE_NAMESPACE, STORE_KEY);
-        if (storeData && typeof storeData === "object") current = storeData;
+        const stored = await getStoreValue(STORE_NAMESPACE, LEGACY_BLOB_KEY);
+        if (stored && typeof stored === "object") blob = stored;
       } catch {
-        // missing store key is expected on first run
+        // missing blob is expected once migrated / on first run
       }
 
-      const merged = Object.assign({}, legacy, current);
-      await setStoreValue(STORE_NAMESPACE, STORE_KEY, merged);
+      const legacy = collectLegacySettingsFromLocalStorage();
+      // Blob wins over localStorage for the same key (it's the newer format).
+      const merged = Object.assign({}, legacy, pickSettings(blob || {}));
+      if (!Object.keys(merged).length) {
+        removeLegacyLocalStorageValues();
+        return;
+      }
+
+      for (const [key, value] of Object.entries(merged)) {
+        await setStoreValue(STORE_NAMESPACE, key, value);
+      }
+      if (blob && typeof deleteStoreValue === "function") {
+        try { await deleteStoreValue(STORE_NAMESPACE, LEGACY_BLOB_KEY); } catch { /* best-effort */ }
+      }
       removeLegacyLocalStorageValues();
-      console.debug("Legacy localStorage settings migrated to gateway store");
+      console.debug("Store migrated to per-field keys");
     } catch (err) {
-      console.debug("Legacy settings migration skipped:", err?.message || err);
+      console.debug("Store layout migration skipped:", err?.message || err);
     }
   }
 
   /**
    * Load the persisted settings from the gateway into the store (in place).
-   * Returns the store object on success, or null when nothing was loaded.
+   * Reads the whole namespace (ETag-backed ?full=1) and keeps only the nsx_*
+   * settings keys. Falls back to the legacy single blob if the namespace read
+   * is unavailable. Returns the store object on success, or null.
    */
   async function loadStore() {
-    const getStoreValue = api().getStoreValue;
-    if (typeof getStoreValue !== "function") return null;
-    const data = await getStoreValue(STORE_NAMESPACE, STORE_KEY);
-    if (!data || typeof data !== "object") return null;
-    return replaceStore(data);
+    const { getStoreNamespace, getStoreValue } = api();
+
+    let ns = null;
+    if (typeof getStoreNamespace === "function") {
+      try { ns = await getStoreNamespace(STORE_NAMESPACE); } catch { ns = null; }
+    }
+
+    if (ns && typeof ns === "object") {
+      // Legacy blob (if a pre-migration write still exists) forms the base;
+      // per-field nsx_* keys win over it.
+      const merged = Object.assign({}, pickSettings(ns[LEGACY_BLOB_KEY] || {}), pickSettings(ns));
+      if (!Object.keys(merged).length) return null;
+      return replaceStore(merged);
+    }
+
+    // Fallback: no namespace endpoint — read the legacy blob directly.
+    if (typeof getStoreValue === "function") {
+      const data = await getStoreValue(STORE_NAMESPACE, LEGACY_BLOB_KEY).catch(() => null);
+      if (data && typeof data === "object") return replaceStore(pickSettings(data));
+    }
+    return null;
   }
 
   NSXCore.register({

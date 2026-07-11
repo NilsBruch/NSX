@@ -59,21 +59,57 @@
   function getNsxNamespace() { return _nsCache; }
   function invalidateNsxNamespace() { _nsCache = null; _nsRaw = null; }
 
+  // Recipes as we last loaded or persisted them — the base for the 3-way merge
+  // on write, so a concurrent change on another device isn't blindly replaced.
+  let _recipesBase = [];
+
   async function loadRecipes(force = false) {
     const ns = await loadNsxNamespace(force);
-    return Array.isArray(ns?.[RECIPE_KEY]) ? ns[RECIPE_KEY] : [];
+    const list = Array.isArray(ns?.[RECIPE_KEY]) ? ns[RECIPE_KEY] : [];
+    _recipesBase = list.map((r) => ({ ...r }));
+    return list;
+  }
+
+  // 3-way merge (base = what we last saw, ours = local list, theirs = current
+  // server list). Start from the server, drop what we deleted (in base, gone
+  // from ours), then overlay our adds/edits (ours wins per id). Two devices
+  // adding different recipes therefore union instead of clobbering, while a
+  // delete on one device still removes the recipe.
+  function mergeRecipes(base, ours, theirs) {
+    const oursById = new Map((ours || []).map((r) => [r.id, r]));
+    const deleted = new Set((base || []).filter((r) => !oursById.has(r.id)).map((r) => r.id));
+    const byId = new Map();
+    for (const r of theirs || []) if (r && !deleted.has(r.id)) byId.set(r.id, r);
+    for (const r of ours || []) if (r) byId.set(r.id, r);
+    return [...byId.values()];
   }
 
   async function saveRecipes(recipes) {
-    const { setStoreValue } = window.NSXApi || {};
+    const { setStoreValue, getStoreNamespace } = window.NSXApi || {};
+    if (typeof setStoreValue !== "function") return recipes;
+    const ours = Array.isArray(recipes) ? recipes : [];
+    let merged = ours;
     try {
-      await setStoreValue?.(RECIPE_NS, RECIPE_KEY, recipes);
-      // The namespace hash changed server-side — drop the cache so the next
-      // read (or revalidation) fetches fresh instead of returning stale data.
+      // Read the server's current recipes (ETag: an unchanged list is a cheap
+      // 304) and merge against them so we never overwrite another device's
+      // concurrent change.
+      let theirs = ours;
+      if (typeof getStoreNamespace === "function") {
+        const fresh = await getStoreNamespace(RECIPE_NS);
+        if (Array.isArray(fresh?.[RECIPE_KEY])) theirs = fresh[RECIPE_KEY];
+      }
+      merged = mergeRecipes(_recipesBase, ours, theirs);
+      await setStoreValue(RECIPE_NS, RECIPE_KEY, merged);
+      // Base tracks what THIS client knows (ours), not the merged superset —
+      // otherwise another device's recipe (folded in via theirs but never in
+      // our local list) would look "deleted" on our next save and get removed.
+      _recipesBase = ours.map((r) => ({ ...r }));
+      // Server hash changed — drop the cache so the next read is fresh.
       invalidateNsxNamespace();
     } catch (err) {
       console.warn("Recipes could not be saved:", err?.message);
     }
+    return merged;
   }
 
   function makeRecipeId() {
@@ -236,6 +272,7 @@
   NSXCore.register({
     loadRecipes,
     saveRecipes,
+    mergeRecipes,
     makeRecipeId,
     loadNsxNamespace,
     getNsxNamespace,
