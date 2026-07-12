@@ -3866,6 +3866,11 @@ async function hydrateUiSettingsFromStore() {
   } catch (err) {
     console.debug('Store load failed:', err?.message || err);
   }
+
+  // Land on the configured start page. This ran only on screensaver unlock, so a
+  // plain page load (or a disabled lockscreen) always came up on Home. setTab also
+  // emits router:tabchange, which is what renders the Recipes-tab-only widgets.
+  window.NSXRouter?.setTab(storeSettings.nsx_start_tab === 'recipe' ? 1 : 0, false);
 }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
