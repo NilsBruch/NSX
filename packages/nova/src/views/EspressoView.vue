@@ -236,7 +236,13 @@ async function openRateRecipe() {
       </button>
     </div>
 
-    <div v-else class="dials">
+    <!-- One wrapper for orbs+rating+bottom-buttons, centred as a single group
+         (see .espresso-body's comment in app.css) — replaces the old "dials
+         grows to fill leftover space, rating row yanked up by a fixed pixel
+         offset" layout, which overlapped an orb on screens with less leftover
+         space than whatever it was tuned against. -->
+    <div v-else class="espresso-body">
+    <div class="dials">
       <div class="dial-group">
         <span class="dial-label">{{ t('espresso.bean') }}</span>
         <button class="dial-id" :aria-label="t('espresso.changeBean')" @click="showBeanChooser = true">
@@ -332,7 +338,7 @@ async function openRateRecipe() {
       </div>
     </div>
 
-    <div v-if="hasRecipe" class="recipe-rate-row">
+    <div class="recipe-rate-row">
       <StarRating v-if="recipe.rating > 0" :model-value="recipe.rating" readonly :size="20" />
       <button class="rate-recipe-btn" @click="openRateRecipe">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z" /></svg>
@@ -340,7 +346,7 @@ async function openRateRecipe() {
       </button>
     </div>
 
-    <div v-if="hasRecipe" class="prep-bottom prep-bottom-3">
+    <div class="prep-bottom prep-bottom-3">
       <button class="btn" @click="showRecipePicker = true">
         <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.list"></svg>{{ t('espresso.recipes') }}
       </button>
@@ -350,6 +356,7 @@ async function openRateRecipe() {
       <button class="btn" @click="loadHistoryForCurrentRecipe">
         <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.history"></svg>{{ t('espresso.history') }}
       </button>
+    </div>
     </div>
 
     <RecipePicker v-if="showRecipePicker" @back="showRecipePicker = false" />
