@@ -1086,7 +1086,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .tile .tl { font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.05em; }
 /* Machine state toggle overlaid on its tile, below the icon+label (which stay
    centered on the tile itself, unaffected by this overlay). */
-.tile-switch { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); }
+.tile-switch { position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%); }
 
 /* Vertical brightness slider */
 .vslider {
