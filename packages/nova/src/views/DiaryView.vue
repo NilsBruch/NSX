@@ -293,7 +293,9 @@ function fmtDate(iso) {
         class="rbtn accent"
         :aria-label="t('diary.addRecipe')"
         @click="showRecipeCreator = true"
-      >+</button>
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+      </button>
       <button class="rbtn" :aria-label="t('diary.search')" @click="openSearch">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
       </button>

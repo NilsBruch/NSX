@@ -127,7 +127,7 @@ const assistantMode = ref(null); // null | 'forwardFlush' | 'backflush' | 'desca
     <div class="prep-bottom cleaning-actions" style="justify-content: center; gap: 24px">
       <button class="btn" @click="assistantMode = 'forwardFlush'">
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3v11" /><path d="M8 10l4 4 4-4" /><path d="M5 19h14" />
+          <path d="M4 12a8 8 0 0 1 14-5m2-3v5h-5" /><path d="M20 12a8 8 0 0 1-14 5m-2 3v-5h5" />
         </svg>
         {{ t('cleaning.forwardFlush') }}
       </button>

@@ -1326,7 +1326,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 
 .diary-bottom { display: flex; align-items: stretch; gap: 10px; height: 60px; margin-top: 10px; }
 .rbtn {
-  width: 58px; border-radius: 50%; border: none; background: var(--card-bg); color: var(--text);
+  width: 58px; height: 58px; flex: none; border-radius: 50%; border: none; background: var(--card-bg); color: var(--text);
   font-size: var(--fs-lg); font-weight: 600; font-family: inherit;
   display: flex; align-items: center; justify-content: center;
 }

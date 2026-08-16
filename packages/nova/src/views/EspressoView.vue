@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { singleGrinder, grinders, formatGrinderLabel } from '../composables/useCore.js';
 import { recipe, roastAge, pushRecipe, setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, cloneProfile, applyEditedProfile } from '../composables/useRecipe.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
-import { openNumberPad, openRating, openChooser } from '../composables/useModals.js';
+import { openNumberPad, openRating, openChooser, openConfirm } from '../composables/useModals.js';
 import { useDragDial, DIAL_PX_PER_STEP } from '../composables/useDragDial.js';
 import RecipePicker from '../components/RecipePicker.vue';
 import ProfilePicker from '../components/ProfilePicker.vue';
@@ -71,6 +71,8 @@ const showRecipeCreator = ref(false);
 // composing a new recipe the way the "+ New recipe" flow does.
 async function onBeanPicked(bean) {
   showBeanChooser.value = false;
+  const ok = await openConfirm({ title: t('espresso.confirmReplaceBean'), confirmLabel: t('common.replace') });
+  if (!ok) return;
   await setRecipeBean(bean);
 }
 async function pickGrinder() {
@@ -81,10 +83,15 @@ async function pickGrinder() {
   });
   if (grinderId == null) return;
   const grinder = grinders.value.find((g) => g.id === grinderId);
-  if (grinder) await setRecipeGrinder(grinder);
+  if (!grinder) return;
+  const ok = await openConfirm({ title: t('espresso.confirmReplaceGrinder'), confirmLabel: t('common.replace') });
+  if (!ok) return;
+  await setRecipeGrinder(grinder);
 }
 
 async function onProfileSelected(profile) {
+  const ok = await openConfirm({ title: t('espresso.confirmReplaceProfile'), confirmLabel: t('common.replace') });
+  if (!ok) { showProfilePicker.value = false; return; }
   recipe.profileTitle = profile.profile?.title || '—';
   recipe.selectedProfileId = profile.id ?? null;
   // Copy, not reference: the recipe now owns this profile and can diverge

@@ -468,6 +468,41 @@ export async function selectRecipe(entry) {
 }
 
 /**
+ * "New recipe -> From existing recipe" flow (RecipePicker.vue): loads a
+ * library entry's fields exactly like selectRecipe, but with `id: null` so
+ * the caller's createRecipeFromCurrent() persists it as a distinct new
+ * recipe instead of loading the original in place. Starts unrated, like
+ * composeNewRecipe — a duplicate is a new recipe, not a copy of the source's
+ * history.
+ */
+export async function duplicateRecipeAsNew(entry) {
+  recipe.id = null;
+  Object.assign(recipe, {
+    coffeeRoaster: entry.coffeeRoaster || '—',
+    coffeeName: entry.coffeeName || '—',
+    grinderModel: entry.grinderModel || '—',
+    grinderSetting: entry.grinderSetting || '—',
+    targetDoseWeight: Number(entry.targetDoseWeight) || 0,
+    targetYield: Number(entry.targetYield) || 0,
+    groupTemp: Number(entry.groupTemp) || 0,
+    profileTitle: entry.profileTitle || '—',
+    selectedProfileId: entry.selectedProfileId ?? null,
+    profile: cloneProfile(entry.profile),
+    stopAtWeight: entry.stopAtWeight !== false,
+    grinderId: entry.grinderId ?? null,
+    beanId: entry.beanId ?? null,
+    beanBatchId: entry.beanBatchId ?? null,
+    roastDate: null,
+    volumeCalibration: entry.volumeCalibration && typeof entry.volumeCalibration === 'object'
+      ? entry.volumeCalibration
+      : { factor: 1.0, samples: [] },
+    rating: 0,
+  });
+  await adoptBatch(recipe.beanBatchId);
+  await pushRecipe();
+}
+
+/**
  * New-recipe flow (bean chosen, then a profile): dose/grind/temp keep whatever
  * was already dialed in (or the sole grinder's model, if none was set yet) —
  * only the bean+profile identity actually changes. Does not persist anything

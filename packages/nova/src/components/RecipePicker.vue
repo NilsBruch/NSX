@@ -13,7 +13,7 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, recipes, refreshRecipes, selectRecipe, composeNewRecipe, createRecipeFromCurrent, deleteRecipe } from '../composables/useRecipe.js';
+import { recipe, recipes, refreshRecipes, selectRecipe, composeNewRecipe, createRecipeFromCurrent, duplicateRecipeAsNew, deleteRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots, grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
 import { openTextField, openChooser } from '../composables/useModals.js';
 import BeanChooser from './BeanChooser.vue';
@@ -84,8 +84,20 @@ async function openSearch() {
 const num = (v, digits = 1) => (Number.isFinite(Number(v)) ? Number(v).toFixed(digits) : '—');
 const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight) || 0, Number(entry.targetYield) || 0);
 
+// While true, tapping a card doesn't load it — it seeds a NEW recipe from it
+// instead (see startNewRecipe's "From existing recipe" choice).
+const pickingDuplicateSource = ref(false);
+
 async function pick(entry) {
   if (editing.value) return; // in edit mode a tap must not also load the recipe
+  if (pickingDuplicateSource.value) {
+    pickingDuplicateSource.value = false;
+    await duplicateRecipeAsNew(entry);
+    const created = await createRecipeFromCurrent();
+    emit('created', created);
+    emit('back');
+    return;
+  }
   await selectRecipe(entry);
   emit('back');
 }
@@ -95,8 +107,14 @@ async function remove(entry, event) {
   await deleteRecipe(entry.id);
 }
 
-function startNewRecipe() {
-  step.value = 'bean';
+async function startNewRecipe() {
+  // "From existing recipe" only makes sense if there's one to start from.
+  const options = [['blank', t('recipePicker.newBlank')]];
+  if (recipes.value.length) options.push(['existing', t('recipePicker.fromExisting')]);
+  if (options.length === 1) { step.value = 'bean'; return; }
+  const v = await openChooser({ title: t('recipePicker.newRecipeChoiceTitle'), options, current: 'blank' });
+  if (v === 'blank') step.value = 'bean';
+  else if (v === 'existing') pickingDuplicateSource.value = true;
 }
 
 /** Backing out of the bean step: to the library if we came from it, otherwise
@@ -152,6 +170,11 @@ async function onProfilePicked(profile) {
       <button class="sort-btn accent" @click="startNewRecipe">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>{{ t('recipePicker.newRecipe') }}
       </button>
+    </div>
+
+    <div v-if="pickingDuplicateSource" class="picking-banner">
+      <span>{{ t('recipePicker.pickingSourceHint') }}</span>
+      <button class="btn" @click="pickingDuplicateSource = false">{{ t('common.cancel') }}</button>
     </div>
 
     <div class="rp-strip">
