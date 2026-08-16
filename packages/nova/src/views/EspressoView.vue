@@ -223,6 +223,7 @@ async function openRateRecipe() {
 
     <div v-else class="dials">
       <div class="dial-group">
+        <span class="dial-label">{{ t('espresso.bean') }}</span>
         <button class="dial-id" :aria-label="t('espresso.changeBean')" @click="showBeanChooser = true">
           <span class="dial-id-name">{{ recipe.coffeeRoaster }}</span>
           <span class="dial-id-sub">{{ recipe.coffeeName }}</span>
@@ -246,6 +247,7 @@ async function openRateRecipe() {
       </div>
 
       <div class="dial-group">
+        <span class="dial-label">{{ t('espresso.grinder') }}</span>
         <!-- With only one grinder configured it's implicit (see useCore.js's
              singleGrinder) — plain text, nothing to switch TO. -->
         <button v-if="!singleGrinder" class="dial-id" :aria-label="t('espresso.changeGrinder')" @click="pickGrinder">
@@ -274,6 +276,7 @@ async function openRateRecipe() {
       </div>
 
       <div class="dial-group">
+        <span class="dial-label">{{ t('espresso.profile') }}</span>
         <button class="dial-id" :aria-label="t('espresso.changeProfile')" @click="showProfilePicker = true">
           <span class="dial-id-name">{{ recipe.profileTitle }}</span>
         </button>

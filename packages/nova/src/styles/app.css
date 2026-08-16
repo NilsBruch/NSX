@@ -1017,6 +1017,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   background: var(--card-bg); border: 1px solid #2a323d; border-radius: 999px;
   padding: 24px 30px; color: var(--text); font-family: inherit;
   touch-action: none; /* drag-to-adjust, see useDragDial.js */
+  /* Fixed so the pill doesn't resize (and shove its neighbours) as the digit
+     count changes — 1 -> 2 digits, or the "∞" timer-off glyph. */
+  min-width: 108px; box-sizing: border-box;
 }
 .timer-pod.off { opacity: 0.4; }
 .timer-pod.dragging { border-color: var(--accent); }

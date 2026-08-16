@@ -128,5 +128,11 @@ function onPresetCancel(key) {
         </button>
       </div>
     </div>
+
+    <!-- Empty, same height as Cleaning's button row (.prep-bottom) — this page
+         has no bottom buttons, but without reserving the same space here,
+         .dials (flex:1, vertically centred) fills more of the page and its
+         orbs end up sitting lower than Cleaning's identical-looking ones. -->
+    <div class="prep-bottom"></div>
   </section>
 </template>

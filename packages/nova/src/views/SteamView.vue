@@ -21,10 +21,12 @@ const flowLabel = computed(() => `${(steam.flow || 0).toFixed(1)} ml/s`);
 function onFlowSlide(v) { NSXCore.setSteamFlow(v / 10); }
 
 // Three save-slots, exactly like the Hot Water page: tap loads the stored
-// intensity, hold (~600ms) overwrites it with the current one. They store only
-// the flow, so loading one never disturbs the independent timer or temperature.
+// intensity + timer, hold (~600ms) overwrites both with the current ones —
+// the Steam page's own two adjustable dials, same as Hot Water saves its
+// temp+volume and Cleaning saves its flow+duration. selectSteamPreset (core)
+// also carries the preset's temp, but that's not independently dialed here;
+// it just re-pushes whatever the preset already had.
 const LEVEL_KEYS = ['schwach', 'normal', 'stark'];
-const isPreset = (key) => Math.abs((steam.flow || 0) - (steam.presets[key]?.flow ?? -1)) < 0.05;
 
 const holdTimers = {};
 function onPresetDown(key) {
@@ -32,7 +34,9 @@ function onPresetDown(key) {
     held: false,
     timer: setTimeout(() => {
       holdTimers[key].held = true;
-      NSXCore.setSteamPresets({ ...steam.presets, [key]: { ...steam.presets[key], flow: steam.flow } });
+      const next = { ...steam.presets, [key]: { ...steam.presets[key], flow: steam.flow, duration: steam.duration } };
+      NSXCore.setSteamPresets(next);
+      NSXCore.selectSteamPreset(key);
     }, 600),
   };
 }
@@ -40,7 +44,7 @@ function onPresetUp(key) {
   const h = holdTimers[key];
   if (!h) return;
   clearTimeout(h.timer);
-  if (!h.held) NSXCore.setSteamFlow(steam.presets[key]?.flow ?? steam.flow);
+  if (!h.held) NSXCore.selectSteamPreset(key);
   delete holdTimers[key];
 }
 function onPresetCancel(key) {
@@ -80,19 +84,6 @@ function toggleTimer() { NSXCore.setSteamTimerEnabled(!steam.timerEnabled); }
   <section class="page">
     <div class="page-title">{{ t('tab.steam') }}</div>
 
-    <!-- Master steam power. Off dims the controls below and sends temp/flow 0. -->
-    <div class="steam-power">
-      <span class="vl">{{ t('steam.enabled') }}</span>
-      <button
-        class="switch"
-        :class="{ on: steam.enabled }"
-        role="switch"
-        :aria-checked="steam.enabled"
-        :aria-label="t('steam.enabled')"
-        @click="toggleEnabled"
-      ></button>
-    </div>
-
     <div class="dials" :class="{ disabled: !steam.enabled }">
       <div class="dial-group">
         <span class="dial-label">{{ t('steam.intensity') }}</span>
@@ -112,7 +103,7 @@ function toggleTimer() { NSXCore.setSteamTimerEnabled(!steam.timerEnabled); }
             v-for="(key, i) in LEVEL_KEYS"
             :key="key"
             class="preset"
-            :class="{ selected: isPreset(key) }"
+            :class="{ selected: steam.active === key }"
             @pointerdown="onPresetDown(key)"
             @pointerup="onPresetUp(key)"
             @pointerleave="onPresetCancel(key)"
@@ -144,6 +135,25 @@ function toggleTimer() { NSXCore.setSteamTimerEnabled(!steam.timerEnabled); }
           :aria-label="t('steam.timer')"
           style="margin-top: 14px"
           @click="toggleTimer"
+        ></button>
+      </div>
+    </div>
+
+    <!-- Same height as Cleaning's button row (.prep-bottom) — without
+         reserving that space, .dials (flex:1, vertically centred) filled more
+         of the page and its orbs sat lower than Cleaning's. Now the home for
+         the master steam power switch (off dims/locks the dials above),
+         previously a page-level row above the dials. -->
+    <div class="prep-bottom steam-actions" style="justify-content: center; gap: 40px">
+      <div class="steam-power">
+        <span class="vl">{{ t('steam.enabled') }}</span>
+        <button
+          class="switch"
+          :class="{ on: steam.enabled }"
+          role="switch"
+          :aria-checked="steam.enabled"
+          :aria-label="t('steam.enabled')"
+          @click="toggleEnabled"
         ></button>
       </div>
     </div>
