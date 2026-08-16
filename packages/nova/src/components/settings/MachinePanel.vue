@@ -185,6 +185,7 @@ const waterUnitLabel = () => waterUnitOpts.find(([value]) => value === skinSetti
       <template v-else-if="view === 'calibration'">
         <SettingSlider
           :label="t('machineSettings.flowMult')"
+          :hint="t('machineSettings.flowMultHint')"
           :model-value="appSettings.flowEstimationMultiplier ?? null"
           :min="0.13" :max="2" :step="0.01" :decimals="2"
           @change="saveAppSetting('flowEstimationMultiplier', $event)"
@@ -192,6 +193,7 @@ const waterUnitLabel = () => waterUnitOpts.find(([value]) => value === skinSetti
         />
         <SettingSlider
           :label="t('machineSettings.weightMult')"
+          :hint="t('machineSettings.weightMultHint')"
           :model-value="appSettings.weightFlowMultiplier ?? null"
           :min="0" :max="5" :step="0.1" :decimals="1"
           @change="saveAppSetting('weightFlowMultiplier', $event)"
@@ -199,6 +201,7 @@ const waterUnitLabel = () => waterUnitOpts.find(([value]) => value === skinSetti
         />
         <SettingSlider
           :label="t('machineSettings.volumeMult')"
+          :hint="t('machineSettings.volumeMultHint')"
           :model-value="appSettings.volumeFlowMultiplier ?? null"
           :min="0" :max="2" :step="0.05" :decimals="2"
           @change="saveAppSetting('volumeFlowMultiplier', $event)"

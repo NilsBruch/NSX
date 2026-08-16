@@ -1078,8 +1078,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .tile svg { width: 40px; height: 40px; stroke: var(--accent); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tile .tl { font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.05em; }
-/* Machine state toggle overlaid on its tile */
-.tile-switch { position: absolute; top: 12px; right: 12px; }
+/* Machine state toggle overlaid on its tile, below the icon+label (which stay
+   centered on the tile itself, unaffected by this overlay). */
+.tile-switch { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); }
 
 /* Vertical brightness slider */
 .vslider {
@@ -1139,6 +1140,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .slider-row .hslider-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 999px; pointer-events: none; }
 .slider-row .sr-value.as-val { flex: 0 0 auto; border: none; background: none; font-family: inherit; color: var(--text); cursor: pointer; padding: 0; justify-content: flex-end; min-width: 64px; }
+.sr-info-btn {
+  border: none; background: none; color: var(--muted); font-size: var(--fs-sm); line-height: 1; cursor: pointer;
+  padding: 4px; margin: -4px -4px -4px 0; vertical-align: middle;
+}
 
 /* Machine settings is a long list of sliders. A full-width track (touch-action:
    none) swallows the vertical scroll gesture, so the panel is hard to scroll.

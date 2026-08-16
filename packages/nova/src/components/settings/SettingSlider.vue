@@ -7,9 +7,14 @@
  * value still shows a sliver rather than an empty track.
  */
 import { computed, ref } from 'vue';
+import { openAlert } from '../../composables/useModals.js';
 
 const props = defineProps({
   label: { type: String, required: true },
+  // Optional explanation shown via a tap on the ⓘ next to the label — for
+  // settings whose effect isn't obvious from the name alone (e.g. the DE1's
+  // calibration multipliers).
+  hint: { type: String, default: null },
   modelValue: { type: Number, default: null },
   min: { type: Number, default: 0 },
   max: { type: Number, default: 100 },
@@ -75,11 +80,17 @@ function onPointerUp(evt) {
   dragValue.value = null;
   if (v !== props.modelValue) emit('change', v);
 }
+function showHint() {
+  if (props.hint) openAlert({ title: props.label, message: props.hint });
+}
 </script>
 
 <template>
   <div class="setting-row slider-row">
-    <span class="sr-name">{{ label }}</span>
+    <span class="sr-name">
+      {{ label }}
+      <button v-if="hint" type="button" class="sr-info-btn" :aria-label="`${label} info`" @click="showHint">ⓘ</button>
+    </span>
     <div
       ref="track"
       class="hslider"
