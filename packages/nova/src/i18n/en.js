@@ -345,6 +345,8 @@ export default {
     volumeMultHint: 'Multiplier (in seconds) applied to machine flow for the projected volume used when stopping a shot by volume. Default is 0.3. Accounts for the lag between the stop command and the flow actually stopping.',
     fanThreshold: 'Fan threshold', heaterIdle: 'Heater idle temperature',
     heaterPh1: 'Heater phase 1 flow', heaterPh2: 'Heater phase 2 flow', heaterPh2Timeout: 'Heater phase 2 timeout',
+    heaterVoltage: 'Heater voltage', refillKit: 'Refill kit',
+    refillKitOff: 'Off', refillKitOn: 'On', refillKitAuto: 'Auto',
     info: 'Machine info', model: 'Model', serial: 'Serial', firmware: 'Firmware',
     autoSleep: 'Auto sleep', autoSleepEnabled: 'Auto sleep', autoSleepSub: 'Sleeps the machine after inactivity',
     autoSleepTimeout: 'Sleep after',

@@ -94,6 +94,23 @@ async function pickWaterUnit() {
   if (v != null) saveSkinSetting('waterUnit', v);
 }
 const waterUnitLabel = () => waterUnitOpts.find(([value]) => value === skinSettings.waterUnit)?.[1] ?? '';
+
+// -1 is the DE1's "not set" sentinel — the chooser only ever offers 120/230,
+// so an existing -1 just shows as unset until the user picks one.
+const heaterVoltageOpts = [[120, '120V'], [230, '230V']];
+async function pickHeaterVoltage() {
+  const v = await openChooser({ title: t('machineSettings.heaterVoltage'), options: heaterVoltageOpts, current: advancedSettings.heaterVoltage });
+  if (v != null) saveAdvancedSetting('heaterVoltage', Number(v));
+}
+const heaterVoltageLabel = () => heaterVoltageOpts.find(([value]) => value === advancedSettings.heaterVoltage)?.[1] ?? '—';
+
+// 0 force off · 1 force on · 2 auto — the DE1's optional auto-refill kit.
+const refillKitOpts = [[0, t('machineSettings.refillKitOff')], [1, t('machineSettings.refillKitOn')], [2, t('machineSettings.refillKitAuto')]];
+async function pickRefillKit() {
+  const v = await openChooser({ title: t('machineSettings.refillKit'), options: refillKitOpts, current: advancedSettings.refillKitSetting ?? 2 });
+  if (v != null) saveAdvancedSetting('refillKitSetting', Number(v));
+}
+const refillKitLabel = () => refillKitOpts.find(([value]) => value === (advancedSettings.refillKitSetting ?? 2))?.[1] ?? '';
 </script>
 
 <template>
@@ -140,6 +157,10 @@ const waterUnitLabel = () => waterUnitOpts.find(([value]) => value === skinSetti
         <button class="setting-row as-btn" @click="pickWaterUnit">
           <span class="sr-name">{{ t('machineSettings.waterUnit') }}</span>
           <span class="sr-value">{{ waterUnitLabel() }}<span class="sr-chev">›</span></span>
+        </button>
+        <button class="setting-row as-btn" @click="pickRefillKit">
+          <span class="sr-name">{{ t('machineSettings.refillKit') }}</span>
+          <span class="sr-value">{{ refillKitLabel() }}<span class="sr-chev">›</span></span>
         </button>
 
         <span class="setting-group-label">{{ t('machineSettings.steamFlush') }}</span>
@@ -244,6 +265,10 @@ const waterUnitLabel = () => waterUnitOpts.find(([value]) => value === skinSetti
           @change="saveAdvancedSetting('heaterPh2Timeout', $event)"
           @edit="editHeaterFlow('heaterPh2Timeout', t('machineSettings.heaterPh2Timeout'))"
         />
+        <button class="setting-row as-btn" @click="pickHeaterVoltage">
+          <span class="sr-name">{{ t('machineSettings.heaterVoltage') }}</span>
+          <span class="sr-value">{{ heaterVoltageLabel() }}<span class="sr-chev">›</span></span>
+        </button>
       </template>
     </div>
   </div>

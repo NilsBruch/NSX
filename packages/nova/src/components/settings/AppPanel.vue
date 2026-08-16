@@ -54,6 +54,18 @@ async function pickScalePowerMode() {
   const v = await openChooser({ title: t('machineSettings.scalePower'), options: scalePowerOpts, current: appSettings.scalePowerMode });
   if (v != null) saveAppSetting('scalePowerMode', v);
 }
+
+// '' (not null) means "None" here too — same reasoning as scalePowerOpts above.
+const machineOpts = computed(() => [['', noneLabel()], ...orderedDevices.value.filter((d) => d.type !== 'scale').map((d) => [d.id, d.name ?? d.id])]);
+const scaleOpts = computed(() => [['', noneLabel()], ...orderedDevices.value.filter((d) => d.type === 'scale').map((d) => [d.id, d.name ?? d.id])]);
+async function pickPreferredMachine() {
+  const v = await openChooser({ title: t('machineSettings.preferredMachine'), options: machineOpts.value, current: appSettings.preferredMachineId || '' });
+  if (v != null) saveAppSetting('preferredMachineId', v || null);
+}
+async function pickPreferredScale() {
+  const v = await openChooser({ title: t('machineSettings.preferredScale'), options: scaleOpts.value, current: appSettings.preferredScaleId || '' });
+  if (v != null) saveAppSetting('preferredScaleId', v || null);
+}
 async function pickChargingMode() {
   const v = await openChooser({ title: t('appSettings.chargingMode'), options: chargingOpts, current: appSettings.chargingMode });
   if (v != null) saveAppSetting('chargingMode', v);
@@ -95,6 +107,14 @@ const showVisualizer = ref(false);
           <span class="sr-sub">{{ d.type === 'scale' ? t('machineSettings.scale') : t('machineSettings.machine') }}</span>
         </span>
         <span class="dev-status" :class="{ on: d.connected }">{{ d.connected ? t('settingsPage.connected') : t('settingsPage.disconnected') }}</span>
+      </button>
+      <button class="setting-row as-btn" @click="pickPreferredMachine">
+        <span class="sr-main"><span class="sr-name">{{ t('machineSettings.preferredMachine') }}</span><span class="sr-sub">{{ t('machineSettings.autoConnect') }}</span></span>
+        <span class="sr-value">{{ optLabel(machineOpts, appSettings.preferredMachineId) }}<span class="sr-chev">›</span></span>
+      </button>
+      <button class="setting-row as-btn" @click="pickPreferredScale">
+        <span class="sr-main"><span class="sr-name">{{ t('machineSettings.preferredScale') }}</span><span class="sr-sub">{{ t('machineSettings.autoConnect') }}</span></span>
+        <span class="sr-value">{{ optLabel(scaleOpts, appSettings.preferredScaleId) }}<span class="sr-chev">›</span></span>
       </button>
       <button class="setting-row as-btn" @click="pickScalePowerMode">
         <span class="sr-main"><span class="sr-name">{{ t('machineSettings.scalePower') }}</span><span class="sr-sub">{{ t('machineSettings.spSub') }}</span></span>

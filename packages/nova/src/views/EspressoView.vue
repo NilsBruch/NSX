@@ -14,6 +14,7 @@ import ProfileEditor from '../components/settings/ProfileEditor.vue';
 import StarRating from '../components/StarRating.vue';
 
 const { t } = useI18n();
+const { NSXCore } = window;
 
 const ICONS = {
   thermo: '<path d="M10 4a2 2 0 0 1 4 0v9a4.5 4.5 0 1 1-4 0V4z"/><path d="M12 9v6"/>',
@@ -89,6 +90,13 @@ async function onProfileSelected(profile) {
   // Copy, not reference: the recipe now owns this profile and can diverge
   // from the library one it was picked from (see useRecipe.js's recipe.profile).
   recipe.profile = cloneProfile(profile.profile);
+  // Rebaseline the temperature dial to the NEW profile's own — same resolution
+  // order as composeNewRecipe/applyEditedProfile (groupTemp, else first frame's
+  // temperature, else tank_temperature). Without this the dial kept showing
+  // whatever the PREVIOUS profile was brewed at, and buildGatewayPayload shifts
+  // every frame by (recipe.groupTemp - resolveProfileTemp(profile)) — so a stale
+  // dial would silently re-shift the new profile's temperatures on push too.
+  recipe.groupTemp = NSXCore.resolveProfileTemp(profile.profile) ?? recipe.groupTemp;
   await pushRecipe();
   showProfilePicker.value = false;
 }
