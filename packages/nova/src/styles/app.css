@@ -613,6 +613,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .pe-body .pick-list { width: 25%; min-width: 158px; }
 /* Halve the gap between the step list and the card pane (was the picker's 16px). */
 .pe-body { gap: 8px; }
+.picking-banner {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 2px 2px 0; padding: 10px 12px; border-radius: 10px;
+  background: #242c37; font-size: var(--fs-sm); color: var(--text);
+}
+.picking-banner .btn { padding: 6px 12px; font-size: var(--fs-xs); }
 .pick-list .seg { flex: none; margin: 2px 2px 0; }
 /* Slightly taller than the generic .seg (Diary's Browse/Full toggle) — scoped
    here only, via the extra padding on both the pill and its sliding thumb. */

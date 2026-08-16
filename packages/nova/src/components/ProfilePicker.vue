@@ -11,7 +11,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { profiles, profilesAll, refreshProfiles, refreshProfilesAll } from '../composables/useCore.js';
 import { frames, frameDetailText, frameName } from '../composables/useProfileDisplay.js';
-import { openConfirm } from '../composables/useModals.js';
+import { openConfirm, openChooser } from '../composables/useModals.js';
 import ProfileEditor from './settings/ProfileEditor.vue';
 
 const props = defineProps({
@@ -207,36 +207,79 @@ function confirmSelect() {
 // ── Library create/edit (mode="manage" only) ────────────────────────────
 const showEditor = ref(false);
 const editingRecord = ref(null); // null = new profile
+// Set only while editingRecord holds a synthetic "seeded from X" stand-in
+// (see startFromPreset) — the id of the real record that seeded it, tracked
+// separately from editingRecord.id so onEditorSaved can tell "editing record
+// X in place" apart from "starting a NEW record that happens to look like X".
+const presetSourceId = ref(null);
 
+// Tapping "+ New" no longer jumps straight into a blank editor — it asks
+// blank vs. from an existing profile first (any Decent default can only ever
+// be copied, never edited in place; this makes copying a REGULAR way to start
+// a new profile too, not something that only implicitly happens by hitting
+// Edit on a default — see openEditProfile's removal below).
+async function newProfileChoice() {
+  const v = await openChooser({
+    title: t('profilePicker.newProfileChoiceTitle'),
+    options: [['blank', t('profilePicker.newBlank')], ['preset', t('profilePicker.fromPreset')]],
+    current: 'blank',
+  });
+  if (v === 'blank') openNewProfile();
+  else if (v === 'preset') pickingSource.value = true;
+}
 function openNewProfile() {
   editingRecord.value = null;
+  presetSourceId.value = null;
+  showEditor.value = true;
+}
+// "From preset" step 2: browsing the list already IS profile selection here,
+// so reuse it — pickingSource just swaps the detail pane's action row (see
+// template) to a single "Use as starting point" button instead of the normal
+// Delete/Hide/Edit ones.
+const pickingSource = ref(false);
+function useSelectedAsPreset() {
+  const record = selected.value;
+  if (!record) return;
+  presetSourceId.value = record.id;
+  // Author is reset — the new profile is ours, not the source's — but title/
+  // notes/steps/limits carry over as the actual starting point. isDefault:
+  // false here is just "this synthetic record isn't a real default row";
+  // onEditorSaved decides the save path from presetSourceId, not this flag.
+  editingRecord.value = { id: null, isDefault: false, profile: { ...record.profile, author: '' } };
+  pickingSource.value = false;
   showEditor.value = true;
 }
 function openEditProfile() {
-  if (!selected.value) return;
+  // Decent defaults can't be edited in place at all (see the save-branch
+  // comment below) — the template hides this button for them, but guard here
+  // too so a stray call can't slip a default into the PUT/execution-change path.
+  if (!selected.value || selected.value.isDefault) return;
   editingRecord.value = selected.value;
+  presetSourceId.value = null;
   showEditor.value = true;
 }
 
 /**
- * Three save branches (see the profile-editor plan) — the bridge derives
+ * Four save branches (see the profile-editor plan) — the bridge derives
  * profile ids from step content, which is why an execution change can't PUT:
- *   - new, or a Decent default being copied -> always create. A Decent
- *     original is left visible (no hide-the-original step, unlike NSX).
+ *   - seeded from a preset (presetSourceId set) -> always create, linked to
+ *     that preset via parentId. Covers both "New -> From preset" and the old
+ *     "Edit a Decent default" case, which is now just that flow's shortcut.
+ *   - new, blank -> always create, no parent.
  *   - user-owned + execution changed -> create the new version, retire the old.
  *   - user-owned + metadata only (title/author/notes) -> PUT in place, same id.
  */
 async function onEditorSaved({ profile: built, originalProfile }) {
   const record = editingRecord.value;
-  const isDefault = Boolean(record?.isDefault);
+  const fromPreset = presetSourceId.value != null;
   const originalId = record?.id ?? null;
 
   try {
     let saved;
-    if (!record || isDefault) {
+    if (fromPreset || !record) {
       saved = await NSXApi.createProfile({
         profile: built,
-        parentId: isDefault ? originalId : null,
+        parentId: fromPreset ? presetSourceId.value : null,
         metadata: { source: 'user' },
       });
     } else if (NSXCore.profileHasExecutionChanges(built, originalProfile)) {
@@ -264,6 +307,7 @@ async function onEditorSaved({ profile: built, originalProfile }) {
   } finally {
     showEditor.value = false;
     editingRecord.value = null;
+    presetSourceId.value = null;
   }
 }
 </script>
@@ -284,7 +328,7 @@ async function onEditorSaved({ profile: built, originalProfile }) {
         <svg v-if="showHidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
         <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" /><path d="M10.6 5.2A10.6 10.6 0 0 1 12 5c6 0 10 7 10 7a17.3 17.3 0 0 1-3.2 4.1M6.5 6.6C3.6 8.4 2 12 2 12s4 7 10 7c1.4 0 2.7-.4 3.9-1" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
       </button>
-      <button v-if="mode === 'manage'" class="sort-btn lg" @click="openNewProfile">
+      <button v-if="mode === 'manage'" class="sort-btn lg" @click="newProfileChoice">
         <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
         {{ t('profilePicker.newProfile') }}
       </button>
@@ -292,6 +336,10 @@ async function onEditorSaved({ profile: built, originalProfile }) {
 
     <div class="pick-body">
       <div class="pick-list">
+        <div v-if="pickingSource" class="picking-banner">
+          <span>{{ t('profilePicker.pickingSourceHint') }}</span>
+          <button class="btn" @click="pickingSource = false">{{ t('common.cancel') }}</button>
+        </div>
         <div class="seg seg-tall" :data-pos="activeGroup === 'user' ? 1 : 0">
           <span class="seg-thumb"></span>
           <button :class="{ on: activeGroup === 'decent' }" @click="activeGroup = 'decent'">{{ t('profilePicker.decentProfiles') }}</button>
@@ -376,12 +424,18 @@ async function onEditorSaved({ profile: built, originalProfile }) {
         </div>
 
         <div class="pd-actions">
-          <template v-if="mode === 'manage'">
+          <template v-if="mode === 'manage' && pickingSource">
+            <button class="btn accent" @click="useSelectedAsPreset">{{ t('profilePicker.useAsStart') }}</button>
+          </template>
+          <template v-else-if="mode === 'manage'">
             <button v-if="isUserOwned(selected)" class="btn danger" @click="deleteSelected">{{ t('common.delete') }}</button>
             <button class="btn" @click="toggleSelectedVisibility">
               {{ selected.visibility === 'hidden' ? t('profilePicker.unhide') : t('profilePicker.hide') }}
             </button>
-            <button class="btn accent" @click="openEditProfile">{{ t('common.edit') }}</button>
+            <!-- Decent defaults can't be edited in place at all (see
+                 onEditorSaved) — "New -> From preset" is how you start a new
+                 profile based on one now, not this button. -->
+            <button v-if="isUserOwned(selected)" class="btn accent" @click="openEditProfile">{{ t('common.edit') }}</button>
           </template>
           <button v-if="mode === 'pick'" class="btn" @click="confirmSelect">{{ t('profilePicker.select') }}</button>
         </div>

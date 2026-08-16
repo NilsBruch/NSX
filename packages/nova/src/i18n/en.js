@@ -152,6 +152,11 @@ export default {
     newProfile: 'New',
     deleteConfirmTitle: 'Delete this profile?',
     allTypes: 'All',
+    newProfileChoiceTitle: 'New profile',
+    newBlank: 'Blank',
+    fromPreset: 'From preset',
+    pickingSourceHint: 'Select a profile to start from',
+    useAsStart: 'Use as starting point',
   },
   profileEditor: {
     tabSteps: 'Steps',
