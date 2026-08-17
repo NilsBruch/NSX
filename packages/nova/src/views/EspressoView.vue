@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { singleGrinder, grinders, formatGrinderLabel } from '../composables/useCore.js';
+import { grinders, formatGrinderLabel, recipeIdentityParts } from '../composables/useCore.js';
 import { recipe, roastAge, pushRecipe, setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, cloneProfile, applyEditedProfile } from '../composables/useRecipe.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { openNumberPad, openRating, openChooser, openConfirm } from '../composables/useModals.js';
@@ -42,22 +42,9 @@ const hasRecipe = computed(() => {
   return !!(roaster && roaster !== '—' && name && name !== '—');
 });
 
-// The combined identity title: FOUR dot-separated parts (roaster, bean,
-// grinder, profile), with any unset ones dropped rather than rendered as "—",
-// and the grinder omitted entirely when there's only one (it's implicit; see
-// useCore's singleGrinder). Looked up by id, falling back to a model-name
-// match for legacy recipes saved before grinderId existed.
-const titleGrinderLabel = computed(() => {
-  if (singleGrinder.value) return null;
-  const model = recipe.grinderModel;
-  if (!model || model === '—') return null;
-  const g = grinders.value.find((x) => x.id === recipe.grinderId) ?? grinders.value.find((x) => x.model === model);
-  return g ? formatGrinderLabel(g) : model;
-});
-const titleParts = computed(() =>
-  [recipe.coffeeRoaster, recipe.coffeeName, titleGrinderLabel.value, recipe.profileTitle]
-    .filter((v) => v && v !== '—')
-);
+// The combined identity title — shared with the Diary's recipe rows so the two
+// render the same recipe identically (see useCore's recipeIdentityParts).
+const titleParts = computed(() => recipeIdentityParts(recipe));
 
 function fmtDate(iso) {
   const d = new Date(iso);
@@ -74,8 +61,7 @@ const showProfilePicker = ref(false);
 const showRoastPicker = ref(false);
 const showProfileEditor = ref(false);
 const showBeanChooser = ref(false);
-// Jumps straight to bean->profile creation, skipping the (empty) library list —
-// same entry point the Diary's "+" uses (RecipePicker start-step="bean").
+// The bean->profile creation wizard — the same entry point the Diary's "+" uses.
 const showRecipeCreator = ref(false);
 
 // Bean and grinder tiles' own pickers — see useRecipe.js's setRecipeBean/
@@ -381,7 +367,7 @@ async function openRateRecipe() {
     />
     <RecipePicker
       v-if="showRecipeCreator"
-      start-step="bean"
+
       @back="showRecipeCreator = false"
       @created="showRecipeCreator = false"
     />

@@ -9,14 +9,13 @@
  *     splits into three separately-tappable bubbles — that continuity is
  *     what makes "tap the title, then tap the part you want" legible;
  *   - no Back button — tapping the backdrop closes it;
- *   - no "New recipe" button — recipes are created from the Diary.
- *
- * Recipe loading/sorting/search/delete all behave exactly as in
- * RecipePicker.vue; only the chrome differs.
+ *   - no create/edit/delete — this is only for switching to another recipe.
+ *     Managing the library (deleting, reviewing shots per recipe) is the
+ *     Diary's Recipes view; creating one is the Diary's "+".
  */
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, recipes, refreshRecipes, selectRecipe, deleteRecipe } from '../composables/useRecipe.js';
+import { recipe, recipes, refreshRecipes, selectRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots, grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
 import { openTextField } from '../composables/useModals.js';
 import StarRating from './StarRating.vue';
@@ -32,7 +31,6 @@ onMounted(() => {
 });
 
 const query = ref('');
-const editing = ref(false);
 const sortMode = ref('use');
 
 const isCurrent = (entry) => entry.id != null && entry.id === recipe.id;
@@ -74,14 +72,8 @@ const num = (v, digits = 1) => (Number.isFinite(Number(v)) ? Number(v).toFixed(d
 const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight) || 0, Number(entry.targetYield) || 0);
 
 async function pick(entry) {
-  if (editing.value) return; // in edit mode a tap must not also load the recipe
   await selectRecipe(entry);
   emit('close');
-}
-
-async function remove(entry, event) {
-  event.stopPropagation();
-  await deleteRecipe(entry.id);
 }
 </script>
 
@@ -163,14 +155,6 @@ async function remove(entry, event) {
             <span class="rp-label">{{ t('recipePicker.lProfile') }}</span>
             <span class="rp-chip">{{ entry.profileTitle }}</span>
           </div>
-          <button
-            v-if="editing"
-            class="rp-del"
-            :aria-label="t('common.delete')"
-            @click="remove(entry, $event)"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
-          </button>
         </div>
 
         <div v-if="recipes.length && !visibleRecipes.length" class="rp-empty">{{ t('diary.noResults') }}</div>
@@ -186,7 +170,6 @@ async function remove(entry, event) {
           {{ t('diary.filteredBy', { q: query }) }}<span class="x">×</span>
         </button>
         <span class="spacer" style="flex: 1"></span>
-        <button class="sort-btn" @click="editing = !editing">{{ editing ? t('common.done') : t('common.edit') }}</button>
         <button class="rbtn" :aria-label="t('recipePicker.search')" @click="openSearch">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
         </button>

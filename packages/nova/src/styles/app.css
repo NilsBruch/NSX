@@ -1325,6 +1325,13 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   background: var(--accent); border-radius: 9px; transition: transform 0.2s ease;
 }
 .seg[data-pos="1"] .seg-thumb { transform: translateX(100%); }
+/* Three-up variant (Diary: Browse / History / Recipes). The base thumb is
+   half-width and only knows data-pos 0..1; a third of the padded inner width
+   is (100% - 8px)/3, and the narrower min-width keeps the row from crowding
+   the sort/search controls beside it. */
+.seg.seg-3 .seg-thumb { width: calc(33.333% - 2.667px); }
+.seg.seg-3[data-pos="2"] .seg-thumb { transform: translateX(200%); }
+.seg.seg-3 button { min-width: 84px; }
 .seg button {
   position: relative; z-index: 1; flex: 1; min-width: 120px;
   background: none; border: none; font-family: inherit;
@@ -1358,6 +1365,29 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .bean-row .row-edit svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .bean-row .row-edit .chev { font-size: var(--fs-md); transition: transform 0.15s ease; }
 .bean-row .row-edit .chev.open { transform: rotate(90deg); }
+.bean-row .row-edit.danger { color: var(--alert); }
+/* Diary recipe rows: the identity line reuses the Coffee title's dot
+   separators (the row itself is already uppercase + tracked, so only the dots
+   need styling here). min-width:0 on both the button and the column is what
+   actually lets a long identity ellipsize instead of pushing the stars and
+   Load button off the row — a flex item defaults to min-width:auto.
+   An explicit class rather than :has(.recipe-row-meta): :has() is Chromium
+   105+, and this tablet's WebView is ~96 — the same cutoff that rules out
+   container queries at the top of this file. */
+.bean-row .row-main.recipe-row-main { justify-content: flex-start; min-width: 0; }
+.recipe-row-meta { flex: 1; min-width: 0; }
+/* Four dot-separated parts is a lot of text for one line, so this opts out of
+   the row's uppercase + wide tracking and drops a size: mixed case is both
+   narrower and easier to read at length. (The Coffee page's title bar keeps
+   the uppercase treatment — one line of it, centred, reads as a title; a
+   column of them in a list just reads as shouting.) Still a rung above the
+   --fs-xs facts line below it, so the hierarchy holds. */
+.recipe-row-id {
+  font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.02em; text-transform: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.recipe-row-id .dot { color: var(--faint); padding: 0 0.4em; }
+.recipe-row-meta .rsub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Explicit "load this recipe" action — tapping the row itself only expands the
    shot list now, so loading is this button, not a whole-row tap. */
 .bean-row .load-recipe-btn {

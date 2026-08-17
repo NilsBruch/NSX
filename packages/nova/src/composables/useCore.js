@@ -128,6 +128,27 @@ export function formatGrinderLabel(g) {
   return g?.burrs ? `${model} (${g.burrs})` : model;
 }
 
+/**
+ * A recipe's identity as dot-separated parts: roaster, bean, grinder, profile.
+ * Shared by the Coffee page's title bar and the Diary's recipe rows so the two
+ * can't drift — both drop parts that were never set (rather than printing "—")
+ * and omit the grinder entirely when only one is configured, since it's
+ * implicit then. Looked up by id, falling back to a model-name match for
+ * legacy recipes saved before grinderId existed.
+ */
+export function recipeIdentityParts(recipe) {
+  let grinderLabel = null;
+  if (!singleGrinder.value) {
+    const model = recipe?.grinderModel;
+    if (model && model !== '—') {
+      const g = grinders.value.find((x) => x.id === recipe.grinderId) ?? grinders.value.find((x) => x.model === model);
+      grinderLabel = g ? formatGrinderLabel(g) : model;
+    }
+  }
+  return [recipe?.coffeeRoaster, recipe?.coffeeName, grinderLabel, recipe?.profileTitle]
+    .filter((v) => v && v !== '—');
+}
+
 NSXCore.on('machineState', ({ state, substate }) => {
   const prev = machine.state;
   machine.state = state;

@@ -98,8 +98,6 @@ export default {
     createFirstRecipe: 'Create your first recipe',
   },
   recipePicker: {
-    title: 'Recipes',
-    newRecipe: 'New recipe',
     sortUse: 'By use',
     sortRating: 'By rating',
     lGrinder: 'Grinder',
@@ -115,10 +113,6 @@ export default {
     noRoaster: 'No roaster',
     noRecipesYet: 'No recipes yet — brew something to start one',
     noBeansYet: 'No beans yet — add one in the Diary first',
-    newRecipeChoiceTitle: 'New recipe',
-    newBlank: 'New',
-    fromExisting: 'From existing recipe',
-    pickingSourceHint: 'Select a recipe to start from',
   },
   profilePicker: {
     pickTitle: 'Choose profile',
@@ -288,9 +282,18 @@ export default {
     sortOldest: 'oldest first',
     sortNewest: 'newest first',
     sortAlpha: 'A–Z',
+    // Recipes view only — see RECIPE_SORTS in useDiary.js.
+    sortUse: 'by use',
+    sortRating: 'by rating',
     back: 'Back',
     browse: 'Browse',
-    fullHistory: 'Full history',
+    fullHistory: 'History',
+    recipes: 'Recipes',
+    // vue-i18n plural forms (zero | one | other) — selected by the third
+    // argument at the call site: t('diary.shotCount', { n }, n).
+    shotCount: 'no shots | 1 shot | {n} shots',
+    noRecipesYet: 'No recipes yet',
+    deleteRecipeConfirm: 'Delete this recipe?',
     add: 'Add',
     addRecipe: 'New recipe',
     search: 'Search',

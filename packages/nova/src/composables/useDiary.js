@@ -10,7 +10,7 @@
  */
 import { computed, reactive, ref, watch } from 'vue';
 import { beans, shots, shotsTotal, loadShots, loadMoreShots } from './useCore.js';
-import { loadOrCreateRecipeForBeanProfile } from './useRecipe.js';
+import { recipes, refreshRecipes, loadOrCreateRecipeForBeanProfile } from './useRecipe.js';
 
 const { NSXApi, NSXCore } = window;
 
@@ -19,9 +19,11 @@ export const diaryState = reactive({
   roasterName: null,
   bean: null,
   sort: 'newest', // 'oldest' | 'newest' | 'alpha' (shots: no 'alpha')
-  view: 'browse', // 'browse' | 'full' (flat, all shots)
+  view: 'browse', // 'browse' | 'full' (flat, all shots) | 'recipes' (the library)
   query: '',
   expandedProfile: null, // which profile group (by title) is expanded, at level 2
+  expandedRecipe: null, // which recipe (by id) is expanded, in the recipes view
+  editingRecipes: false, // recipes view: reveal the per-row delete
   showArchived: false, // include archived beans in the browse view
 });
 
@@ -187,6 +189,50 @@ export function toggleProfileExpanded(title) {
 }
 
 /**
+ * The recipes view: the whole recipe LIBRARY as a flat list, each row carrying
+ * the shots actually brewed with it.
+ *
+ * Sourced from `recipes` (the library) rather than from shots the way
+ * profileGroupsInBean is — that difference is the point of this view. A recipe
+ * that has never been brewed still belongs in a library you manage, and
+ * `rating` is a property of the recipe itself, so it only exists on this side.
+ *
+ * NSXCore.findShotsForWorkflow matches on the shared workflow key (roaster /
+ * bean / grinder / profile) and returns newest-first, so the expanded shot
+ * list needs no ordering of its own.
+ */
+export const recipeRows = computed(() => {
+  const q = diaryState.query.trim().toLowerCase();
+  // Most-recently-brewed first is the base order, and stays the tiebreak under
+  // 'rating' so equally-rated recipes still lead with the one you actually use.
+  let list = NSXCore.sortRecipesByLastUsed(recipes.value, shots.value);
+  if (q) {
+    list = list.filter((r) =>
+      [r.coffeeRoaster, r.coffeeName, r.profileTitle, r.grinderModel].some((v) => matches(v, q))
+    );
+  }
+  if (diaryState.sort === 'rating') {
+    const pos = new Map(list.map((r, i) => [r, i]));
+    list = list.slice().sort((a, b) =>
+      ((Number(b.rating) || 0) - (Number(a.rating) || 0)) || (pos.get(a) - pos.get(b))
+    );
+  }
+  return list.map((recipe) => ({ recipe, shots: NSXCore.findShotsForWorkflow(recipe, shots.value) }));
+});
+
+// The recipes view sorts by its own two axes, not the shared date/A-Z set:
+// a recipe has no meaningful "created" date, and its useful orderings are how
+// often you reach for it and how well it scored.
+const RECIPE_SORTS = ['use', 'rating'];
+
+export function toggleRecipeExpanded(id) {
+  diaryState.expandedRecipe = diaryState.expandedRecipe === id ? null : id;
+}
+export function toggleEditingRecipes() {
+  diaryState.editingRecipes = !diaryState.editingRecipes;
+}
+
+/**
  * Per-shot ACTUAL metrics (measured output + brew time + real ratio), keyed by
  * shot id. The list endpoint's lightweight shot carries no measurements, so —
  * exactly like NSX's _loadHistoryShotDurations — these come from fetching the
@@ -276,8 +322,12 @@ watch(
   (q) => {
     clearTimeout(_queryTimer);
     _queryTimer = setTimeout(() => {
+      // The recipes view filters the in-memory library client-side, so it
+      // deliberately falls through both branches. The `view === 'browse'`
+      // guard matters: level/bean survive a view switch, so without it typing
+      // here would re-query the last-browsed bean's shots.
       if (diaryState.view === 'full') loadShots(200, 0, q || '');
-      else if (diaryState.level === 2 && diaryState.bean) loadBeanShots(diaryState.bean, q || '');
+      else if (diaryState.view === 'browse' && diaryState.level === 2 && diaryState.bean) loadBeanShots(diaryState.bean, q || '');
     }, 250);
   }
 );
@@ -302,14 +352,28 @@ export function goBack() {
   diaryState.query = '';
 }
 export function cycleSort() {
-  const shotLevel = diaryState.view === 'full' || diaryState.level === 2;
-  const opts = shotLevel ? ['oldest', 'newest'] : ['oldest', 'newest', 'alpha'];
+  // `level` survives a view switch, so it only means anything while browsing —
+  // without that guard the recipes view would inherit a stale level 2.
+  const shotLevel = diaryState.view === 'full' || (diaryState.view === 'browse' && diaryState.level === 2);
+  const opts = diaryState.view === 'recipes' ? RECIPE_SORTS
+    : shotLevel ? ['oldest', 'newest']
+    : ['oldest', 'newest', 'alpha'];
   const i = opts.indexOf(diaryState.sort);
   diaryState.sort = opts[(i + 1) % opts.length];
 }
 export function setView(view) {
   diaryState.view = view;
   diaryState.query = '';
+  diaryState.expandedRecipe = null;
+  diaryState.editingRecipes = false; // never leave a destructive mode armed across views
+  // `sort` is shared, but the recipes view's vocabulary doesn't overlap the
+  // others' at all — so translate on the way in and back out, or a stale value
+  // would leave the sort button labelled for a mode this view can't apply.
+  if (view === 'recipes') {
+    if (!RECIPE_SORTS.includes(diaryState.sort)) diaryState.sort = 'use';
+  } else if (RECIPE_SORTS.includes(diaryState.sort)) {
+    diaryState.sort = 'newest';
+  }
   if (view === 'full' && diaryState.sort === 'alpha') diaryState.sort = 'newest';
 }
 export function toggleArchived() {
@@ -323,7 +387,9 @@ export function toggleArchived() {
  * its own load, like every other lazily-opened panel already does.
  */
 export async function ensureDiaryLoaded() {
-  const [shotsResult] = await Promise.allSettled([loadShots(200), loadBatchMap()]);
+  // refreshRecipes feeds the recipes view — the library is a separate store
+  // read from shots/beans, and nothing else on this page loads it.
+  const [shotsResult] = await Promise.allSettled([loadShots(200), loadBatchMap(), refreshRecipes()]);
   // A failed fetch previously left the list silently empty with no signal at
   // all — surface it the same way every other load failure in Nova does.
   if (shotsResult.status === 'rejected') {

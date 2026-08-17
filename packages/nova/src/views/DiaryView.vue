@@ -3,16 +3,20 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import {
-  diaryState, roasterGroups, beansInRoaster, shotsInBean, fullHistoryShots,
-  enterRoaster, enterBean, goBack, cycleSort, setView, toggleArchived, ensureDiaryLoaded, shotCountForBean,
+  diaryState, roasterGroups, beansInRoaster, fullHistoryShots,
+  enterRoaster, enterBean, goBack, cycleSort, setView, toggleArchived, ensureDiaryLoaded,
   profileGroupsInBean, toggleProfileExpanded, openRecipeForBeanProfile,
-  shotMetrics, ensureShotMetrics, hasMoreShots, loadMoreFullHistory,
+  ensureShotMetrics, hasMoreShots, loadMoreFullHistory,
+  recipeRows, toggleRecipeExpanded, toggleEditingRecipes,
 } from '../composables/useDiary.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
-import { openTextField } from '../composables/useModals.js';
-import { singleGrinder } from '../composables/useCore.js';
+import { openTextField, openConfirm } from '../composables/useModals.js';
+import { recipeIdentityParts } from '../composables/useCore.js';
+import { selectRecipe, deleteRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
 import RecipePicker from '../components/RecipePicker.vue';
+import DiaryShotRow from '../components/DiaryShotRow.vue';
+import StarRating from '../components/StarRating.vue';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -33,7 +37,6 @@ async function goToRecipe(group) {
 // "+" creates a RECIPE (choose/add bean -> choose profile), not a bare bean —
 // a bean on its own can't be brewed, so the recipe flow is the useful thing to
 // start from here. Adding a bean is still reachable: it's step 1 of that flow.
-// RecipePicker owns both steps already; entering at 'bean' just skips its library list.
 const showRecipeCreator = ref(false);
 function closeRecipeCreator() { showRecipeCreator.value = false; }
 async function onRecipeCreated() {
@@ -42,6 +45,36 @@ async function onRecipeCreated() {
 }
 
 onMounted(ensureDiaryLoaded);
+
+// Recipes view: load it and go brew — same destination as the Browse view's
+// own load button, but straight from the library entry rather than rebuilding
+// a recipe out of a shot's workflow.
+async function loadRecipeRow(recipe) {
+  await selectRecipe(recipe);
+  router.push({ name: 'espresso' });
+}
+// The row's second line: what the recipe actually brews. calcRatio is core's,
+// the same one the recipe cards use, so "1:2.0" means the same thing here.
+function recipeFacts(r) {
+  const dose = Number(r.targetDoseWeight) || 0;
+  const yield_ = Number(r.targetYield) || 0;
+  const ratio = window.NSXCore.calcRatio(dose, yield_);
+  return [
+    `${dose.toFixed(1)} → ${yield_.toFixed(1)} g (${ratio})`,
+    `${t('espresso.grindSize')} ${r.grinderSetting}`,
+    `${Number(r.groupTemp) || 0} °C`,
+  ].join(' · ');
+}
+
+async function removeRecipe(recipe) {
+  const ok = await openConfirm({
+    title: t('diary.deleteRecipeConfirm'),
+    message: `${recipe.coffeeRoaster} – ${recipe.coffeeName}`,
+    danger: true,
+    confirmLabel: t('common.delete'),
+  });
+  if (ok) await deleteRecipe(recipe.id);
+}
 
 const sortLabel = computed(() => t(`diary.sort${diaryState.sort[0].toUpperCase()}${diaryState.sort.slice(1)}`));
 const searchPlaceholder = computed(() => {
@@ -71,6 +104,7 @@ async function onLoadMore() {
 
 const crumb = computed(() => {
   if (diaryState.view === 'full') return t('diary.fullHistory');
+  if (diaryState.view === 'recipes') return t('diary.recipes');
   if (diaryState.level === 0) return t('diary.roasters');
   if (diaryState.level === 1) return diaryState.roasterName;
   return `${diaryState.roasterName} › ${diaryState.bean?.name ?? ''}`;
@@ -85,34 +119,11 @@ function openEditBean(bean) {
 }
 function closeEditor() { showEditor.value = false; }
 
-// enjoyment is 0-100 in the real API (5 stars x 20), not 1-5 (see
-// enjoymentToStars). Rendered as 5 individual SVG stars rather than a single
-// '★★★☆☆' text string — a hollow ☆ glyph colored the same as a filled ★ read
-// as barely distinguishable at this size; the SVG's empty state gets its own
-// stroke so "not rated" is unambiguous even glanced at from across the room.
-const starLevel = (shot) => window.NSXCore.enjoymentToStars(shot?.annotations?.enjoyment);
-
-// The lightweight list-endpoint shot (what fullHistoryShots/shotsInBean hold)
-// carries workflow.context/profile but not measurements — mapShotToWorkflow
-// (core) is exactly the fields derivable from that: roaster, bean, dose,
-// grind, profile, and a ready-formatted temp/ratio. Brew time is deliberately
-// NOT shown here: it only exists in a shot's full measurements, and fetching
-// those per row for a 200-shot list isn't worth the request storm — it's
-// already shown once a shot is opened (LiveShotOverlay's history screen).
-const factsFor = (shot) => window.NSXCore.mapShotToWorkflow(shot);
-
-// Actual dose reads an annotation (target fallback) off the LIGHT shot — no
-// fetch needed, so it shows immediately. Actual yield/ratio/duration only exist
-// in the full shot record (fetched lazily + cached — see ensureShotMetrics),
-// so those render once it arrives.
-const actualDose = (shot) => window.NSXCore.resolveActualDose(shot);
-const metricsFor = (shot) => shotMetrics.get(shot.id) || null;
-function durationLabel(shot) {
-  const sec = metricsFor(shot)?.durationSec;
-  return Number.isFinite(sec) ? `${Math.round(sec)}s` : '';
-}
+// Rendering one shot (facts, measured metrics, stars) lives in DiaryShotRow —
+// all three lists here show the same row, so it has one implementation.
 // Fetch metrics for whatever shots are actually on screen: the flat full
-// history, or the shots under the one expanded profile group.
+// history, the shots under the one expanded profile group, or those under the
+// one expanded recipe.
 watch(
   () => (diaryState.view === 'full' ? fullHistoryShots.value : null),
   (list) => { if (list) ensureShotMetrics(list); },
@@ -126,13 +137,14 @@ watch(
     if (group) ensureShotMetrics(group.shots);
   }
 );
-
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`;
-}
+watch(
+  () => diaryState.expandedRecipe,
+  (id) => {
+    if (!id) return;
+    const row = recipeRows.value.find((r) => r.recipe.id === id);
+    if (row) ensureShotMetrics(row.shots);
+  }
+);
 </script>
 
 <template>
@@ -164,6 +176,12 @@ function fmtDate(iso) {
         <button v-if="diaryState.view === 'browse' && diaryState.level < 2" class="sort-btn" :class="{ accent: diaryState.showArchived }" @click="toggleArchived">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M5 5v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5M9 9v8M15 9v8" /></svg>{{ diaryState.showArchived ? t('diary.hideArchived') : t('diary.showAll') }}
         </button>
+        <!-- Deleting a recipe is behind an explicit mode, like the profile
+             library's: these rows are tapped constantly to expand/load, so a
+             permanently visible trash icon would be one mis-tap from data loss. -->
+        <button v-if="diaryState.view === 'recipes'" class="sort-btn" @click="toggleEditingRecipes">
+          {{ diaryState.editingRecipes ? t('common.done') : t('common.edit') }}
+        </button>
         <button class="sort-btn" @click="cycleSort">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>{{ sortLabel }}
         </button>
@@ -178,33 +196,60 @@ function fmtDate(iso) {
         class="list-row shot-row as-btn"
         @click="openHistoryAt(fullHistoryShots, shot)"
       >
-        <span class="shot-body">
-          <span class="shot-facts">
-            <span class="fact"><b>{{ fmtDate(shot.timestamp) }}</b></span>
-            <span class="fact">{{ factsFor(shot).coffeeRoaster }}</span>
-            <span class="fact">{{ factsFor(shot).coffeeName }}</span>
-          </span>
-          <span class="shot-meta">
-            <span class="rp-chip">{{ factsFor(shot).profileTitle }}</span>
-            <span>{{ factsFor(shot).profileTemp }}</span>
-            <span v-if="!singleGrinder"><b>{{ factsFor(shot).grinderModel }}</b></span>
-            <span>{{ t('espresso.grindSize') }} <b>{{ factsFor(shot).grinderSetting }}</b></span>
-            <span>
-              <b>{{ actualDose(shot)?.toFixed(1) ?? '—' }}</b>g<template v-if="metricsFor(shot)"> → <b>{{ metricsFor(shot).yield?.toFixed(1) ?? '—' }}</b>{{ metricsFor(shot).yieldUnit }}{{ metricsFor(shot).estimated ? '*' : '' }}
-              (<b>{{ metricsFor(shot).ratio }}</b>)<template v-if="durationLabel(shot)">{{ ' ' + t('diary.in') + ' ' }}<b>{{ durationLabel(shot) }}</b></template></template>
-            </span>
-          </span>
-        </span>
-        <span class="stars">
-          <svg v-for="n in 5" :key="n" viewBox="0 0 24 24" :class="{ on: n <= starLevel(shot) }" aria-hidden="true">
-            <path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z" />
-          </svg>
-        </span>
+        <DiaryShotRow :shot="shot" scope="history" />
       </button>
       <div v-if="!fullHistoryShots.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
       <button v-if="hasMoreShots" class="load-more" :disabled="loadingMore" @click="onLoadMore">
         {{ loadingMore ? t('diary.loading') : t('diary.loadMore', { n: 20 }) }}
       </button>
+    </div>
+
+    <!-- Recipes: the library itself, flat. Unlike Browse (which derives its
+         rows from shots), these come from the saved recipes — so one that has
+         never been brewed still appears, and the recipe's own rating shows. -->
+    <div v-else-if="diaryState.view === 'recipes'" class="list">
+      <template v-for="row in recipeRows" :key="row.recipe.id">
+        <div class="list-row bean-row">
+          <button class="row-main recipe-row-main" @click="toggleRecipeExpanded(row.recipe.id)">
+            <span class="rmeta recipe-row-meta">
+              <!-- Same dot-separated identity as the Coffee page's title bar
+                   (shared via recipeIdentityParts), so a recipe reads the same
+                   in the list as it does once loaded. -->
+              <span class="recipe-row-id">
+                <template v-for="(part, i) in recipeIdentityParts(row.recipe)" :key="i">
+                  <span v-if="i > 0" class="dot">•</span>{{ part }}
+                </template>
+              </span>
+              <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
+            </span>
+          </button>
+          <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="16" />
+          <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleRecipeExpanded(row.recipe.id)">
+            <span class="chev" :class="{ open: diaryState.expandedRecipe === row.recipe.id }">›</span>
+          </button>
+          <button
+            v-if="diaryState.editingRecipes"
+            class="row-edit danger"
+            :aria-label="t('common.delete')"
+            @click="removeRecipe(row.recipe)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
+          </button>
+          <button v-else class="load-recipe-btn" @click="loadRecipeRow(row.recipe)">{{ t('diary.loadRecipe') }}</button>
+        </div>
+        <div v-if="diaryState.expandedRecipe === row.recipe.id" class="sublist">
+          <button
+            v-for="shot in row.shots"
+            :key="shot.id"
+            class="list-row shot-row as-btn"
+            @click="openHistoryAt(row.shots, shot)"
+          >
+            <DiaryShotRow :shot="shot" scope="recipe" />
+          </button>
+          <div v-if="!row.shots.length" class="list-row"><span class="rsub">{{ t('diary.noShotsYet') }}</span></div>
+        </div>
+      </template>
+      <div v-if="!recipeRows.length" class="list-row"><span class="rsub">{{ t('diary.noRecipesYet') }}</span></div>
     </div>
 
     <!-- Browse: roasters -->
@@ -249,27 +294,7 @@ function fmtDate(iso) {
             class="list-row shot-row as-btn"
             @click="openHistoryAt(group.shots, shot)"
           >
-            <span class="shot-body">
-              <span class="shot-facts">
-                <span class="fact"><b>{{ fmtDate(shot.timestamp) }}</b></span>
-                <span class="fact"><b>{{ actualDose(shot)?.toFixed(1) ?? '—' }}</b>g<template v-if="metricsFor(shot)"> → <b>{{ metricsFor(shot).yield?.toFixed(1) ?? '—' }}</b>{{ metricsFor(shot).yieldUnit }}{{ metricsFor(shot).estimated ? '*' : '' }}</template></span>
-              </span>
-              <!-- Roaster/bean/profile are already the context you drilled into
-                   (this list is nested under one bean's one profile) — repeating
-                   them here would just be noise. Grinder, grind setting, temp and
-                   ratio are the facts that still vary shot to shot. -->
-              <span class="shot-meta">
-                <span>{{ factsFor(shot).profileTemp }}</span>
-                <span v-if="!singleGrinder"><b>{{ factsFor(shot).grinderModel }}</b></span>
-                <span>{{ t('espresso.grindSize') }} <b>{{ factsFor(shot).grinderSetting }}</b></span>
-                <span v-if="metricsFor(shot)">(<b>{{ metricsFor(shot).ratio }}</b>)<template v-if="durationLabel(shot)">{{ ' ' + t('diary.in') + ' ' }}<b>{{ durationLabel(shot) }}</b></template></span>
-              </span>
-            </span>
-            <span class="stars">
-              <svg v-for="n in 5" :key="n" viewBox="0 0 24 24" :class="{ on: n <= starLevel(shot) }" aria-hidden="true">
-                <path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z" />
-              </svg>
-            </span>
+            <DiaryShotRow :shot="shot" scope="profile" />
           </button>
         </div>
       </template>
@@ -277,10 +302,11 @@ function fmtDate(iso) {
     </div>
 
     <div class="diary-bottom">
-      <div class="seg" :data-pos="diaryState.view === 'full' ? 1 : 0">
+      <div class="seg seg-3" :data-pos="diaryState.view === 'full' ? 1 : diaryState.view === 'recipes' ? 2 : 0">
         <span class="seg-thumb"></span>
         <button :class="{ on: diaryState.view === 'browse' }" @click="setView('browse')">{{ t('diary.browse') }}</button>
         <button :class="{ on: diaryState.view === 'full' }" @click="setView('full')">{{ t('diary.fullHistory') }}</button>
+        <button :class="{ on: diaryState.view === 'recipes' }" @click="setView('recipes')">{{ t('diary.recipes') }}</button>
       </div>
       <span class="spacer" style="flex: 1"></span>
       <button v-if="diaryState.query" class="filter-chip" @click="clearQuery">
@@ -312,7 +338,7 @@ function fmtDate(iso) {
 
     <RecipePicker
       v-if="showRecipeCreator"
-      start-step="bean"
+
       @back="closeRecipeCreator"
       @created="onRecipeCreated"
     />
