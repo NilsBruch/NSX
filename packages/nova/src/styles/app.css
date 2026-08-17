@@ -482,82 +482,126 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .chooser-item.sel { color: var(--accent); }
 
 /* ===== Espresso page: recipe title, roast chip, orbs ===== */
-/* Orbs + rating row + bottom buttons, centred as ONE group in the space below
-   the title (see EspressoView.vue's espresso-body wrapper). Previously .dials
-   alone was flex:1 (grows to fill ALL leftover space, top-aligned), which left
-   a viewport-dependent empty gap below the orbs that a fixed `top: -30px` hack
-   on .recipe-rate-row tried to eat — fine on the screen it was tuned against,
-   but a shorter/differently-proportioned screen has LESS leftover space to
-   begin with, so the same fixed 30px overshot into the orb above it. Centring
-   the whole group with real gaps removes the viewport-dependent gap entirely,
-   so there's nothing left for a fixed pixel value to get wrong. */
-/* align-items: stretch (the default — NOT center): .dials/.recipe-rate-row/
-   .prep-bottom each need the FULL page width to do their own internal
-   centering/distribution (.dials' justify-content:center, .prep-bottom's
-   flex:1 buttons) — align-items:center would shrink-wrap each of them to
-   its own content width instead, leaving .prep-bottom's buttons squeezed
-   down to their content size rather than spanning the page like every
-   other page's bottom button row. */
+/* Title + orbs + bottom buttons, centred as ONE group in the space below the
+   page title (see EspressoView.vue's espresso-body wrapper). An earlier
+   version grew .dials alone with flex:1 (top-aligned), which left a
+   viewport-dependent empty gap below the orbs that a fixed `top: -30px` on
+   the rating row tried to eat — fine on the screen it was tuned against, but
+   a shorter screen has LESS leftover space, so the same 30px overshot into
+   the orb above. Centring the whole group with real gaps removes the
+   viewport-dependent gap, so no fixed pixel value has to guess at it.
+   align-items: stretch (the default — NOT center): each child needs the FULL
+   page width to do its own internal centering/distribution (.dials'
+   justify-content:center, .prep-bottom's flex:1 buttons); align-items:center
+   would shrink-wrap each to its content width instead, squeezing the bottom
+   buttons out of line with every other page's button row. */
 .espresso-body { flex: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 22px; min-height: 0; }
-.recipe-rate-row { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 26px; }
+/* The rating control, in the bottom button row's middle slot: the "Rate"
+   label when unrated, the earned stars once rated. flex:1 gives it an equal
+   third of the row like its two .btn siblings, so its width is fixed by the
+   row rather than by its contents and nothing shifts between those two
+   states; align-self keeps it a compact chip in a row that is otherwise
+   align-items: stretch. No chip surface of its own — flanked by two solid
+   .btn surfaces, the stars read better floating than boxed in a third,
+   competing panel. */
 .rate-recipe-btn {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: var(--card-bg); border: none; border-radius: 10px; padding: 6px 14px;
+  flex: 1 1 0; min-width: 0; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  background: none; border: none; border-radius: 10px; padding: 6px 14px;
   color: var(--accent); font-family: inherit; font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
 }
 .rate-recipe-btn svg { width: 15px; height: 15px; fill: currentColor; stroke: currentColor; stroke-width: 1.2; }
 
 /* .dials itself no longer grows (that's .espresso-body's job now) — it just
-   sizes to its own content, top-aligned within itself so the three orbs' own
-   labels/chips/orbs stay aligned to each other regardless of unequal content
-   (long profile title vs. short grinder name, etc.) — see .dial-id's fixed
-   width below for why that no longer shifts the orbs sideways either. Orbs
-   are a touch bigger than the shared .dial default. */
+   sizes to its own content, top-aligned within itself so the three columns'
+   labels and orbs stay aligned to each other. Orbs are a touch bigger than
+   the shared .dial default. */
 .espresso-page .dials { flex: none; align-items: flex-start; }
 .espresso-page .dial { width: 24vw; }
 /* Equal-width columns, dividing .dials' ACTUAL available width (the page's
-   real width, minus the side rails) — not a fixed vw of the full viewport.
-   `26vw` per column here previously (x3 + gaps) totalled ~84vw, wider than
-   the page's real column ever is once the two side rails are accounted for,
-   which forced the page's grid track to grow and pushed the right-hand rail
-   off the edge of the screen. flex:1/min-width:0 can only ever add up to
-   .dials' real width, so it can't overflow like that by construction — and
-   still keeps all 3 columns equal (see .dial-id below), so the middle one's
-   position doesn't depend on its neighbours' text length either. */
+   real width, minus the side rails) rather than a fixed vw of the full
+   viewport: a per-column vw value large enough to look right (x3 + gaps)
+   overflowed the page's real column once the two rails were accounted for,
+   which grew the grid track and pushed the right-hand rail off screen.
+   flex:1/min-width:0 can only ever add up to .dials' real width, so it can't
+   overflow by construction — and keeps all three columns equal, so a wide
+   roast-date chip under one orb can't shift its neighbours sideways. */
 .espresso-page .dial-group { flex: 1 1 0; min-width: 0; }
 
-/* Per-orb identity button (bean / grinder / profile) sitting above its circle
-   — tap to swap that part, one per orb instead of one page-wide title line
-   for the whole recipe. Styled as a solid chip, same family as .btn (the
-   bottom row's Edit profile/Recipes/History buttons), so the button chrome
-   itself signals "tappable" — no chevron needed. Plain (no chip) only for the
-   grinder header when there's nothing to switch TO — see singleGrinder in
-   EspressoView.vue. */
-.dial-id {
+/* The recipe's whole identity in one bar above the orbs, and the blurred
+   recipe browser it opens (RecipeOverlay.vue).
+   A FULL-WIDTH bar, not an inline pill, and widely-tracked uppercase rather
+   than mixed case — that tracking is what makes a run-on
+   "roaster • bean • grinder • profile" line scan as a title instead of as a
+   sentence. `flex: none` because it lives in .espresso-body's flex column
+   and would otherwise be shrunk below its min-height by its siblings. */
+.recipe-title {
+  flex: none;
+  width: 100%; text-align: center;
+  background: var(--card-bg); border: none; border-radius: 12px; padding: 0 16px;
+  min-height: 54px;
+  color: var(--text); font-family: inherit;
+  font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.recipe-title .dot { color: var(--faint); padding: 0 0.5em; }
+.recipe-title .chev { color: var(--muted); padding-left: 0.8em; }
+
+/* The overlay. A scrim that BLURS the espresso page rather than hiding it —
+   the recipe you're browsing away from stays visible behind its own browser.
+   `fixed`, not `absolute`, for the same reason .overlay-full documents:
+   `.pages` is itself a positioning context, so an absolute scrim would cover
+   only the middle column and leave the register rails sharp and tappable.
+   z-index sits BELOW .overlay-full (20) and .scrim (30), so the bean/profile
+   pickers and the confirm modals a bubble opens still land on top of it.
+   -webkit- prefix included: the DE1 tablet's Android 12 WebView is Chromium
+   ~96, which supports backdrop-filter but still ships the prefixed name in
+   some builds. The rgba() tint is the fallback if neither applies — without
+   it an unsupported blur would leave the list sitting on raw page content. */
+.rov-scrim {
+  position: fixed; inset: 0; z-index: 15;
+  background: rgba(12, 16, 22, 0.62);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
+/* Pinned to exactly .page's own box (.stage's 12px vertical padding, the two
+   --rail-w columns) so it can then reuse .page's padding verbatim — that's
+   what puts the identity bubbles at the same offset as the .recipe-identity
+   title they replace. That positional continuity is the point of the concept.
+   pointer-events: none so a tap on any empty part of the panel falls through
+   to the scrim's @click.self and dismisses; the three real sections below
+   opt back in. */
+.rov-panel {
+  position: absolute; top: 12px; bottom: 12px; left: var(--rail-w); right: var(--rail-w);
+  display: flex; flex-direction: column; gap: 18px;
+  padding: 80px 30px 22px;
+  pointer-events: none;
+}
+.rov-identity, .rov-strip, .rov-panel .rp-bottom { pointer-events: auto; }
+/* The bubbles the title splits into. Same full-width row and the same 54px
+   min-height as the .recipe-title bar they replace, and the name carries that
+   bar's exact type treatment — the two are meant to read as one control
+   regrouping itself, so the typography must not change under it. */
+.rov-identity { flex: none; display: flex; align-items: stretch; gap: 10px; }
+.rov-bubble {
+  flex: 1 1 0; min-width: 0; min-height: 54px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  /* 100% of .dial-group, which is now a flex:1/min-width:0 column (see the
-     .espresso-page .dial-group rule) — so every chip is exactly as wide as
-     its equal-share column, regardless of its OWN text length. A longer
-     profile/grinder name used to widen just that one column and visibly
-     shift the other (unrelated) orbs sideways to re-center the row; a fixed
-     vw width fixed that but could add up to more than the page's real
-     width and push content off-screen — percentage of an already-correctly-
-     sized parent avoids both. */
-  width: 100%; height: 3.75rem; /* 2/3 taller than 2.25rem, for breathing room around the two text lines */
-  background: var(--card-bg); border: none; border-radius: 12px; padding: 0 24px;
+  background: var(--card-bg); border: none; border-radius: 12px; padding: 8px 16px;
   color: var(--text); font-family: inherit;
 }
-.dial-id.plain { background: none; padding: 0 4px; cursor: default; }
-.dial-id-name {
-  display: flex; align-items: center; gap: 4px; max-width: 100%;
-  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+.rov-bubble.plain { background: none; }
+.rov-bubble-label {
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+}
+.rov-bubble-name {
+  max-width: 100%;
+  font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.dial-id-sub {
-  max-width: 100%; font-size: var(--fs-xs); font-weight: 500; color: var(--muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
+/* .rp-strip already carries flex:1/min-height:0 and its own scrolling — the
+   .rov-strip class exists only for the pointer-events opt-in above. */
+
 .roast-chip {
   display: inline-flex; align-items: center; gap: 8px;
   background: none; border: none; color: var(--muted); font-family: inherit;
