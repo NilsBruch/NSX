@@ -1,10 +1,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { phase, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipShot, closeHistory, olderShot, newerShot, rateShot, setActualDose, deleteCurrentShot, virtualScaleActive, liveVirtualWeight } from '../composables/useLiveShot.js';
+import { phase, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, deleteCurrentShot, virtualScaleActive, liveVirtualWeight } from '../composables/useLiveShot.js';
 import { recipe } from '../composables/useRecipe.js';
 import { machine } from '../composables/useCore.js';
 import { openNumberPad, openConfirm } from '../composables/useModals.js';
+import { showToast } from '../composables/useToast.js';
 import { formatClock } from '../utils/clock.js';
 import ShotStripChart from './ShotStripChart.vue';
 
@@ -109,6 +110,16 @@ async function confirmDeleteShot() {
   if (ok) await deleteCurrentShot();
 }
 
+// skipStep's own guards (in-flight / interval / already-skipped) return
+// quietly; only a real API rejection reaches here and deserves a toast.
+async function onSkipStep() {
+  try {
+    await skipStep();
+  } catch {
+    showToast(t('liveShot.skipStepFailed'));
+  }
+}
+
 async function editActualDose() {
   const v = await openNumberPad({ title: t('liveShot.mIn'), unit: 'g', value: fmtWeight(actualDose.value) === '—' ? '' : fmtWeight(actualDose.value) });
   if (v != null) setActualDose(parseFloat(v));
@@ -138,7 +149,11 @@ async function editActualDose() {
       <div class="metric"><div class="ml">{{ t('liveShot.mTime') }}</div><div class="mv">{{ liveElapsedLabel }}</div></div>
     </div>
     <div class="live-bottom">
-      <button class="skip-btn" @click="skipShot">{{ t('liveShot.skip') }}</button>
+      <!-- Skip step only: it advances the profile to its next frame. Stopping
+           is deliberately NOT offered here — that's what the machine's own
+           stop is for, same as starting a shot. This button used to be
+           labelled "Skip" but actually stopped the shot. -->
+      <button class="skip-btn" @click="onSkipStep">{{ t('liveShot.skipStep') }}</button>
       <div class="wbar">
         <span class="wbar-label"><b>{{ shownWeight.toFixed(0) }}</b> / {{ recipe.targetYield.toFixed(0) }} g<small v-if="virtualScaleActive" style="color: var(--muted)"> *</small></span>
         <div class="wbar-track">

@@ -440,6 +440,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   padding: 8px 12px 8px 14px; background: var(--accent); border: none; border-radius: 999px;
   color: #12161b; font-family: inherit; font-size: var(--fs-sm); font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  touch-action: manipulation;
 }
 .tf-tag-x { font-size: var(--fs-md); font-weight: 700; line-height: 1; opacity: 0.75; }
 /* Autocomplete chips: existing values matching what's typed — tap one to fill. */
@@ -449,6 +450,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   background: var(--card-bg); border: none; border-radius: 999px;
   color: var(--text); font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  touch-action: manipulation;
 }
 .kb { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .kb-row { display: flex; gap: 8px; justify-content: center; }
@@ -457,6 +459,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   background: var(--card-bg); color: var(--text);
   font-family: inherit; font-size: var(--fs-base); font-weight: 600;
   display: flex; align-items: center; justify-content: center;
+  /* Touch only: without this the engine keeps double-tap-to-zoom alive on the
+     key and has to wait out the disambiguation window before delivering the
+     tap, which is what made fast typing drop keystrokes on the tablet while a
+     mouse on a desktop was always fine. The viewport's user-scalable=no ought
+     to cover it, but Android WebView has a long history of overriding that
+     (the system "force enable zoom" setting does exactly this), so state it
+     on the element rather than relying on the meta tag. */
+  touch-action: manipulation;
 }
 .kb-key:disabled { opacity: 0.35; }
 .kb-key.on { background: var(--accent); color: #12161b; }
@@ -1029,6 +1039,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   background: var(--accent); color: #12161b; border: none; border-radius: 16px;
   height: 66px; min-width: 220px; font-family: inherit; font-size: var(--fs-base); font-weight: 700;
   letter-spacing: 0.1em; text-transform: uppercase;
+  touch-action: manipulation; /* mid-shot taps must land first time — see .kb-key */
 }
 
 .date-nav { display: inline-flex; align-items: center; gap: 6px; background: var(--card-bg); border-radius: 12px; padding: 5px; }

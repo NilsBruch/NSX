@@ -71,15 +71,23 @@ export const plugins = [
   },
 ];
 
+// The Visualizer plugin's REAL field names, which are capitalised — these
+// previously used Nova's lowercase local names, so the mock happily served
+// whatever Nova asked for and hid the fact that those keys don't exist on a
+// real gateway (the panel showed "Not set" on the machine while working here).
+// A mock that agrees with the client instead of the API proves nothing.
+//
+// Values here are what the gateway STORES. Secure ones are redacted on the way
+// out — see redactPluginSettings in server.mjs — the way Decaid >=
+// 0.7.17-beta.4 does it.
 export const pluginSettings = {
   "visualizer.reaplugin": {
-    username: "",
-    password: "",
-    autoUpload: false,
-    minShotDuration: 10,
-    extendedMetadata: false,
-    backSync: false,
-    backSyncIntervalSeconds: 300,
+    Username: "",
+    Password: "",
+    AutoUpload: true,
+    LengthThreshold: 5,
+    BackSync: false,
+    BackSyncIntervalSeconds: 300,
   },
 };
 

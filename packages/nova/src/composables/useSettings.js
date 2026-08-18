@@ -53,11 +53,52 @@ export async function disconnectDevice(id) {
 }
 
 export const plugins = ref([]);
+const VISUALIZER_ID = 'visualizer.reaplugin';
+
+/**
+ * The gateway's own (capitalised) field names for the Visualizer plugin,
+ * mapped to Nova's local camelCase. Confirmed against NSX — which runs on real
+ * machines — and Beanie's plugin schema, which agree exactly.
+ *
+ * Nova previously used the lowercase names as the wire names too, so every
+ * read came back undefined (the panel showed "Not set" even with Visualizer
+ * configured) and every save wrote a key the plugin ignores. The mock gateway
+ * used the lowercase names as well, which is exactly why this never surfaced
+ * in development — its fixtures now match the real API instead.
+ *
+ * The plugin's schema has no "extended metadata" field; Nova's old
+ * extendedMetadata toggle wrote to nothing, so it is gone. Defaults below are
+ * the schema's own (AutoUpload true, LengthThreshold 5s).
+ */
+const VIZ_KEYS = {
+  username: 'Username',
+  password: 'Password',
+  autoUpload: 'AutoUpload',
+  minShotDuration: 'LengthThreshold',
+  backSync: 'BackSync',
+  backSyncIntervalSeconds: 'BackSyncIntervalSeconds',
+};
+
 export const visualizerSettings = reactive({
-  username: '', password: '', autoUpload: false, minShotDuration: 10, extendedMetadata: false,
+  username: '', autoUpload: true, minShotDuration: 5,
   backSync: false, backSyncIntervalSeconds: 300,
 });
-const VISUALIZER_ID = 'visualizer.reaplugin';
+
+/**
+ * Whether a password is STORED — which is no longer the same as knowing it.
+ * From Decaid 0.7.17-beta.4 the gateway redacts secure fields and reports only
+ * that they are set, so the panel can show "saved" but can never pre-fill.
+ * Reads every shape we might be talking to: a plain string (older gateways), a
+ * redacted `{ isSet: true }`, or a `secretsSet` envelope — so one build works
+ * across gateway versions.
+ */
+export const visualizerPasswordSet = ref(false);
+function readPasswordSet(raw) {
+  const v = raw?.[VIZ_KEYS.password];
+  if (typeof v === 'string') return v !== '';
+  if (v && typeof v === 'object') return v.isSet === true;
+  return raw?.secretsSet?.[VIZ_KEYS.password] === true;
+}
 
 export async function loadPlugins() {
   await NSXCore.loadPlugins();
@@ -68,12 +109,24 @@ export async function setPluginEnabled(id, enabled) {
   plugins.value = NSXCore.getPlugins();
 }
 export async function loadVisualizerSettings() {
-  const s = await NSXCore.loadPluginSettings(VISUALIZER_ID);
-  Object.assign(visualizerSettings, s);
+  const s = (await NSXCore.loadPluginSettings(VISUALIZER_ID)) || {};
+  // Copy only real primitives, key by key: a blanket Object.assign of the raw
+  // map would both miss the capitalised names and, on a redacting gateway,
+  // drop `{ isSet: true }` straight into a settings field.
+  for (const [local, remote] of Object.entries(VIZ_KEYS)) {
+    if (local === 'password') continue; // never held locally — see visualizerPasswordSet
+    const v = s[remote];
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+      visualizerSettings[local] = v;
+    }
+  }
+  visualizerPasswordSet.value = readPasswordSet(s);
 }
+
 export async function saveVisualizerSetting(key, value) {
-  visualizerSettings[key] = value;
-  await NSXCore.savePluginSetting(VISUALIZER_ID, key, value);
+  if (key !== 'password') visualizerSettings[key] = value;
+  await NSXCore.savePluginSetting(VISUALIZER_ID, VIZ_KEYS[key], value);
+  if (key === 'password') visualizerPasswordSet.value = value !== '';
 }
 export const visualizerPlugin = () => plugins.value.find((p) => p.id === VISUALIZER_ID);
 

@@ -104,6 +104,23 @@ const FRAME_SECONDS = 6;
 const SHOT_SECONDS = 15; // sped up for dev; a real espresso shot runs ~25-40s
 
 /**
+ * Secure plugin fields are STORED but never returned: from Decaid
+ * 0.7.17-beta.4 a GET reports only whether one is set. Mirroring that here is
+ * the point — a mock that hands secrets back lets a client quietly depend on
+ * reading them, which is exactly how Nova's Visualizer panel shipped believing
+ * it could show the saved password.
+ */
+const SECURE_PLUGIN_FIELDS = { "visualizer.reaplugin": ["Password"] };
+function redactPluginSettings(id, settings) {
+  const out = { ...settings };
+  for (const key of SECURE_PLUGIN_FIELDS[id] ?? []) {
+    const v = out[key];
+    out[key] = { isSet: typeof v === "string" ? v !== "" : v?.isSet === true };
+  }
+  return out;
+}
+
+/**
  * Persists a shot record for the just-finished brew, built from state.workflow
  * (the currently loaded recipe) — so Nova's "after the shot, show this recipe's
  * history" flow has something real to land on instead of only the seeded mocks.
@@ -331,7 +348,7 @@ function routeApi(req, res, url, body) {
   const pluginSettingsMatch = path.match(/^\/api\/v1\/plugins\/([^/]+)\/settings$/);
   if (pluginSettingsMatch) {
     const id = decodeURIComponent(pluginSettingsMatch[1]);
-    if (method === "GET") return json(state.pluginSettings[id] ?? {});
+    if (method === "GET") return json(redactPluginSettings(id, state.pluginSettings[id] ?? {}));
     state.pluginSettings[id] = { ...(state.pluginSettings[id] ?? {}), ...body };
     return noContent();
   }

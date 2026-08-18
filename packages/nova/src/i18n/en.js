@@ -259,7 +259,8 @@ export default {
   liveShot: {
     title: 'Espresso',
     saving: 'Saving shot…',
-    skip: 'Skip',
+    skipStep: 'Skip step',
+    skipStepFailed: 'Could not skip the step',
     back: 'Recipe',
     historyTitle: 'Shot history',
     mTemp: 'Temp',
@@ -403,7 +404,9 @@ export default {
     logLevel: 'Log level', autoUpdate: 'Automatic update checks',
     integrations: 'Integrations', visualizer: 'Visualizer',
     vizEnabled: 'Enabled', vizUser: 'Username', vizPass: 'Password',
-    vizAutoUpload: 'Auto upload', vizMinShot: 'Min. shot duration', vizExtended: 'Extended metadata',
+    // The gateway redacts stored secrets, so the row can say "saved" but never show it.
+    vizPassSaved: 'Saved',
+    vizAutoUpload: 'Auto upload', vizMinShot: 'Min. shot duration',
     vizBackSync: 'Back sync', vizBackSyncInterval: 'Back sync interval',
     notSet: 'Not set',
   },

@@ -3,7 +3,7 @@ import { onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { openTextField, openNumberPad } from '../../composables/useModals.js';
 import {
-  visualizerSettings, loadVisualizerSettings, saveVisualizerSetting,
+  visualizerSettings, visualizerPasswordSet, loadVisualizerSettings, saveVisualizerSetting,
   visualizerPlugin, setPluginEnabled,
 } from '../../composables/useSettings.js';
 
@@ -20,9 +20,13 @@ async function editUser() {
   const v = await openTextField({ title: t('systemSettings.vizUser'), value: visualizerSettings.username });
   if (v != null) saveVisualizerSetting('username', v);
 }
+// Always opens EMPTY: the gateway redacts the stored password, so there is
+// nothing to pre-fill. That makes an empty confirm ambiguous, so it's treated
+// as "leave the saved one alone" rather than saving a blank — otherwise
+// opening this row and confirming would silently wipe a working login.
 async function editPass() {
-  const v = await openTextField({ title: t('systemSettings.vizPass'), value: visualizerSettings.password });
-  if (v != null) saveVisualizerSetting('password', v);
+  const v = await openTextField({ title: t('systemSettings.vizPass'), value: '' });
+  if (v) saveVisualizerSetting('password', v);
 }
 async function editMinShot() {
   const v = await openNumberPad({ title: t('systemSettings.vizMinShot'), unit: 's', value: visualizerSettings.minShotDuration });
@@ -54,7 +58,7 @@ async function editBackSyncInterval() {
       </button>
       <button class="setting-row as-btn" @click="editPass">
         <span class="sr-name">{{ t('systemSettings.vizPass') }}</span>
-        <span class="sr-value" :class="{ muted: !visualizerSettings.password }">{{ visualizerSettings.password ? '••••••' : t('systemSettings.notSet') }}<span class="sr-chev">›</span></span>
+        <span class="sr-value" :class="{ muted: !visualizerPasswordSet }">{{ visualizerPasswordSet ? t('systemSettings.vizPassSaved') : t('systemSettings.notSet') }}<span class="sr-chev">›</span></span>
       </button>
       <div class="setting-row">
         <span class="sr-name">{{ t('systemSettings.vizAutoUpload') }}</span>
@@ -64,10 +68,6 @@ async function editBackSyncInterval() {
         <span class="sr-name">{{ t('systemSettings.vizMinShot') }}</span>
         <span class="sr-value">{{ visualizerSettings.minShotDuration }} s<span class="sr-chev">›</span></span>
       </button>
-      <div class="setting-row">
-        <span class="sr-name">{{ t('systemSettings.vizExtended') }}</span>
-        <button class="switch" :class="{ on: visualizerSettings.extendedMetadata }" role="switch" :aria-checked="visualizerSettings.extendedMetadata" @click="saveVisualizerSetting('extendedMetadata', !visualizerSettings.extendedMetadata)"></button>
-      </div>
       <div class="setting-row">
         <span class="sr-name">{{ t('systemSettings.vizBackSync') }}</span>
         <button class="switch" :class="{ on: visualizerSettings.backSync }" role="switch" :aria-checked="visualizerSettings.backSync" @click="saveVisualizerSetting('backSync', !visualizerSettings.backSync)"></button>

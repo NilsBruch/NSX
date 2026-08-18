@@ -93,14 +93,62 @@ function _restoreNormalBrightness() {
   setBrightnessOverride(Number(NSXCore.getStore().nsx_display_brightness) || 80);
 }
 
+/**
+ * The release below is issued ONCE, at the moment of locking — nothing
+ * re-checks it for as long as the lockscreen is up, and setWakelockOverride
+ * only console.errors a rejection. So if that one call is lost (a failed
+ * request, or the gateway re-acquiring the override behind our back), the
+ * lockscreen keeps the display lit indefinitely: there is no later lock() to
+ * correct it until the user unlocks and locks again. That is the intermittent
+ * "screen stayed on while on the lockscreen" bug — it needs the release to be
+ * LOST, not merely issued, which is why it only shows up occasionally.
+ *
+ * So while locked, verify against the gateway's real display state instead of
+ * assuming the one-shot release stuck, and re-release if it didn't. Note this
+ * deliberately never touches `locked` — the file header explains why deriving
+ * that from machine state is its own bug; this only re-asserts the wakelock.
+ */
+const WAKELOCK_WATCHDOG_MS = 30000;
+let _watchdogTimer = null;
+
+function _stopWakelockWatchdog() {
+  if (_watchdogTimer !== null) { clearInterval(_watchdogTimer); _watchdogTimer = null; }
+}
+
+function _startWakelockWatchdog() {
+  _stopWakelockWatchdog();
+  if (!wakelockOn()) return; // nothing was held, so nothing can leak
+  _watchdogTimer = setInterval(async () => {
+    if (!locked.value) { _stopWakelockWatchdog(); return; }
+    try {
+      const state = await NSXApi.fetchDisplayState();
+      if (state?.wakeLockOverride) {
+        console.warn('[Nova] wakelock override still held on the lockscreen — releasing again');
+        await setWakelockOverride(false);
+      } else if (state?.wakeLockEnabled) {
+        // Held, but not by US: the gateway's own machine-state rule keeps the
+        // display awake and drops it when the DE1 sleeps — so this means the
+        // machine isn't actually asleep. Nothing here to release (the override
+        // is already clear); logged so the two causes stay distinguishable if
+        // this is ever reported again.
+        console.warn('[Nova] lockscreen display awake, but not via our override — machine likely not sleeping');
+      }
+    } catch (err) {
+      console.error('[Nova] wakelock watchdog check failed', err);
+    }
+  }, WAKELOCK_WATCHDOG_MS);
+}
+
 export function lock() {
   locked.value = true;
   _dimForLock();
   if (wakelockOn()) setWakelockOverride(false);
+  _startWakelockWatchdog();
 }
 
 export async function unlock() {
   locked.value = false;
+  _stopWakelockWatchdog();
   // Restore the normal brightness the slider was last set to, regardless of
   // whether the machine itself wakes up below.
   _restoreNormalBrightness();
@@ -149,6 +197,7 @@ NSXCore.on('machineState', ({ state }) => {
     locked.value = true;
     _dimForLock();
     if (wakelockOn()) setWakelockOverride(false);
+    _startWakelockWatchdog(); // a reload lands here instead of lock(), same risk
   } else {
     _restoreNormalBrightness();
     if (wakelockOn()) setWakelockOverride(true);

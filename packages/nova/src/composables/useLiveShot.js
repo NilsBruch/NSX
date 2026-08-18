@@ -31,6 +31,10 @@ export const series = reactive({ elapsed: [], pressure: [], targetPressure: [], 
 // factor — see applyPostShotVirtualScale), which is why it divides by factor.
 export const virtualScaleActive = ref(false); // true = weight readouts below are the estimate, not a real scale
 export const liveVirtualWeight = ref(0);       // g, running estimate while counting
+// The profile frame the machine is currently running (null when unknown) —
+// skipStep's guard uses it to tell "the machine has moved on" from "my tap
+// hasn't landed yet".
+export const liveFrame = ref(null);
 let _liveVolume = 0;   // ml integrated from live flow since counting started
 let _volCounting = false;
 let _lastSnapMs = 0;
@@ -124,6 +128,12 @@ function startLive() {
 // snapshots (flow pinned at 0 during preinfusion soak) never fire a value-watch,
 // and a missing sample is a visibly missing bar in the strip chart's flow bins.
 NSXCore.on('liveShot', (snap) => {
+  // Which profile frame the machine is executing. Read before the substate
+  // filter below, since skipStep's guard needs it during preparing/heating too
+  // — not only across the pouring window the graph captures.
+  const f = Number(snap?.profileFrame);
+  liveFrame.value = Number.isFinite(f) ? f : null;
+
   if (phase.value !== 'live') return;
   // Only capture the extraction itself — preinfusion + pouring — so the graph
   // doesn't run through the heating/preparing lead-in or the post-pour drip.
@@ -310,14 +320,42 @@ export function openHistoryAt(shotList, shot) {
   phase.value = 'history';
 }
 
-/** The on-screen "Skip": ends the brew early. Real DE1s start shots from the
- *  group-head hardware, but stopping one early is an allowed API operation
- *  (canExecuteOperation('stopShot', 'espresso') === true) — see the design log
- *  for why this is the one on-screen exception to "start is hardware-only". */
-export async function skipShot() {
-  if (!NSXCore.canExecuteOperation('stopShot', machine.state)) return;
-  await NSXApi.setMachineState('idle');
-  // machine.state's watcher above fires finishLive() once the state event arrives.
+/**
+ * Advances to the profile's next frame — e.g. cutting a preinfusion short.
+ * The ONLY shot command the skin sends: stopping (like starting) is left to
+ * the machine's own controls, so there is deliberately no on-screen stop.
+ *
+ * The three guards mirror NSX's (app.js's btn-espresso-fs-skip-step), because
+ * the DE1 takes a moment to actually advance and the button invites repeat
+ * taps in the meantime:
+ *   - in-flight: one request at a time;
+ *   - min interval: a double-tap must not eat two frames at once;
+ *   - guard frame: once a skip is accepted for frame N, ignore further taps
+ *     until the machine reports a different frame, so an unresponsive-feeling
+ *     button can't silently skip several steps.
+ */
+const SKIP_STEP_MIN_INTERVAL_MS = 800;
+let _skipInFlight = false;
+let _skipGuardFrame = null;
+let _skipLastSentAt = 0;
+
+export async function skipStep() {
+  if (machine.state !== 'espresso') return;
+  if (_skipInFlight) return;
+  if (Date.now() - _skipLastSentAt < SKIP_STEP_MIN_INTERVAL_MS) return;
+  const frame = Number.isFinite(liveFrame.value) ? liveFrame.value : null;
+  if (frame !== null && frame === _skipGuardFrame) return;
+
+  _skipInFlight = true;
+  try {
+    await NSXApi.setMachineState('skipStep');
+    _skipLastSentAt = Date.now();
+    if (frame !== null) _skipGuardFrame = frame;
+  } finally {
+    _skipInFlight = false;
+  }
+  // A rejection propagates: composables have no `t`, so the caller shows the
+  // toast in its own locale (same split as CleaningAssistant's skip).
 }
 
 /** `stars` is 0-5 (what the UI shows); the API stores enjoyment as 0-100 —

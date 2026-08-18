@@ -181,11 +181,22 @@ function pickSuggestion(s) {
         >{{ s }}</button>
       </div>
 
-      <!-- @mousedown.prevent on every key keeps focus on the <input>: without it,
-           tapping a key blurs the field, the kiosk browser resets selectionStart
-           to 0, and every character gets inserted at index 0 (text appears
-           reversed / right-to-left). Preventing the default mousedown focus shift
-           leaves the caret where it was. -->
+      <!-- Keys actuate on POINTERDOWN, not click. A click only fires when the
+           press and release land on the same element having barely moved, so
+           at typing speed — where a finger routinely slides a few pixels, or
+           lifts over the gap between two keys — the browser cancels it and the
+           keystroke is silently lost. That is touch-only: a mouse on a desktop
+           never moves between press and release, which is why this looked fine
+           there and dropped keys on the tablet. Typing slowly hid it by making
+           every tap precise. Pressing on pointerdown is also what a real
+           keyboard does, and it feels markedly faster. (.kb-key also sets
+           touch-action: manipulation — see app.css.)
+
+           `.prevent` is load-bearing for a second reason: it keeps focus on
+           the <input>. Without it, tapping a key blurs the field, the kiosk
+           browser resets selectionStart to 0, and every character is inserted
+           at index 0 — text appears reversed. It also suppresses the
+           compatibility mouse events, so no key can fire twice. -->
       <div class="kb">
         <div v-for="(row, i) in (numeric ? SYMBOLS : LETTERS)" :key="i" class="kb-row">
           <button
@@ -193,18 +204,17 @@ function pickSuggestion(s) {
             class="kb-key kb-wide"
             :class="{ on: shift }"
             :disabled="numeric"
-            @mousedown.prevent
-            @click="shift = !shift"
+            @pointerdown.prevent="shift = !shift"
           >⇧</button>
-          <button v-for="k in row" :key="k" class="kb-key" @mousedown.prevent @click="type(k)">
+          <button v-for="k in row" :key="k" class="kb-key" @pointerdown.prevent="type(k)">
             {{ !numeric && shift ? k.toUpperCase() : k }}
           </button>
-          <button v-if="i === 2" class="kb-key kb-wide" @mousedown.prevent @click="backspace">⌫</button>
+          <button v-if="i === 2" class="kb-key kb-wide" @pointerdown.prevent="backspace">⌫</button>
         </div>
         <div class="kb-row">
-          <button class="kb-key kb-wide" @mousedown.prevent @click="numeric = !numeric">{{ numeric ? 'ABC' : '123' }}</button>
-          <button class="kb-key kb-space" @mousedown.prevent @click="space">{{ t('common.space') }}</button>
-          <button v-if="textFieldState.multiline" class="kb-key kb-wide" @mousedown.prevent @click="newline">↵</button>
+          <button class="kb-key kb-wide" @pointerdown.prevent="numeric = !numeric">{{ numeric ? 'ABC' : '123' }}</button>
+          <button class="kb-key kb-space" @pointerdown.prevent="space">{{ t('common.space') }}</button>
+          <button v-if="textFieldState.multiline" class="kb-key kb-wide" @pointerdown.prevent="newline">↵</button>
           <!-- Tag mode's "add" key. The DE1's kiosk browser raises no system
                keyboard, so there is no hardware ↵ to rely on here. -->
           <button
@@ -212,8 +222,7 @@ function pickSuggestion(s) {
             class="kb-key kb-wide"
             :class="{ accent: draft.trim() }"
             :disabled="!draft.trim()"
-            @mousedown.prevent
-            @click="addTag(draft)"
+            @pointerdown.prevent="addTag(draft)"
           >{{ t('textField.addTag') }}</button>
         </div>
       </div>
