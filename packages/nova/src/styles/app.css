@@ -98,7 +98,15 @@ html, body {
    grid-template-rows: 1fr on .stage — the classic CSS Grid "content forces
    the track bigger" gotcha. With this, `.page`'s height:100% + `.list`'s own
    overflow-y:auto are what actually contain a long list. */
-.pages { grid-column: 2; grid-row: 1; position: relative; min-height: 0; }
+/* min-width for the same reason as min-height, on the other axis: a grid item's
+   automatic minimum size is its CONTENT's min-content width, and a `1fr` track
+   cannot go below that. A long recipe title is one nowrap line, so its
+   min-content width is the whole title — which grew this track past its share,
+   pushed the total beyond 100vw and slid the right-hand rail off screen (the
+   same failure .espresso-page .dial-group's comment below records). With
+   min-width: 0 the track keeps its 1fr share and .recipe-title's own
+   text-overflow: ellipsis finally has a width to truncate against. */
+.pages { grid-column: 2; grid-row: 1; position: relative; min-height: 0; min-width: 0; }
 
 /* A page fills the centre column. The active register tab merges with it. */
 .page {
