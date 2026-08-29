@@ -138,7 +138,11 @@ function pickSuggestion(s) {
 </script>
 
 <template>
-  <div v-if="textFieldState.open" class="scrim" @click.self="cancel">
+  <!-- kb-scrim bottom-anchors this modal (see app.css): the keys must not move
+       while typing, so everything that can change height — the suggestion
+       strip, the committed tags, a growing notes field — has to grow UPWARDS
+       away from them, not push them around a centred box. -->
+  <div v-if="textFieldState.open" class="scrim kb-scrim" @click.self="cancel">
     <div class="modal kb-modal">
       <span class="m-title">{{ textFieldState.title }}</span>
       <textarea
@@ -171,7 +175,12 @@ function pickSuggestion(s) {
         >{{ tg }}<span class="tf-tag-x" aria-hidden="true">×</span></button>
       </div>
 
-      <div v-if="suggestions.length" class="tf-suggests">
+      <!-- Rendered whenever this field HAS a suggestion pool, not whenever the
+           filtered list happens to be non-empty: the strip has a fixed height
+           (app.css), so keeping it mounted is what stops the layout from
+           jumping as typing narrows five suggestions down to one and then to
+           none. That jump is what caused mis-taps at speed. -->
+      <div v-if="textFieldState.suggestions?.length" class="tf-suggests">
         <button
           v-for="s in suggestions"
           :key="s"
