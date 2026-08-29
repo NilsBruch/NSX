@@ -16,6 +16,11 @@ const props = defineProps({
   step: { type: Number, default: 1 },
   // Overrides the readout text; when null, the value is shown as a percentage.
   display: { type: String, default: null },
+  // How many equal divisions the tick scale is drawn in (0 = no scale). A
+  // plain coloured column tells you "fairly full" but not HOW full without
+  // reading the number — the ticks are what make the fill legible as a
+  // quantity at a glance, which is the whole reason a slider beats a field.
+  ticks: { type: Number, default: 4 },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -58,6 +63,14 @@ function onPointerUp(evt) {
     @pointerup="onPointerUp"
   >
     <div class="vslider-fill" :style="{ height: pct + '%' }"></div>
+    <!-- Drawn OVER the fill, not under it: a scale that disappears as the
+         slider fills is no scale. The lines are white at low alpha, so they
+         read as a lightening on the dark track and on the accent alike. -->
+    <div
+      v-if="ticks > 0"
+      class="vslider-ticks"
+      :style="{ backgroundSize: `100% ${100 / ticks}%` }"
+    ></div>
     <span class="vslider-label">{{ display ?? Math.round(modelValue) + '%' }}</span>
   </div>
 </template>
