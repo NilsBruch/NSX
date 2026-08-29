@@ -85,6 +85,10 @@ export interface ScheduleState {
 
 export interface StoreSettings { [k: string]: any; }
 
+/** GET /api/v1/display -> platformSupported. A `false` means the gateway's host
+ *  cannot drive that at all, so the matching control should be hidden. */
+export interface DisplaySupport { brightness: boolean; wakeLock: boolean; }
+
 // ── Event map (NSXCore.on) ────────────────────────────────────────────────────
 
 /**
@@ -136,6 +140,7 @@ export interface NSXCoreEventMap {
   settingsLoaded: { app: Record<string, any>; machine: Record<string, any>; advanced: Record<string, any> };
   devicesLoaded: { devices: any[] };
   pluginsLoaded: { plugins: any[] };
+  displaySupportLoaded: DisplaySupport;
   toast: string;
 }
 
@@ -225,6 +230,10 @@ export interface NSXCore {
   setPluginEnabled(id: string, enabled: boolean): Promise<void>;
   loadPluginSettings(id: string): Promise<Record<string, any>>;
   savePluginSetting(id: string, key: string, value: any): Promise<any>;
+
+  // display.js
+  getDisplaySupport(): DisplaySupport;
+  loadDisplaySupport(force?: boolean): Promise<DisplaySupport>;
 
   // profile-render.js (pure)
   renderProfileSpark(profile: any, opts?: {

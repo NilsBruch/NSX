@@ -45,6 +45,9 @@ const wakelockOn = () => NSXCore.getStore().nova_wakelock !== false; // default 
  */
 let _wakelockChain = Promise.resolve();
 export function setWakelockOverride(active) {
+  // A host that can't hold a wake lock turns every one of these into a no-op
+  // round-trip (NSXCore.getDisplaySupport, filled in by main.js at boot).
+  if (!NSXCore.getDisplaySupport().wakeLock) return _wakelockChain;
   _wakelockChain = _wakelockChain.then(
     () => (active ? NSXApi.requestWakeLockOverride() : NSXApi.releaseWakeLockOverride())
   ).catch((err) => {
@@ -71,6 +74,9 @@ export function setWakelockOverride(active) {
 // display at the wrong brightness for whichever state the skin shows.
 let _brightnessChain = Promise.resolve();
 export function setBrightnessOverride(level) {
+  // Same as the wakelock chain: nothing to drive on a host without backlight
+  // control, so don't spend a request per lock/unlock/slider tick.
+  if (!NSXCore.getDisplaySupport().brightness) return _brightnessChain;
   _brightnessChain = _brightnessChain.then(
     () => NSXApi.setDisplayBrightness(level)
   ).catch((err) => {

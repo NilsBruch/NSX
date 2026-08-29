@@ -7,7 +7,7 @@
 import { useI18n } from 'vue-i18n';
 import { openChooser, openNumberPad } from '../../composables/useModals.js';
 import { TABS } from '../../router/index.js';
-import { skinSettings, saveSkinSetting } from '../../composables/useSettings.js';
+import { skinSettings, saveSkinSetting, displaySupport } from '../../composables/useSettings.js';
 
 defineEmits(['close']);
 const { t } = useI18n();
@@ -66,7 +66,9 @@ async function pickReviewAutoClose() {
         <span class="sr-main"><span class="sr-name">{{ t('skinSettings.wakeOnUnlock') }}</span><span class="sr-sub">{{ t('skinSettings.wakeOnUnlockSub') }}</span></span>
         <button class="switch" :class="{ on: skinSettings.wakeOnUnlock }" role="switch" :aria-checked="skinSettings.wakeOnUnlock" @click="saveSkinSetting('wakeOnUnlock', !skinSettings.wakeOnUnlock)"></button>
       </div>
-      <button class="setting-row as-btn" @click="editScreensaverBrightness">
+      <!-- Both hidden on a host the gateway can't drive: the dim level would
+           never be applied, the wake lock never held (core's display domain). -->
+      <button v-if="displaySupport.brightness" class="setting-row as-btn" @click="editScreensaverBrightness">
         <span class="sr-name">{{ t('skinSettings.screensaverBrightness') }}</span>
         <span class="sr-value">{{ skinSettings.screensaverBrightness }}%<span class="sr-chev">›</span></span>
       </button>
@@ -80,7 +82,7 @@ async function pickReviewAutoClose() {
         <span class="sr-name">{{ t('skinSettings.startPage') }}</span>
         <span class="sr-value">{{ optLabel(startTabOpts, skinSettings.startTab) }}<span class="sr-chev">›</span></span>
       </button>
-      <div class="setting-row">
+      <div v-if="displaySupport.wakeLock" class="setting-row">
         <span class="sr-name">{{ t('skinSettings.wakelock') }}</span>
         <button class="switch" :class="{ on: skinSettings.wakelock }" role="switch" :aria-checked="skinSettings.wakelock" @click="saveSkinSetting('wakelock', !skinSettings.wakelock)"></button>
       </div>

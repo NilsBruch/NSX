@@ -8,7 +8,7 @@ import SkinPanel from '../components/settings/SkinPanel.vue';
 import AppPanel from '../components/settings/AppPanel.vue';
 import SchedulePanel from '../components/settings/SchedulePanel.vue';
 import VerticalSlider from '../components/VerticalSlider.vue';
-import { displayBrightness, loadDisplayBrightness, setBrightness } from '../composables/useSettings.js';
+import { displayBrightness, loadDisplayBrightness, setBrightness, displaySupport } from '../composables/useSettings.js';
 import { machine } from '../composables/useCore.js';
 import { showToast } from '../composables/useToast.js';
 
@@ -69,7 +69,10 @@ async function toggleMachine() {
           ></button>
         </div>
       </div>
+      <!-- Nothing to drive where the host has no backlight control (core's
+           display domain, from GET /api/v1/display's platformSupported). -->
       <VerticalSlider
+        v-if="displaySupport.brightness"
         class="settings-brightness"
         :model-value="displayBrightness"
         :min="10"

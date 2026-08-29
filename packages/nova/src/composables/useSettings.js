@@ -238,6 +238,18 @@ export async function saveSkinSetting(key, value) {
   if (key === 'wakelock') await setWakelockOverride(value);
 }
 
+/**
+ * What the gateway's HOST can actually do to the screen (core's display
+ * domain). On a platform that supports neither, the brightness slider and the
+ * wake-lock switch are controls that provably do nothing, so the panels hide
+ * them. Defaults to supported until the fetch answers, so a slow or old
+ * gateway never makes the controls flicker away.
+ */
+export const displaySupport = reactive({ ...NSXCore.getDisplaySupport() });
+export async function loadDisplaySupport() {
+  Object.assign(displaySupport, await NSXCore.loadDisplaySupport());
+}
+
 /** The DE1's own screen brightness (gateway-side, not skin CSS) — write-only
  * API, so the last value set THIS session is all we can show; it does not
  * reflect a value changed from the machine's own screen.

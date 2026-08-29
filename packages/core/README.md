@@ -188,6 +188,18 @@ step exactly.
   Visualizer integration): `getPlugins`, `getPluginSettings(id)`, `loadPlugins`,
   `setPluginEnabled(id, enabled)`, `loadPluginSettings(id)`,
   `savePluginSetting(id, key, value)`. Emits `pluginsLoaded`.
+- **`display.js`** — what the gateway's **host platform** can do to the screen,
+  from `GET /api/v1/display`'s `platformSupported: { brightness, wakeLock }`:
+  `getDisplaySupport()` (sync, cached) and `loadDisplaySupport(force?)`. Emits
+  `displaySupportLoaded`. Where a capability is `false`, the matching
+  `NSXApi.setDisplayBrightness` / `requestWakeLockOverride` calls are no-ops on
+  that host, so a skin should **hide** its brightness slider / "keep screen
+  awake" switch rather than offer a control that does nothing. It is a
+  capability, not state — fetched once and cached; only an explicit `false`
+  hides anything, so an old gateway that omits the field (or one that is
+  briefly unreachable) leaves every control visible. The live values in the
+  same response are deliberately not cached — read those from
+  `NSXApi.fetchDisplayState()`.
 
 ### Profile rendering — `profile-render.js` (owns **no state at all**)
 
@@ -296,6 +308,7 @@ Domain-emitted events (fire after a command mutates that domain):
 | `settingsLoaded` | `{ app, machine, advanced }` |
 | `devicesLoaded` | `{ devices }` |
 | `pluginsLoaded` | `{ plugins }` |
+| `displaySupportLoaded` | `{ brightness, wakeLock }` |
 | `toast` | `string` (message to surface to the user) |
 
 ## TypeScript

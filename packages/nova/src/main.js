@@ -31,6 +31,7 @@ import './core/domains/settings.js';
 import './core/domains/devices.js';
 import './core/domains/plugins.js';
 import './core/domains/profile-render.js';
+import './core/domains/display.js';
 
 // translations.js (shared with NSX) defaults to German. Nova is English-only
 // for now (see the design log) — core functions that read window.NSXI18n?.t
@@ -56,7 +57,7 @@ import router from './router';
 import i18n from './i18n';
 import { bootCore } from './composables/useCore.js';
 import { adoptCurrentWorkflowAsRecipe } from './composables/useRecipe.js';
-import { skinSettings, loadSkinSettings } from './composables/useSettings.js';
+import { skinSettings, loadSkinSettings, loadDisplaySupport } from './composables/useSettings.js';
 
 createApp(App).use(router).use(i18n).mount('#app');
 
@@ -68,6 +69,11 @@ createApp(App).use(router).use(i18n).mount('#app');
 // the start and dial edits always persist somewhere visible. Sequenced here
 // rather than inside bootCore() because useCore.js importing useRecipe.js would
 // close an import cycle.
+// Screen capabilities are a property of the host the gateway runs on, so this
+// is fetched once, as early as possible: the settings panels and the two
+// display-override helpers all read the cached answer synchronously.
+loadDisplaySupport();
+
 bootCore().then(() => {
   adoptCurrentWorkflowAsRecipe();
   loadSkinSettings();
