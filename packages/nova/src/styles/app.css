@@ -35,6 +35,26 @@
      .pages (Settings' widgets included) needs a default to fall back to. */
   --accent: #7fa8c9;
 
+  /* ── Material ──
+     Every raised surface gets the same two cues, so "raised" means one thing
+     across the whole skin instead of being re-invented per component:
+       --edge-hi        a 1px inner highlight along the top edge — the single
+                        strongest "this is a physical object" cue, and cheap;
+       --elev-1/2       two-layer shadows (a tight contact shadow + a wide
+                        ambient one). One layer alone reads as either a sticker
+                        or a smudge; the pair reads as depth.
+     No surface gradient: fills stay FLAT on purpose. The lift comes entirely
+     from the edge and the shadow, which is what keeps the skin's flat-color
+     character while still giving surfaces an edge to catch light on.
+     Deliberately NOT applied to .page or the register rails: the active tab
+     merges into the page by painting a page-COLORED liquid over the island, so
+     a shadow on either would show the seam that effect exists to hide. Kept in
+     rgba() rather than color-mix() for the same reason the container-query
+     note above gives — the tablet's WebView is Chromium ~96. */
+  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 6px 16px rgba(0, 0, 0, 0.22);
+  --elev-2: 0 2px 6px rgba(0, 0, 0, 0.34), 0 18px 40px rgba(0, 0, 0, 0.34);
+
   /* Type scale — the ONLY font-sizes used anywhere in this skin. Every rule
      must reference one of these tokens; never write a raw font-size value.
      Need a size these don't cover? Add a rung to the scale, don't invent a
@@ -1173,7 +1193,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .tile-slot { position: relative; min-width: 0; min-height: 0; }
 .tile {
   width: 100%; height: 100%;
-  background: #1b222b; border: none; border-radius: 16px; cursor: pointer; color: var(--text);
+  background: var(--card-bg); border: none; border-radius: 16px; cursor: pointer; color: var(--text);
   font-family: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
 }
 .tile svg { width: 40px; height: 40px; stroke: var(--accent); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -1184,7 +1204,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 
 /* Vertical brightness slider */
 .vslider {
-  position: relative; height: 100%; border-radius: 16px; background: #1b222b; overflow: hidden;
+  position: relative; height: 100%; border-radius: 16px; background: var(--card-bg); overflow: hidden;
   display: flex; align-items: flex-end; justify-content: center; touch-action: none; cursor: pointer;
 }
 .vslider-fill { position: absolute; bottom: 0; left: 0; right: 0; background: var(--accent); border-radius: 0 0 16px 16px; pointer-events: none; }
@@ -1196,7 +1216,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .settings-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .settings-scroll .setting-group-label:not(:first-child) { margin-top: 12px; }
 .setting-group-label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin: 4px 2px; }
-.setting-row { display: flex; align-items: center; justify-content: space-between; background: #1b222b; border-radius: 14px; padding: 16px 20px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); border-radius: 14px; padding: 16px 20px; }
 .setting-row .sr-main { display: flex; flex-direction: column; gap: 3px; }
 .setting-row .sr-name { font-size: var(--fs-base); font-weight: 600; }
 .setting-row .sr-sub { font-size: var(--fs-xs); color: var(--muted); line-height: 1.35; }
@@ -1456,3 +1476,66 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .rbtn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .rbtn.accent { background: var(--accent); color: #12161b; }
+
+
+/* ═══ Material ══════════════════════════════════════════════════════════════
+   One block rather than a shadow scattered across thirty component rules is
+   what makes "raised" auditable — the list of raised things IS this selector.
+   Nothing here touches color: each surface keeps whatever fill its own rule
+   gave it. */
+.dial,
+.recipe-title,
+.rov-bubble,
+.metric,
+.rp-card,
+.setting-row,
+.tile,
+.list,
+.seg,
+.date-nav,
+.pick-list,
+.pick-detail,
+.vslider,
+.assist-body .bigicon,
+.btn {
+  box-shadow: var(--edge-hi), var(--elev-1);
+}
+
+/* .rov-bubble.plain is a LABEL, not a control (the single-grinder case) — it
+   deliberately has no surface, so it must not gain one here. */
+.rov-bubble.plain {
+  box-shadow: none;
+}
+
+/* Nested surfaces stay flat. Each of these sits ON one of the raised surfaces
+   above, and stacking a second sheen + shadow inside its own parent is exactly
+   what makes a UI look muddy rather than deep — the existing "sits inside X,
+   which is itself var(--card-bg)" comments mark the same boundary. */
+.seg button,
+.date-nav button,
+.pick-list .pick-item,
+.setting-row .switch,
+.list .list-row {
+  box-shadow: none;
+}
+
+/* The orbs are the espresso page's subject, so they sit one step higher than
+   the surfaces around them. */
+.dial {
+  box-shadow: var(--edge-hi), var(--elev-2);
+}
+/* Dragging already recolored the border; with depth in play the orb should also
+   LIFT — a crisp accent ring plus a stronger shadow. A solid ring, not a soft
+   glow: --accent is a hex custom property, and alpha-ing it would need
+   color-mix(), which the tablet's WebView drops (see the token block). */
+.dial.dragging {
+  box-shadow: var(--edge-hi), 0 0 0 2px var(--accent), var(--elev-2);
+}
+
+/* Modals already float above a blurred scrim and already had a deliberately
+   deep shadow — keep that exact lift (0 20px 60px) and only add the edge
+   highlight, so a modal reads as the same material as everything else without
+   changing how far it floats. */
+.modal {
+  box-shadow: var(--edge-hi), 0 20px 60px rgba(0, 0, 0, 0.5);
+}

@@ -137,3 +137,19 @@ body[data-phone="true"] .shot-metrics { grid-template-columns: repeat(3, 1fr); }
    two now sit at opposite screen edges. */
 body[data-phone="true"] .shot-done { justify-content: flex-start; }
 body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }
+
+/* ═══ Material (phone) ══════════════════════════════════════════════════════
+   The phone shell has its own surface classes, so app.css's material block
+   can't reach them — same tokens, same rule: only things that sit on the page
+   background are raised. .phone-sublist is transparent, so the shot rows
+   inside it sit on the page too and belong here. */
+.phone-card,
+.phone-list-row,
+.phone-shot-row,
+.phone-list-item,
+.phone-back,
+.phone-icon-btn,
+.phone-filter-chip,
+.phone-load-more {
+  box-shadow: var(--edge-hi), var(--elev-1);
+}
