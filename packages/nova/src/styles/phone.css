@@ -66,7 +66,7 @@ body[data-phone="true"] {
 .phone-crumb { flex: 1; font-size: var(--fs-md); font-weight: 700; }
 .phone-back, .phone-icon-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 10px;
+  width: 34px; height: 34px; border-radius: var(--r-sm);
   background: var(--card-bg); border: none; color: var(--text);
 }
 .phone-back svg, .phone-icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -74,7 +74,7 @@ body[data-phone="true"] {
 .phone-filter-chip {
   align-self: flex-start;
   display: flex; align-items: center; gap: 6px;
-  background: var(--card-bg); border: none; border-radius: 999px;
+  background: var(--card-bg); border: none; border-radius: var(--r-pill);
   padding: 6px 12px; color: var(--text); font-size: var(--fs-xs);
 }
 
@@ -90,7 +90,7 @@ body[data-phone="true"] {
 .phone-list { display: flex; flex-direction: column; gap: 8px; }
 .phone-list-row {
   display: flex; align-items: center; gap: 10px;
-  background: var(--card-bg); border: none; border-radius: 12px;
+  background: var(--card-bg); border: none; border-radius: var(--r-md);
   padding: 12px 14px; text-align: left; color: var(--text);
 }
 .phone-list-row .rmeta { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-base); font-weight: 600; }
@@ -102,7 +102,7 @@ body[data-phone="true"] {
 .phone-sublist { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; }
 .phone-shot-row, .phone-list-item {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  background: var(--card-bg); border-radius: 12px; padding: 10px 14px;
+  background: var(--card-bg); border-radius: var(--r-md); padding: 10px 14px;
   width: 100%; border: none; font: inherit; color: var(--text); text-align: left;
 }
 .phone-shot-row .shot-facts, .phone-list-item { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); }
@@ -111,7 +111,7 @@ body[data-phone="true"] {
 .phone-shot-row .stars svg.on { fill: var(--accent); stroke: var(--accent); }
 
 .phone-empty { text-align: center; color: var(--muted); font-size: var(--fs-sm); padding: 24px 0; }
-.phone-load-more { background: var(--card-bg); border: none; border-radius: 12px; padding: 12px; color: var(--accent); font-weight: 600; }
+.phone-load-more { background: var(--card-bg); border: none; border-radius: var(--r-md); padding: 12px; color: var(--accent); font-weight: 600; }
 
 /* ===== Reused tablet overlays: reflow the hardcoded-width offenders =====
    MachinePanel's settings sliders have a fixed 300-312px track that would

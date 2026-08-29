@@ -26,24 +26,28 @@
 import { computed, watch } from 'vue';
 import { TABS } from '../router/index.js';
 
-// The untinted greys — the same values app.css declares on :root, which stay
-// the source of truth for anything that never sees an accent (and the fallback
-// if a route isn't one of the six tabs).
-const BASE = {
-  '--app-bg': '#12161b',
-  '--page-bg': '#242b35',
-  '--card-bg': '#1b222b',
-  '--tab-bg': '#191f26',
-};
-// How much accent each surface takes. The page carries the most (it is the
-// largest area and the one the eye reads as "the screen's colour"); the rail
-// island the least, since it sits behind six differently-coloured tabs.
+// How much accent each surface takes, and — read from the stylesheet on first
+// use — the untinted grey it starts from. Read rather than duplicated: these
+// are declared on :root in app.css, and a second copy here would silently rot
+// the first time one of them is adjusted there. Captured once, BEFORE anything
+// is written to the inline style, so later runs still mix from the original
+// greys instead of compounding onto an already-tinted value.
+// The page carries the most (it is the largest area and the one the eye reads
+// as "the screen's colour"); the rail island the least, since it sits behind
+// six differently-coloured tabs.
 const TINT = {
   '--app-bg': 0.04,
   '--page-bg': 0.06,
   '--card-bg': 0.05,
   '--tab-bg': 0.03,
 };
+
+let BASE = null;
+function captureBase() {
+  const cs = getComputedStyle(document.documentElement);
+  BASE = {};
+  for (const key of Object.keys(TINT)) BASE[key] = cs.getPropertyValue(key).trim();
+}
 
 const hex = (c) => {
   const v = parseInt(c.slice(1), 16);
@@ -66,10 +70,13 @@ export function useAccent(route) {
   );
 
   watch(accent, (value) => {
+    if (!BASE) captureBase();
     const root = document.documentElement;
     root.style.setProperty('--accent', value);
-    for (const key of Object.keys(BASE)) {
-      root.style.setProperty(key, mix(BASE[key], value, TINT[key]));
+    for (const [key, amount] of Object.entries(TINT)) {
+      // A stylesheet that ever drops one of these keys would yield '' here;
+      // skip rather than write "#NaNNaNNaN" over a working colour.
+      if (BASE[key]) root.style.setProperty(key, mix(BASE[key], value, amount));
     }
   }, { immediate: true });
 }
