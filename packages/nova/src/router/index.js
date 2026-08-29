@@ -28,7 +28,13 @@ export const TABS = [
   { name: 'hotwater', path: '/hotwater', component: HotWater, side: 'left',  accent: '#d97b5a', icon: ICONS.hotwater },
   { name: 'cleaning', path: '/cleaning', component: Cleaning, side: 'right', accent: '#5fb8a5', icon: ICONS.cleaning },
   { name: 'diary',    path: '/diary',    component: Diary,    side: 'right', accent: '#a48fd1', icon: ICONS.diary },
-  { name: 'settings', path: '/settings', component: Settings, side: 'right', accent: '#9aa4ad', icon: ICONS.settings },
+  // Petrol. Bluer and more saturated than Cleaning's mint, deeper than Steam's
+  // light blue — it sits between the two, and the six tab colours only work as
+  // wayfinding while each stays telling on its own. Held at this lightness on
+  // purpose: a truer, darker petrol drops to ~3.8:1 against the page, out of
+  // family with the other five (4.7-6.0) and short of readable for the small
+  // uppercase labels the accent is used for.
+  { name: 'settings', path: '/settings', component: Settings, side: 'right', accent: '#4fa3b5', icon: ICONS.settings },
 ];
 
 export default createRouter({

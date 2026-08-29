@@ -1,5 +1,7 @@
 <script setup>
 import { watch } from 'vue';
+import { useRoute } from 'vue-router';
+import { useAccent } from './composables/useAccent.js';
 import { locked } from './composables/useScreensaver.js';
 import { phase as liveShotPhase } from './composables/useLiveShot.js';
 import { isPhone } from './composables/useLayout.js';
@@ -19,6 +21,10 @@ import SimpleLiveOverlay from './components/SimpleLiveOverlay.vue';
 import FlushCountdown from './components/FlushCountdown.vue';
 import MobileShell from './components/mobile/MobileShell.vue';
 import ShotReview from './components/mobile/ShotReview.vue';
+
+// Paints the whole document in the active tab's colour — see useAccent.js for
+// why the palette never left the rail before this.
+useAccent(useRoute());
 
 // phone.css targets this to scope its rules without leaking into the tablet
 // stylesheet's class names.

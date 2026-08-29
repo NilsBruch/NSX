@@ -1493,6 +1493,17 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .rbtn.accent { background: var(--accent); color: #12161b; }
 
 
+/* Switching tabs re-tints every surface (useAccent.js). Custom properties
+   themselves don't transition, but the background-color that reads them does —
+   so the two largest areas cross-fade instead of snapping. The smaller cards
+   are left to switch instantly: at a 5% tint the change is barely visible, and
+   transitioning every surface would fight the rail's own liquid animation for
+   the same 0.32s. */
+body,
+.page {
+  transition: background-color 0.3s ease;
+}
+
 /* ═══ Material ══════════════════════════════════════════════════════════════
    One block rather than a shadow scattered across thirty component rules is
    what makes "raised" auditable — the list of raised things IS this selector.
