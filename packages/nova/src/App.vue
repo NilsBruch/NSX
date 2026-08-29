@@ -16,6 +16,7 @@ import RatingModal from './components/RatingModal.vue';
 import Toast from './components/Toast.vue';
 import LiveShotOverlay from './components/LiveShotOverlay.vue';
 import SimpleLiveOverlay from './components/SimpleLiveOverlay.vue';
+import FlushCountdown from './components/FlushCountdown.vue';
 import MobileShell from './components/mobile/MobileShell.vue';
 import ShotReview from './components/mobile/ShotReview.vue';
 
@@ -47,6 +48,9 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
          user is on any tab, not just its own page — see the design log. -->
     <LiveShotOverlay v-if="liveShotPhase !== 'hidden'" />
     <SimpleLiveOverlay />
+    <!-- A flush is housekeeping, not a beverage — a centred countdown rather
+         than one of the two full-screen live overlays above. -->
+    <FlushCountdown />
 
     <!-- Locked is NOT the same as "machine asleep" — see useScreensaver.js. Sleep
          always locks, but unlocking doesn't always wake the machine back up. -->

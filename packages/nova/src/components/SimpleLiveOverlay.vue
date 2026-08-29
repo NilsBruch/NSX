@@ -6,6 +6,13 @@
  * reasoning as LiveShotOverlay: a hardware-triggered dispense can start from
  * any tab.
  *
+ * The two beverages are drawn at different WEIGHTS, deliberately. Steaming is
+ * hands-on and a few seconds long, so it gets the centred LiveRing over a
+ * blurred page (same treatment as the flush): the timer is the only thing you
+ * look at, and the page underneath doesn't need replacing for it. Hot water
+ * keeps the full-screen layout, because its readout is a dispensed-vs-target
+ * pair that wants room to be read as a quantity, not a countdown.
+ *
  * Two readouts, one per beverage:
  *  - STEAM: a timer. Counts only the active pour (substate 'pouring'; the
  *    'steam' state also covers wand heat-up, so the anchor is the first pour,
@@ -22,6 +29,7 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { machine, liveShot } from '../composables/useCore.js';
 import { steam, hotwater } from '../composables/useMachineFunctions.js';
+import LiveRing from './LiveRing.vue';
 
 const { t } = useI18n();
 const { NSXCore, NSXApi } = window;
@@ -61,6 +69,14 @@ const timeLabel = computed(() => {
   const sec = Math.floor(elapsedSec.value);
   const shown = countdown.value ? Math.max(0, Math.round(steam.duration) - sec) : sec;
   return `${Math.floor(shown / 60)}:${String(shown % 60).padStart(2, '0')}`;
+});
+
+// Only a timed steam has an end to run down to; with auto-stop off the ring
+// stays full (LiveRing's null = indeterminate) rather than implying a target
+// the machine isn't working towards.
+const steamProgress = computed(() => {
+  if (!countdown.value || !(steam.duration > 0)) return null;
+  return Math.max(0, Math.min(1, (steam.duration - elapsedSec.value) / steam.duration));
 });
 
 function tick() {
@@ -105,25 +121,23 @@ async function stop() {
 </script>
 
 <template>
-  <div v-if="visible" class="overlay-full">
+  <LiveRing v-if="isSteam" :value="timeLabel" :progress="steamProgress">
+    <button class="rate-btn" @click="stop">{{ t('common.stop') }}</button>
+  </LiveRing>
+
+  <div v-else-if="visible" class="overlay-full">
     <div class="assist-body">
       <span class="bigicon">
-        <svg v-if="isHotWater" viewBox="0 0 24 24" aria-hidden="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 3.5s5.5 6.3 5.5 10a5.5 5.5 0 0 1-11 0c0-3.7 5.5-10 5.5-10z" /><path d="M9.5 14.5a2.8 2.8 0 0 0 2.3 2.7" />
-        </svg>
-        <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" />
         </svg>
       </span>
       <div class="live-title">{{ title }}</div>
 
-      <template v-if="isHotWater">
-        <div class="assist-text" style="font-size: var(--fs-xl); font-variant-numeric: tabular-nums">
-          <b style="color: var(--accent)">{{ hwDispensed }}</b> / {{ hwTarget || '—' }} <small style="color: var(--muted)">ml</small>
-        </div>
-        <div class="progress"><div class="bar" :style="{ width: `${hwPct}%` }"></div></div>
-      </template>
-      <div v-else class="assist-text" style="font-size: var(--fs-xl); font-variant-numeric: tabular-nums">{{ timeLabel }}</div>
+      <div class="assist-text" style="font-size: var(--fs-xl); font-variant-numeric: tabular-nums">
+        <b style="color: var(--accent)">{{ hwDispensed }}</b> / {{ hwTarget || '—' }} <small style="color: var(--muted)">ml</small>
+      </div>
+      <div class="progress"><div class="bar" :style="{ width: `${hwPct}%` }"></div></div>
     </div>
     <div class="ov-bottom"><button class="rate-btn" @click="stop">{{ t('common.stop') }}</button></div>
   </div>
