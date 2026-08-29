@@ -25,6 +25,7 @@
  */
 import { computed, watch } from 'vue';
 import { TABS } from '../router/index.js';
+import { skinSettings } from './useSettings.js';
 
 // How much accent each surface takes, and — read from the stylesheet on first
 // use — the untinted grey it starts from. Read rather than duplicated: these
@@ -65,18 +66,36 @@ const DEFAULT_ACCENT = '#7fa8c9';
 
 /** Call once, from App.vue, with the current route. */
 export function useAccent(route) {
-  const accent = computed(
+  const tabAccent = computed(
     () => TABS.find((t) => t.name === route.name)?.accent ?? DEFAULT_ACCENT
   );
 
-  watch(accent, (value) => {
-    if (!BASE) captureBase();
-    const root = document.documentElement;
-    root.style.setProperty('--accent', value);
-    for (const [key, amount] of Object.entries(TINT)) {
-      // A stylesheet that ever drops one of these keys would yield '' here;
-      // skip rather than write "#NaNNaNNaN" over a working colour.
-      if (BASE[key]) root.style.setProperty(key, mix(BASE[key], value, amount));
-    }
-  }, { immediate: true });
+  // Watched as a pair: the setting arrives AFTER this runs (loadSkinSettings
+  // only fires once bootCore resolves), so the switch has to re-apply, not
+  // just be read once at startup.
+  watch(
+    [tabAccent, () => skinSettings.tabColors],
+    ([accent, colourByTab]) => {
+      if (!BASE) captureBase();
+      const root = document.documentElement;
+
+      if (!colourByTab) {
+        // Off: one blue everywhere and the untinted greys back. Removing the
+        // inline properties rather than writing the base values back is what
+        // keeps app.css the single source of those colours — change a grey
+        // there and this mode follows without touching anything here.
+        root.style.setProperty('--accent', DEFAULT_ACCENT);
+        for (const key of Object.keys(TINT)) root.style.removeProperty(key);
+        return;
+      }
+
+      root.style.setProperty('--accent', accent);
+      for (const [key, amount] of Object.entries(TINT)) {
+        // A stylesheet that ever drops one of these keys would yield '' here;
+        // skip rather than write "#NaNNaNNaN" over a working colour.
+        if (BASE[key]) root.style.setProperty(key, mix(BASE[key], accent, amount));
+      }
+    },
+    { immediate: true }
+  );
 }

@@ -389,6 +389,8 @@ export default {
     general: 'General', brightness: 'Brightness',
     timeFormat: 'Time format', timeFormat24: '24-hour', timeFormat12: '12-hour',
     startPage: 'Start page', wakelock: 'Keep screen awake', screensaverBrightness: 'Screensaver brightness',
+    tabColors: 'Colour by tab',
+    tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',
     reviewAutoCloseOff: 'Stay open', reviewAutoCloseSec: 'After {n}s',
   },

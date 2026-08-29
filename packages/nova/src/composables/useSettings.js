@@ -202,6 +202,12 @@ export const skinSettings = reactive({
   screensaverBrightness: 30,
   wakelock: true,
   waterUnit: 'ml', // 'ml' | 'pct' | 'mm' — how the island shows the tank level
+  // true  = each tab paints the whole skin in its own accent and tints the
+  //         surfaces with it (useAccent.js);
+  // false = the original single blue everywhere, untinted greys. The rail's
+  //         six tab colours are unaffected either way — those were never the
+  //         part in question.
+  tabColors: true,
   shotReviewAutoCloseSec: 5, // 0 = stay open until dismissed
 });
 const SKIN_KEYS = {
@@ -211,6 +217,7 @@ const SKIN_KEYS = {
   screensaverBrightness: 'nova_screensaver_brightness',
   wakelock: 'nova_wakelock',
   waterUnit: 'nova_water_unit',
+  tabColors: 'nova_tab_colors',
   shotReviewAutoCloseSec: 'nova_shot_review_autoclose',
 };
 export function loadSkinSettings() {
@@ -225,6 +232,7 @@ export function loadSkinSettings() {
   skinSettings.screensaverBrightness = s.nova_screensaver_brightness != null ? Number(s.nova_screensaver_brightness) : 30;
   skinSettings.wakelock = s.nova_wakelock !== false;
   skinSettings.waterUnit = s.nova_water_unit || 'ml';
+  skinSettings.tabColors = s.nova_tab_colors !== false; // default on
   // Default 5s; an explicit stored 0 (off) must survive, so don't `|| 5`.
   skinSettings.shotReviewAutoCloseSec = s.nova_shot_review_autoclose != null ? Number(s.nova_shot_review_autoclose) : 5;
 }

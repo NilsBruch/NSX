@@ -78,6 +78,16 @@ async function pickReviewAutoClose() {
         <span class="sr-name">{{ t('skinSettings.timeFormat') }}</span>
         <span class="sr-value">{{ optLabel(timeFormatOpts, skinSettings.timeFormat) }}<span class="sr-chev">›</span></span>
       </button>
+      <!-- Off restores the original look: one blue everywhere, untinted greys.
+           The rail's six tab colours stay either way — this is about whether
+           the PAGE takes the colour of the tab you're on. -->
+      <div class="setting-row">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('skinSettings.tabColors') }}</span>
+          <span class="sr-sub">{{ t('skinSettings.tabColorsSub') }}</span>
+        </span>
+        <button class="switch" :class="{ on: skinSettings.tabColors }" role="switch" :aria-checked="skinSettings.tabColors" @click="saveSkinSetting('tabColors', !skinSettings.tabColors)"></button>
+      </div>
       <button class="setting-row as-btn" @click="pickStartTab">
         <span class="sr-name">{{ t('skinSettings.startPage') }}</span>
         <span class="sr-value">{{ optLabel(startTabOpts, skinSettings.startTab) }}<span class="sr-chev">›</span></span>
