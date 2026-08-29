@@ -6,12 +6,11 @@
  * reasoning as LiveShotOverlay: a hardware-triggered dispense can start from
  * any tab.
  *
- * The two beverages are drawn at different WEIGHTS, deliberately. Steaming is
- * hands-on and a few seconds long, so it gets the centred LiveRing over a
- * blurred page (same treatment as the flush): the timer is the only thing you
- * look at, and the page underneath doesn't need replacing for it. Hot water
- * keeps the full-screen layout, because its readout is a dispensed-vs-target
- * pair that wants room to be read as a quantity, not a countdown.
+ * Both are drawn as the centred LiveRing over a blurred page, the same
+ * treatment as the flush: hands-on, seconds long, one number worth looking at,
+ * and no reason to replace the page for it. The ring runs in opposite
+ * directions for the two — steam's DRAINS towards zero, hot water's FILLS
+ * towards the target — which is exactly what each readout means.
  *
  * Two readouts, one per beverage:
  *  - STEAM: a timer. Counts only the active pour (substate 'pouring'; the
@@ -34,10 +33,9 @@ import LiveRing from './LiveRing.vue';
 const { t } = useI18n();
 const { NSXCore, NSXApi } = window;
 
-const LIVE_STATES = { steam: 'tab.steam', hotWater: 'tab.hotwater' };
-const visible = computed(() => machine.state in LIVE_STATES);
-const title = computed(() => (machine.state in LIVE_STATES ? t(LIVE_STATES[machine.state]) : ''));
-
+// Both states share the one timer/lifecycle below, so they're watched as a set
+// rather than with two separate watches.
+const LIVE_STATES = ['steam', 'hotWater'];
 const isSteam = computed(() => machine.state === 'steam');
 const isHotWater = computed(() => machine.state === 'hotWater');
 
@@ -52,7 +50,12 @@ const hwDispensed = computed(() =>
     ? Math.max(0, Math.round((machine.weight ?? 0) - startWeight))
     : Math.max(0, Math.round(flowVolume.value))
 );
-const hwPct = computed(() => (hwTarget.value > 0 ? Math.min(100, (hwDispensed.value / hwTarget.value) * 100) : 0));
+// The ring FILLS as water is delivered. No target set -> nothing to fill
+// towards, so it stays indeterminate and the millilitres just count up.
+const hwProgress = computed(() =>
+  hwTarget.value > 0 ? Math.min(1, hwDispensed.value / hwTarget.value) : null
+);
+const hwSub = computed(() => (hwTarget.value > 0 ? `/ ${hwTarget.value} ml` : 'ml'));
 
 // ── Timer (steam only; hot water shows ml, not a timer) ──────────────────────
 // Steam advances only while actively pouring; hot water isn't timed.
@@ -96,8 +99,8 @@ function tick() {
 watch(
   () => machine.state,
   (state, prev) => {
-    const entering = state in LIVE_STATES && !(prev in LIVE_STATES);
-    const leaving = !(state in LIVE_STATES) && prev in LIVE_STATES;
+    const entering = LIVE_STATES.includes(state) && !LIVE_STATES.includes(prev);
+    const leaving = !LIVE_STATES.includes(state) && LIVE_STATES.includes(prev);
     if (entering) {
       startMs = 0;
       lastTickMs = Date.now();
@@ -125,20 +128,11 @@ async function stop() {
     <button class="rate-btn" @click="stop">{{ t('common.stop') }}</button>
   </LiveRing>
 
-  <div v-else-if="visible" class="overlay-full">
-    <div class="assist-body">
-      <span class="bigicon">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3.5s5.5 6.3 5.5 10a5.5 5.5 0 0 1-11 0c0-3.7 5.5-10 5.5-10z" /><path d="M9.5 14.5a2.8 2.8 0 0 0 2.3 2.7" />
-        </svg>
-      </span>
-      <div class="live-title">{{ title }}</div>
-
-      <div class="assist-text" style="font-size: var(--fs-xl); font-variant-numeric: tabular-nums">
-        <b style="color: var(--accent)">{{ hwDispensed }}</b> / {{ hwTarget || '—' }} <small style="color: var(--muted)">ml</small>
-      </div>
-      <div class="progress"><div class="bar" :style="{ width: `${hwPct}%` }"></div></div>
-    </div>
-    <div class="ov-bottom"><button class="rate-btn" @click="stop">{{ t('common.stop') }}</button></div>
-  </div>
+  <!-- Millilitres, from the scale when there is one (a real measurement of what
+       landed in the cup) and from the machine's integrated flow when there
+       isn't — see the header. Same number either way, so the readout doesn't
+       change shape when a scale connects mid-dispense. -->
+  <LiveRing v-else-if="isHotWater" :value="String(hwDispensed)" :sub="hwSub" :progress="hwProgress">
+    <button class="rate-btn" @click="stop">{{ t('common.stop') }}</button>
+  </LiveRing>
 </template>

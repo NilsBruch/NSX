@@ -10,15 +10,21 @@
  * Here the page recedes instead of being replaced, so nothing has to be
  * dismissed when the machine finishes.
  *
- * `progress` is the FILLED fraction (1 = full ring, 0 = empty). Pass null for
- * an indeterminate action — the ring then stays full and the number is simply
- * counting up, which is honest about there being no known end.
+ * `progress` is the FILLED fraction (1 = full ring, 0 = empty), which covers
+ * both directions the ring is used in: a countdown passes the REMAINING share
+ * so the arc drains, a dispense passes the DELIVERED share so it fills. Pass
+ * null for an indeterminate action — the ring then stays full and the number
+ * is simply counting up, which is honest about there being no known end.
+ *
+ * `sub` is an optional smaller line under the number, for the readouts whose
+ * value only means something against a target ("120" over "/ 200 ml").
  */
 import { computed, useSlots } from 'vue';
 
 const props = defineProps({
   value: { type: String, required: true },
   progress: { type: Number, default: null },
+  sub: { type: String, default: '' },
 });
 
 const slots = useSlots();
@@ -50,7 +56,10 @@ const dashOffset = computed(() => {
         transform="rotate(-90 60 60)"
       />
     </svg>
-    <div class="lring-num">{{ value }}</div>
+    <div class="lring-val">
+      <div class="lring-num">{{ value }}</div>
+      <div v-if="sub" class="lring-sub">{{ sub }}</div>
+    </div>
   </div>
   <!-- Bottom of the SCREEN, not of the ring: that's where the stop control
        lives in the full-screen live overlays, and a running machine is exactly
@@ -91,9 +100,14 @@ const dashOffset = computed(() => {
 .lring-track, .lring-arc { fill: none; stroke-width: 6; stroke-linecap: round; }
 .lring-track { stroke: rgba(255, 255, 255, 0.07); }
 .lring-arc { stroke: var(--accent); transition: stroke-dashoffset 0.12s linear; }
+.lring-val { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .lring-num {
   font-size: var(--fs-2xl); font-weight: 700; line-height: 1;
   font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.lring-sub {
+  font-size: var(--fs-sm); font-weight: 600; color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The scrim above is pointer-events: none, so the action has to opt itself
