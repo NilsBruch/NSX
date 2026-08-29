@@ -455,8 +455,28 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    your finger was already travelling towards had shifted by the time it
    landed. The strip's fixed height (below) covers the common case; this covers
    the rest. */
-.kb-scrim { align-items: flex-end; padding-bottom: 22px; }
-.kb-modal { width: min(720px, 94vw); }
+.kb-scrim { align-items: flex-end; padding-bottom: 18px; }
+/* Scaled up as a whole for reach: keys are both taller and — since the row is
+   ten keys wide — MUCH wider, which is where the accuracy actually comes from
+   (720px gave ~63px per key, 940px gives ~83px). Width is free on a 1009px
+   stage; height is not, so the extra 38px the taller keys and wider gaps cost
+   is paid for by tightening this modal's own gap and padding rather than by
+   growing the box. The stack is already near the stage height in tags mode
+   (chips + suggestions + keys), and a keyboard that overflows is worse than a
+   slightly smaller one. */
+.kb-modal { width: min(940px, 96vw); gap: 14px; padding: 18px; }
+/* And a hard cap, so "taller keys" can never turn into "the keys or the field
+   you're typing into are off-screen". Bottom-anchored, overflow would clip the
+   TOP — the title and the input, the two things you least want gone. Instead
+   the modal stops at the stage height and the parts that can absorb it do:
+   the chip rows and the notes field all scroll internally already, so they
+   shrink first while the keys and the confirm row keep their size. This only
+   ever engages in the tallest combination (committed chips AND suggestions);
+   in the normal case nothing is squeezed at all. */
+.kb-modal { max-height: calc(100vh - 36px); }
+.kb-modal .m-title,
+.kb-modal .kb,
+.kb-modal .modal-actions { flex: none; }
 .kb-modal .text-field-input {
   width: 100%; background: var(--card-bg); border: 1px solid #2a323d; border-radius: 12px;
   color: var(--text); font: inherit; font-size: var(--fs-md); text-align: center; padding: 14px 16px;
@@ -480,6 +500,17 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .tf-tag-x { font-size: var(--fs-md); font-weight: 700; line-height: 1; opacity: 0.75; }
 /* Autocomplete chips: existing values matching what's typed — tap one to fill. */
+/* Committed notes above, still-available ones below — one rule separates them,
+   and only when there is actually something above to separate FROM (the
+   adjacent-sibling selector; .tf-tags is itself v-if'd on having any). The
+   universal border-box means the border and padding come out of the strip's
+   fixed height rather than adding to it, so the divider appearing costs no
+   layout shift. #262e39 is the same hairline .list-row and .chooser-item use. */
+.tf-tags + .tf-suggests {
+  border-top: 1px solid #262e39;
+  padding-top: 10px;
+}
+
 /* A FIXED height, not max-height: the strip reserves its space whether it
    currently holds five chips, one, or none, so narrowing the matches while
    typing can't resize the modal under the user's fingers. align-content keeps
@@ -495,12 +526,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
   touch-action: manipulation;
 }
-.kb { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-.kb-row { display: flex; gap: 8px; justify-content: center; }
+.kb { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.kb-row { display: flex; gap: 10px; justify-content: center; }
 .kb-key {
-  flex: 1 1 0; min-width: 0; height: 52px; border: none; border-radius: 10px;
+  flex: 1 1 0; min-width: 0; height: 60px; border: none; border-radius: 12px;
   background: var(--card-bg); color: var(--text);
-  font-family: inherit; font-size: var(--fs-base); font-weight: 600;
+  font-family: inherit; font-size: var(--fs-md); font-weight: 600;
   display: flex; align-items: center; justify-content: center;
   /* Touch only: without this the engine keeps double-tap-to-zoom alive on the
      key and has to wait out the disambiguation window before delivering the
@@ -514,8 +545,8 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .kb-key:disabled { opacity: 0.35; }
 .kb-key.on { background: var(--accent); color: #12161b; }
 .kb-key.accent { background: var(--accent); color: #12161b; }
-.kb-key.kb-wide { flex: 1.5 1 0; font-size: var(--fs-sm); }
-.kb-key.kb-space { flex: 5 1 0; font-size: var(--fs-sm); }
+.kb-key.kb-wide { flex: 1.5 1 0; font-size: var(--fs-base); }
+.kb-key.kb-space { flex: 5 1 0; font-size: var(--fs-base); }
 
 .modal-actions { display: flex; gap: 10px; width: 100%; }
 .modal-actions button { flex: 1; height: 52px; border: none; border-radius: 12px; font-family: inherit; font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.04em; }
