@@ -15,7 +15,8 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   phase, historyShots, historyIndex, currentFullShot,
-  closeHistory, olderShot, newerShot, rateShot, setActualDose, deleteCurrentShot,
+  closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield,
+  grindSetting, setGrindSetting, deleteCurrentShot,
 } from '../../composables/useLiveShot.js';
 import { openNumberPad, openConfirm } from '../../composables/useModals.js';
 import ShotStripChart from '../ShotStripChart.vue';
@@ -80,6 +81,32 @@ async function editActualDose() {
   const v = await openNumberPad({ title: t('liveShot.mIn'), unit: 'g', value: fmtWeight(actualDose.value) === '—' ? '' : fmtWeight(actualDose.value) });
   if (v != null) setActualDose(parseFloat(v));
 }
+
+async function editActualYield() {
+  const dose = actualDose.value;
+  const current = actualYield.value.value;
+  const v = await openNumberPad({
+    title: t('liveShot.mOut'), unit: 'g',
+    value: fmtWeight(current) === '—' ? '' : fmtWeight(current),
+    // Same linked-ratio field as the recipe's yield editor: dose is fixed
+    // here, so typing either the grams or the 1:x recomputes the other live —
+    // which is how the RATIO tile's new value is chosen, not just watched.
+    linked: dose > 0 && Number.isFinite(current) ? {
+      label: t('espresso.ratio'), unit: '', prefix: '1 : ',
+      value: (current / dose).toFixed(1),
+      toLinked: (yieldValue) => (yieldValue / dose).toFixed(1),
+      toPrimary: (ratioValue) => (Math.round(dose * ratioValue * 10) / 10).toFixed(1),
+    } : null,
+  });
+  if (v != null) setActualYield(parseFloat(v));
+}
+
+async function editGrindSetting() {
+  const v = await openNumberPad({ title: t('liveShot.mGrind'), value: grindSetting.value ?? '' });
+  // Stored as a string, like the recipe's own grinderSetting — a grinder's
+  // scale isn't necessarily numeric-with-one-decimal.
+  if (v != null) setGrindSetting(String(v));
+}
 </script>
 
 <template>
@@ -104,11 +131,15 @@ async function editActualDose() {
         <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
       </div>
       <div class="shot-metrics">
-        <div class="metric"><div class="ml">{{ t('liveShot.mGrind') }}</div><div class="mv">{{ currentShot.workflow?.context?.grinderSetting ?? '—' }}</div></div>
+        <button class="metric as-btn" @click="editGrindSetting">
+          <div class="ml">{{ t('liveShot.mGrind') }}</div><div class="mv">{{ grindSetting ?? '—' }}</div>
+        </button>
         <button class="metric as-btn" @click="editActualDose">
           <div class="ml">{{ t('liveShot.mIn') }}</div><div class="mv">{{ fmtWeight(actualDose) }}<small>g</small></div>
         </button>
-        <div class="metric"><div class="ml">{{ t('liveShot.mOut') }}</div><div class="mv">{{ fmtWeight(actualYield.value) }}<small>{{ actualYield.unit }}{{ actualYield.estimated ? '*' : '' }}</small></div></div>
+        <button class="metric as-btn" @click="editActualYield">
+          <div class="ml">{{ t('liveShot.mOut') }}</div><div class="mv">{{ fmtWeight(actualYield.value) }}<small>{{ actualYield.unit }}{{ actualYield.estimated ? '*' : '' }}</small></div>
+        </button>
         <div class="metric"><div class="ml">{{ t('liveShot.mRatio') }}</div><div class="mv">{{ ratioLabel }}</div></div>
         <div class="metric"><div class="ml">{{ t('liveShot.mTime') }}</div><div class="mv">{{ durationLabel }}<small>s</small></div></div>
       </div>

@@ -116,7 +116,11 @@ global (keeps core app-state-free).
 - **`shot.js`** — per-shot-id detail cache (a `Map`, no single canonical list):
   `getCachedShotDetails(id)` (sync, cache-only), `getShotDetails(id)`
   (fetch-or-cache), `invalidateShotDetails`, `deleteShot`, `updateShot`,
-  `updateShotMeta`. CRUD wrappers invalidate the cache entry on success.
+  `updateShotMeta`, and `updateShotWorkflowContext(id, ctxPatch)` — patches the
+  recipe-as-brewed (grind setting, roaster/bean, targets) by MERGING onto the
+  full record, since the gateway's PUT replaces `workflow` wholesale and a
+  context-only patch would drop the embedded profile. CRUD wrappers invalidate
+  the cache entry on success.
 - **`profile.js`** — three independent caches (visible / visible+hidden /
   deleted), each `null` until loaded, never cached empty (gateway can transiently
   return none right after wake): `getProfiles`, `getProfilesAll`,

@@ -264,6 +264,7 @@ export interface NSXCore {
   invalidateShotDetails(id: string): void;
   deleteShot(id: string): Promise<void>;
   updateShot(id: string, patch: any): Promise<any>;
+  updateShotWorkflowContext(id: string, ctxPatch: Record<string, any>): Promise<any>;
   updateShotMeta(id: string, patch: any): Promise<any>;
 
   // profile.js

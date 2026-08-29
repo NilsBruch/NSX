@@ -7,7 +7,7 @@
  * Mounted once as a global overlay (App.vue) since a hardware-triggered shot can
  * start while the user is on any tab, not just Espresso.
  */
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { machine, shots, loadShots, currentWorkflow } from './useCore.js';
 import { recipe, bumpRecipeLastUsed, saveVolumeCalibration } from './useRecipe.js';
 import { skinSettings } from './useSettings.js';
@@ -83,6 +83,47 @@ export async function setActualDose(doseWeight) {
   const shot = historyShots.value[historyIndex.value];
   if (!shot) return;
   await NSXCore.updateShot(shot.id, { annotations: { actualDoseWeight: doseWeight } });
+  currentFullShot.value = await NSXCore.getShotDetails(shot.id);
+}
+
+/** Records a corrected OUTPUT weight for the shot in review. Same override
+ *  resolveActualYield already reads before the machine's own volume snapshot
+ *  and the scale samples, so a value entered here wins over all of them — for
+ *  the shots where the scale was absent, bumped, or the cup got topped up. */
+export async function setActualYield(yieldWeight) {
+  cancelReviewAutoClose();
+  const shot = historyShots.value[historyIndex.value];
+  if (!shot) return;
+  // extras merges at field level, so clearing virtualScale here costs nothing
+  // else: a hand-entered yield is a measurement, and must stop rendering with
+  // the "estimated" asterisk resolveActualYield would otherwise keep on it.
+  await NSXCore.updateShot(shot.id, {
+    annotations: { actualYield: yieldWeight, extras: { virtualScale: false } },
+  });
+  currentFullShot.value = await NSXCore.getShotDetails(shot.id);
+}
+
+/** The grind setting recorded WITH the shot. Not an annotation: it's part of
+ *  the recipe as it was at brew time, so it lives in the workflow context and
+ *  is patched through core's merging helper. Prefers the full record, which is
+ *  what an edit refreshes — the lightweight list item keeps the old value
+ *  until the list itself is reloaded. */
+export const grindSetting = computed(() => {
+  const full = currentFullShot.value?.workflow?.context?.grinderSetting;
+  if (full != null && full !== '') return full;
+  const listed = historyShots.value[historyIndex.value]?.workflow?.context?.grinderSetting;
+  return listed != null && listed !== '' ? listed : null;
+});
+
+/** Corrects the grind setting on the shot in review — for a shot brewed right
+ *  after the grinder was adjusted but before the recipe was updated, whose
+ *  record therefore carries the previous number. Edits the SHOT only; the
+ *  recipe's current setting is untouched. */
+export async function setGrindSetting(value) {
+  cancelReviewAutoClose();
+  const shot = historyShots.value[historyIndex.value];
+  if (!shot) return;
+  await NSXCore.updateShotWorkflowContext(shot.id, { grinderSetting: value });
   currentFullShot.value = await NSXCore.getShotDetails(shot.id);
 }
 
