@@ -124,7 +124,9 @@ const assistantMode = ref(null); // null | 'forwardFlush' | 'backflush' | 'desca
         ></button>
       </div>
     </div>
-    <div class="prep-bottom cleaning-actions" style="justify-content: center; gap: 24px">
+    <!-- Layout lives in app.css's .cleaning-actions now, not in an inline
+         style: the gap is part of how the four buttons divide the row. -->
+    <div class="prep-bottom cleaning-actions">
       <button class="btn" @click="assistantMode = 'forwardFlush'">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 12a8 8 0 0 1 14-5m2-3v5h-5" /><path d="M20 12a8 8 0 0 1-14 5m-2 3v-5h5" />

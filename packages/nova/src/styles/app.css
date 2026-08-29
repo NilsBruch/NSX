@@ -768,8 +768,17 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .btn.accent { background: var(--accent); color: #12161b; }
 .btn.danger { background: rgba(232, 132, 111, 0.15); color: var(--alert); }
 .prep-bottom .btn { width: 200px; justify-content: center; }
-/* Cleaning page has more action buttons in the row — make each slightly narrower. */
-.prep-bottom.cleaning-actions .btn { width: 168px; }
+/* No wrapping in an action row: a two-line label next to three one-line ones
+   makes the row look accidental, and it is the label that should give way, not
+   the alignment. */
+.prep-bottom .btn { white-space: nowrap; }
+/* Cleaning has four buttons, and a fixed 168px left "Forward flush" ~10px short
+   of fitting — so it wrapped, and only that one did. Share the row evenly
+   instead of guessing a width (the same fix .prep-bottom-3 got when Espresso
+   grew a third button): four equal shares of this row are ~188px, with tighter
+   side padding to buy the longest label room it doesn't have to fight for. */
+.prep-bottom.cleaning-actions { justify-content: center; gap: 16px; }
+.prep-bottom.cleaning-actions .btn { width: auto; flex: 1; min-width: 0; padding: 0 14px; }
 /* EspressoView's row grew a third button (Edit profile) — share the row
    width evenly instead of three fixed 200px buttons risking overflow.
    Scoped so CleaningView's own (2-button, centered) row is untouched. */
