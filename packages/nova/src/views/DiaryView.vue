@@ -314,8 +314,11 @@ watch(
         <span class="x" :aria-label="t('diary.clearFilter')">×</span>
       </button>
       <span class="spacer" style="flex: 1"></span>
+      <!-- Present in all three views, not just Browse: what it creates (a
+           recipe) is equally the thing you'd want to add while looking at the
+           shot history or the recipe list, and a button that comes and goes
+           with the segment is one the hand can't learn. -->
       <button
-        v-if="diaryState.view === 'browse'"
         class="rbtn accent"
         :aria-label="t('diary.addRecipe')"
         @click="showRecipeCreator = true"
