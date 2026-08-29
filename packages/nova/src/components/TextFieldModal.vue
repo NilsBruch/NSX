@@ -105,6 +105,25 @@ function confirm() {
 }
 function cancel() { resolveTextField(null); }
 
+// Press feedback for the keys. Every other control in the skin gets this from
+// CSS :active (app.css), but the keys preventDefault() on pointerdown — which
+// is load-bearing for focus and for not dropping keystrokes, see the template
+// — and that suppresses the browser's own active state. So the class is set
+// here instead. Delegated from the .kb container rather than bound on each of
+// the ~40 keys, and released on leave/cancel too, so a finger that slides off
+// a key can't leave it stuck looking pressed.
+let pressedEl = null;
+function pressKey(e) {
+  const el = e.target.closest?.('.kb-key');
+  if (!el || el.disabled) return;
+  pressedEl = el;
+  el.classList.add('is-pressed');
+}
+function releaseKey() {
+  pressedEl?.classList.remove('is-pressed');
+  pressedEl = null;
+}
+
 // Existing values that match what's been typed so far (case-insensitive), so the
 // user can tap one instead of re-typing — keeps roaster/origin/etc. consistent.
 const suggestions = computed(() => {
@@ -206,7 +225,13 @@ function pickSuggestion(s) {
            browser resets selectionStart to 0, and every character is inserted
            at index 0 — text appears reversed. It also suppresses the
            compatibility mouse events, so no key can fire twice. -->
-      <div class="kb">
+      <div
+        class="kb"
+        @pointerdown="pressKey"
+        @pointerup="releaseKey"
+        @pointercancel="releaseKey"
+        @pointerleave="releaseKey"
+      >
         <div v-for="(row, i) in (numeric ? SYMBOLS : LETTERS)" :key="i" class="kb-row">
           <button
             v-if="i === 2"

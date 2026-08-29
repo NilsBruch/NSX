@@ -153,3 +153,32 @@ body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }
 .phone-load-more {
   box-shadow: var(--edge-hi), var(--elev-1);
 }
+
+/* ═══ Press feedback (phone) ════════════════════════════════════════════════
+   The phone shell has its own control classes, so app.css's press block can't
+   reach them — same two groups, same values. */
+.phone-back,
+.phone-icon-btn,
+.phone-filter-chip,
+.phone-load-more,
+.phone-shot-row,
+.phone-list-item {
+  transition: transform 0.09s ease, filter 0.09s ease;
+}
+.phone-back:active,
+.phone-icon-btn:active,
+.phone-filter-chip:active,
+.phone-load-more:active,
+.phone-shot-row:active,
+.phone-list-item:active {
+  transform: scale(0.96);
+  filter: brightness(1.14);
+}
+.phone-card,
+.phone-list-row {
+  transition: transform 0.09s ease, filter 0.09s ease;
+}
+.phone-list-row:active {
+  transform: scale(0.985);
+  filter: brightness(1.1);
+}

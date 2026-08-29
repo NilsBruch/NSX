@@ -1524,6 +1524,112 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .rbtn.accent { background: var(--accent); color: #12161b; }
 
 
+/* ═══ Press feedback ════════════════════════════════════════════════════════
+   A touch UI has to acknowledge the press. Before this the whole skin had
+   exactly ONE :active rule (the power button), so every other control was
+   inert under the finger — the only confirmation that a tap registered was
+   whatever it did next, which on a slow gateway round-trip is far too late.
+
+   Two groups, because the same 3% shrink reads very differently at 40px and
+   at 300px: small controls take a firmer press, large surfaces a barely-there
+   settle. Both lighten slightly, which is what carries the feedback on the
+   controls too big to visibly move.
+
+   Deliberately excluded: .tab (the rail runs its own liquid animation on the
+   same 0.32s and a transform would fight it), .dial and .vslider (drag
+   surfaces — a press state would latch on for the whole drag, and .dial
+   already shows its accent ring while dragging), and .kb-key, which prevents
+   the default on pointerdown and so can't rely on :active at all — it gets an
+   explicit class from TextFieldModal.vue instead. */
+.btn,
+.rbtn,
+.rate-btn,
+.sort-btn,
+.scan-btn,
+.filter-chip,
+.npad-key,
+.tf-suggest,
+.tf-tag,
+.seg button,
+.chooser-item,
+.pick-item,
+.list-row,
+.modal-actions button,
+.star,
+.kb-key {
+  transition: transform 0.09s ease, filter 0.09s ease;
+}
+.btn:active,
+.rbtn:active,
+.rate-btn:active,
+.sort-btn:active,
+.scan-btn:active,
+.filter-chip:active,
+.npad-key:active,
+.tf-suggest:active,
+.tf-tag:active,
+.seg button:active,
+.chooser-item:active,
+.pick-item:active,
+.list-row:active,
+.modal-actions button:active,
+.star:active,
+.kb-key.is-pressed {
+  transform: scale(0.96);
+  filter: brightness(1.14);
+}
+
+.tile,
+.setting-row.as-btn,
+.metric.as-btn,
+.rp-card,
+.recipe-title,
+.rov-bubble {
+  transition: transform 0.09s ease, filter 0.09s ease;
+}
+.tile:active,
+.setting-row.as-btn:active,
+.metric.as-btn:active,
+.rp-card:active,
+.recipe-title:active,
+.rov-bubble:active {
+  transform: scale(0.985);
+  filter: brightness(1.1);
+}
+/* .rov-bubble.plain is a label, not a control (single-grinder case) — it must
+   not react to being touched. */
+.rov-bubble.plain:active { transform: none; filter: none; }
+
+/* A disabled control must not pretend it took the press. */
+.btn:disabled:active,
+.rbtn:disabled:active,
+.rate-btn:disabled:active,
+.sort-btn:disabled:active,
+.npad-key:disabled:active,
+.modal-actions button:disabled:active,
+.kb-key:disabled {
+  transform: none;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .rbtn, .rate-btn, .sort-btn, .scan-btn, .filter-chip, .npad-key,
+  .tf-suggest, .tf-tag, .seg button, .chooser-item, .pick-item, .list-row,
+  .modal-actions button, .star, .kb-key, .tile, .setting-row.as-btn,
+  .metric.as-btn, .rp-card, .recipe-title, .rov-bubble {
+    transition: filter 0.09s ease;
+  }
+  .btn:active, .rbtn:active, .rate-btn:active, .sort-btn:active,
+  .scan-btn:active, .filter-chip:active, .npad-key:active, .tf-suggest:active,
+  .tf-tag:active, .seg button:active, .chooser-item:active, .pick-item:active,
+  .list-row:active, .modal-actions button:active, .star:active,
+  .kb-key.is-pressed, .tile:active, .setting-row.as-btn:active,
+  .metric.as-btn:active, .rp-card:active, .recipe-title:active,
+  .rov-bubble:active {
+    transform: none;
+  }
+}
+
 /* Switching tabs re-tints every surface (useAccent.js). Custom properties
    themselves don't transition, but the background-color that reads them does —
    so the two largest areas cross-fade instead of snapping. The smaller cards
