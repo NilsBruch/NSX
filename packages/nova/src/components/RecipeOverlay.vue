@@ -35,6 +35,14 @@ const sortMode = ref('use');
 
 const isCurrent = (entry) => entry.id != null && entry.id === recipe.id;
 
+// A recipe composed while no grinder existed yet carries none (useRecipe's
+// composeNewRecipe falls back to '—'). "One grinder is implicit" only holds
+// once the recipe actually HAS it, so an unset grinder stays pickable however
+// many are configured — otherwise such a recipe can never be given one.
+const grinderUnset = computed(() =>
+  recipe.grinderId == null && (!recipe.grinderModel || recipe.grinderModel === '—')
+);
+
 function grinderDisplay(entry) {
   const model = entry.grinderModel;
   if (!model || model === '—') return model;
@@ -94,10 +102,11 @@ async function pick(entry) {
           <span class="rov-bubble-name">{{ recipe.coffeeRoaster }} {{ recipe.coffeeName }}</span>
         </button>
         <!-- Nothing to switch TO with a single grinder (see useCore's
-             singleGrinder) — plain, not a button, matching layout A. -->
-        <button v-if="!singleGrinder" class="rov-bubble" @click="emit('pickGrinder')">
+             singleGrinder) — plain, not a button, matching layout A. Unless the
+             recipe has no grinder at all: then there IS something to set. -->
+        <button v-if="!singleGrinder || grinderUnset" class="rov-bubble" @click="emit('pickGrinder')">
           <span class="rov-bubble-label">{{ t('espresso.grinder') }}</span>
-          <span class="rov-bubble-name">{{ recipe.grinderModel }}</span>
+          <span class="rov-bubble-name">{{ grinderUnset ? '—' : recipe.grinderModel }}</span>
         </button>
         <div v-else class="rov-bubble plain">
           <span class="rov-bubble-label">{{ t('espresso.grinder') }}</span>

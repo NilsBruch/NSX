@@ -86,8 +86,13 @@ async function pickGrinder() {
   if (grinderId == null) return;
   const grinder = grinders.value.find((g) => g.id === grinderId);
   if (!grinder) return;
-  const ok = await openConfirm({ title: t('espresso.confirmReplaceGrinder'), confirmLabel: t('common.replace') });
-  if (!ok) return;
+  // Nothing to replace when the recipe never had a grinder (composed before any
+  // existed) — only confirm when the pick actually overwrites one.
+  const hadGrinder = recipe.grinderId != null || (recipe.grinderModel && recipe.grinderModel !== '—');
+  if (hadGrinder) {
+    const ok = await openConfirm({ title: t('espresso.confirmReplaceGrinder'), confirmLabel: t('common.replace') });
+    if (!ok) return;
+  }
   await setRecipeGrinder(grinder);
   showRecipeOverlay.value = false;
 }

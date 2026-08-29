@@ -397,6 +397,10 @@ export default {
     type: 'Burr type', conical: 'Conical', flat: 'Flat',
     adjustment: 'Adjustment', setting: 'Setting type', stepless: 'Stepless', positions: 'Positions',
     smallStep: 'Small step', bigStep: 'Big step', values: 'Preset values', valuesSub: 'Comma-separated',
+    backfillTitle: 'Use this grinder in existing recipes?',
+    // Plural forms (zero | one | other), selected by the third argument at the
+    // call site: t('grinderEditor.backfillMessage', { n, grinder }, n).
+    backfillMessage: ' | One recipe has no grinder yet. Set it to {grinder}? | {n} recipes have no grinder yet. Set them to {grinder}?',
   },
   systemSettings: {
     advanced: 'Advanced', gatewayMode: 'Gateway mode',

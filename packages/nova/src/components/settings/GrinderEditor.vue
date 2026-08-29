@@ -7,7 +7,8 @@
  */
 import { reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { openTextField, openChooser, openNumberPad } from '../../composables/useModals.js';
+import { openTextField, openChooser, openNumberPad, openConfirm } from '../../composables/useModals.js';
+import { recipes, refreshRecipes, recipeHasNoGrinder, assignGrinderToRecipesWithout } from '../../composables/useRecipe.js';
 
 const props = defineProps({
   grinder: { type: Object, default: null }, // null = new grinder
@@ -64,10 +65,29 @@ function toPayload() {
 
 async function save() {
   const payload = toPayload();
-  if (isNew) await NSXCore.createGrinder(payload);
-  else await NSXCore.updateGrinder(props.grinder.id, payload);
+  const created = isNew ? await NSXCore.createGrinder(payload) : null;
+  if (!isNew) await NSXCore.updateGrinder(props.grinder.id, payload);
   await NSXCore.loadGrinders();
+  // The POST response is the created record, but fall back to matching the
+  // freshly reloaded list by model in case the gateway ever answers thinner.
+  if (isNew) await offerBackfill(created?.id ? created : NSXCore.getGrinders().find((g) => g.model === payload.model));
   emit('saved');
+}
+
+/** Recipes composed before any grinder existed carry none, and there is no
+ *  other moment where that's obviously fixable — so offer it here, once, right
+ *  after the grinder that could fill them in comes into being. */
+async function offerBackfill(grinder) {
+  if (!grinder?.id) return;
+  await refreshRecipes();
+  const n = recipes.value.filter(recipeHasNoGrinder).length;
+  if (!n) return;
+  const ok = await openConfirm({
+    title: t('grinderEditor.backfillTitle'),
+    message: t('grinderEditor.backfillMessage', { n, grinder: grinder.model || '—' }, n),
+    confirmLabel: t('common.yes'),
+  });
+  if (ok) await assignGrinderToRecipesWithout(grinder);
 }
 async function del() {
   await NSXCore.deleteGrinder(props.grinder.id);

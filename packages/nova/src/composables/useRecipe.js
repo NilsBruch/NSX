@@ -707,6 +707,35 @@ export async function setRecipeBean(bean) {
   await gcBatchIfUnused(previousBatchId);
 }
 
+/** A recipe that never got a grinder: composed while none were configured, so
+ *  composeNewRecipe's fallback left it at '—'/null. Not the same as "the single
+ *  implicit grinder" — those recipes DO carry it. */
+export function recipeHasNoGrinder(entry) {
+  return entry?.grinderId == null && (!entry?.grinderModel || entry.grinderModel === '—');
+}
+
+/** Backfill: give `grinder` to every persisted recipe that has none, and to the
+ *  loaded one if it's among them (pushing it, so the machine's workflow context
+ *  gets the grinder too). Offered when a grinder is first created — recipes made
+ *  before that point are otherwise stuck without one. Returns how many changed. */
+export async function assignGrinderToRecipesWithout(grinder) {
+  if (!grinder) return 0;
+  const model = grinder.model || '—';
+  const targets = recipes.value.filter(recipeHasNoGrinder);
+  if (targets.length) {
+    const updated = recipes.value.map((r) =>
+      recipeHasNoGrinder(r) ? { ...r, grinderId: grinder.id, grinderModel: model } : r
+    );
+    recipes.value = await NSXCore.saveRecipes(updated);
+  }
+  if (recipe.id && recipeHasNoGrinder(recipe)) {
+    recipe.grinderId = grinder.id;
+    recipe.grinderModel = model;
+    await pushRecipe();
+  }
+  return targets.length;
+}
+
 /** Swap only the GRINDER of the loaded recipe (the grind SETTING stays — it's
  *  the user's dialed-in number, not a property of the device). No batch work:
  *  the grinder has no bearing on which bag the coffee came from. */
