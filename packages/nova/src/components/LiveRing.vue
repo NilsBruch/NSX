@@ -92,7 +92,7 @@ const dashOffset = computed(() => {
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%;
   background: var(--card-bg);
-  box-shadow: var(--edge-hi), var(--elev-2);
+  box-shadow: var(--elev-2);
   pointer-events: none; /* purely a readout — never swallows a tap */
   animation: lring-pop 0.22s ease-out;
 }

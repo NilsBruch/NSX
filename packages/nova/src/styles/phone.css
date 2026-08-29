@@ -151,7 +151,7 @@ body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }
 .phone-icon-btn,
 .phone-filter-chip,
 .phone-load-more {
-  box-shadow: var(--edge-hi), var(--elev-1);
+  box-shadow: var(--elev-1);
 }
 
 /* ═══ Press feedback (phone) ════════════════════════════════════════════════

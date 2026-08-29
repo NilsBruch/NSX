@@ -15,11 +15,16 @@
   --text: #e9edf2;
   --muted: #8b96a3;
   --faint: #4d5866;
-  /* Hairline border for the few controls that outline rather than fill. White
-     at low alpha, not a fixed grey: it has to hold up on a card, on the page,
-     and under any of the six accent tints, which a hex tuned for one of them
-     cannot. */
-  --edge: rgba(255, 255, 255, 0.09);
+  /* Hairline border for the five controls that outline rather than fill (the
+     espresso orbs, the power button, the text field, the SBW pill, the roast
+     chip). White at low alpha, not a fixed grey: it has to hold up on a card,
+     on the page, and under any of the six accent tints, which a hex tuned for
+     one of them cannot.
+     TRIAL: switched off — the ring it drew around the dark surfaces read as
+     grey rather than as an edge, with the shadows already doing the lifting. Kept as `transparent` rather than deleting the five
+     border declarations, so the 1px still occupies its place in the box and
+     nothing shifts by a pixel; put the rgba back to restore it. */
+  --edge: transparent;
   /* Radius scale. There were TWELVE distinct radii in this file (2, 8, 9, 10,
      12, 14, 16, 18, 20, 99, 999, 50%) — a corner rounded four different ways
      across four components reads as sloppiness even when nobody can name why.
@@ -57,22 +62,23 @@
   --accent: #7fa8c9;
 
   /* ── Material ──
-     Every raised surface gets the same two cues, so "raised" means one thing
-     across the whole skin instead of being re-invented per component:
-       --edge-hi        a 1px inner highlight along the top edge — the single
-                        strongest "this is a physical object" cue, and cheap;
-       --elev-1/2       two-layer shadows (a tight contact shadow + a wide
-                        ambient one). One layer alone reads as either a sticker
-                        or a smudge; the pair reads as depth.
-     No surface gradient: fills stay FLAT on purpose. The lift comes entirely
-     from the edge and the shadow, which is what keeps the skin's flat-color
-     character while still giving surfaces an edge to catch light on.
+     Raised means one thing across the whole skin instead of being re-invented
+     per component: --elev-1/2, two-layer shadows (a tight contact shadow plus
+     a wide ambient one). One layer alone reads as either a sticker or a
+     smudge; the pair reads as depth.
+     Two things were tried and dropped, in this order. A surface gradient:
+     fills stay FLAT on purpose, that is the skin's character. Then a 1px inner
+     highlight along the top edge — textbook advice, and wrong here: an inset
+     shadow follows the border-radius, so on the round elements (orbs, the
+     countdown ring, the icon discs) it curved into a glare across the top and
+     turned them into lit spheres, while on the rest it read as a grey rim
+     rather than an edge. What is left is the shadow alone, and the skin looks
+     better for it.
      Deliberately NOT applied to .page or the register rails: the active tab
      merges into the page by painting a page-COLORED liquid over the island, so
      a shadow on either would show the seam that effect exists to hide. Kept in
      rgba() rather than color-mix() for the same reason the container-query
      note above gives — the tablet's WebView is Chromium ~96. */
-  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.09);
   --elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 6px 16px rgba(0, 0, 0, 0.22);
   --elev-2: 0 2px 6px rgba(0, 0, 0, 0.34), 0 18px 40px rgba(0, 0, 0, 0.34);
 
@@ -1706,7 +1712,7 @@ body,
 .vslider,
 .assist-body .bigicon,
 .btn {
-  box-shadow: var(--edge-hi), var(--elev-1);
+  box-shadow: var(--elev-1);
 }
 
 /* .rov-bubble.plain is a LABEL, not a control (the single-grinder case) — it
@@ -1728,22 +1734,26 @@ body,
 }
 
 /* The orbs are the espresso page's subject, so they sit one step higher than
-   the surfaces around them. */
+   the surfaces around them — but WITHOUT the edge highlight. An inset shadow
+   follows the border-radius, so on a 50% radius the straight 1px light edge
+   becomes an arc across the top; paired with the downward shadow underneath,
+   the eye stops reading "lit edge + lift" and starts reading a lit sphere.
+   That's right for a card and too much for a 25vw circle. */
 .dial {
-  box-shadow: var(--edge-hi), var(--elev-2);
+  box-shadow: var(--elev-2);
 }
 /* Dragging already recolored the border; with depth in play the orb should also
    LIFT — a crisp accent ring plus a stronger shadow. A solid ring, not a soft
    glow: --accent is a hex custom property, and alpha-ing it would need
    color-mix(), which the tablet's WebView drops (see the token block). */
 .dial.dragging {
-  box-shadow: var(--edge-hi), 0 0 0 2px var(--accent), var(--elev-2);
+  box-shadow: 0 0 0 2px var(--accent), var(--elev-2);
 }
 
-/* Modals already float above a blurred scrim and already had a deliberately
-   deep shadow — keep that exact lift (0 20px 60px) and only add the edge
-   highlight, so a modal reads as the same material as everything else without
-   changing how far it floats. */
+/* Modals already float above a blurred scrim with a deliberately deep shadow
+   of their own, and with the edge highlight gone there is nothing left to add:
+   the rule stays only to state that the original lift is intentional and not
+   an oversight of the material pass. */
 .modal {
-  box-shadow: var(--edge-hi), 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
