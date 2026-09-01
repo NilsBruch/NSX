@@ -376,6 +376,15 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .status-island .st-dot.heating { background: var(--warn); }
 .status-island .st-state.alert { color: var(--alert); }
 .status-island .st-dot.alert { background: var(--alert); }
+/* The machine's own "ready in" estimate, appended to the state. Dimmer than
+   the label it follows: it qualifies "Heating", it doesn't compete with it —
+   and being a live-updating number in a row of static text, it would pull the
+   eye far too hard at full weight. Tabular figures so a second ticking over
+   can't jog the text beside it. */
+.status-island .st-ttr {
+  margin-left: 8px; opacity: 0.75;
+  font-variant-numeric: tabular-nums; font-weight: 600;
+}
 
 .status-island .st-mid {
   justify-self: center;

@@ -6,11 +6,22 @@
  * The ring is driven purely by TEMPERATURE, not a timer: it fills as the live
  * group temperature climbs toward (target - 10°C), where target is the loaded
  * recipe's group temp (falling back to a sensible default when no recipe is
- * loaded). Once the group is within 10°C of target the ring vanishes. No "time
- * until ready" estimate is involved — that earlier baseline-countdown approach
- * glitched whenever the machine revised its estimate.
+ * loaded). Once the group is within 10°C of target the ring vanishes.
+ *
+ * The machine's own estimate (the time-to-ready plugin, bridged to
+ * machine.timeToReadyMs) is shown as a COUNTDOWN NEXT TO THE LABEL, and
+ * deliberately does not drive the ring. That distinction is the whole lesson
+ * of the earlier attempt: the estimate gets revised, and a progress arc that
+ * runs backwards reads as broken, while a number that jumps from 2:10 to 2:40
+ * reads as the machine changing its mind — which is exactly what happened.
+ * So: temperature answers "how far along", the plugin answers "how long", and
+ * neither is asked to do the other's job.
+ *
+ * The plugin is optional and not installed on every gateway. Nothing here
+ * requires it: with no estimate arriving, the island renders precisely as it
+ * did before.
  */
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { machine, liveShot } from '../composables/useCore.js';
 import { recipe } from '../composables/useRecipe.js';
@@ -117,11 +128,43 @@ const heatingPct = computed(() => {
   return Math.max(0, Math.min(100, pct));
 });
 
+// ── Time to ready: the machine's own estimate ──
+// Interpolated between pushes rather than shown only when one lands: the
+// plugin's cadence isn't ours to assume (it is a separate reaplugin, and this
+// socket can go quiet for seconds at a time), and a countdown that freezes
+// looks more broken than one that is a second or two out. Every push re-syncs
+// the anchor, so drift can never accumulate.
+const ttrAnchor = ref(null); // { ms, at } — the last estimate and when it arrived
+watch(
+  () => machine.timeToReadyMs,
+  (ms) => { ttrAnchor.value = Number.isFinite(ms) && ms > 0 ? { ms, at: Date.now() } : null; },
+  { immediate: true }
+);
+
+const ttrTick = ref(Date.now());
+let ttrTimer = null;
+
+const readyInLabel = computed(() => {
+  // Only while actually heating: the estimate lingers at its last value after
+  // the machine arrives, and a countdown next to "Ready" is nonsense.
+  if (!heatingActive.value || !ttrAnchor.value) return null;
+  const left = ttrAnchor.value.ms - (ttrTick.value - ttrAnchor.value.at);
+  if (left <= 0) return null; // overshot its own estimate — say nothing rather than 0:00
+  const sec = Math.ceil(left / 1000);
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+});
+
 // ── Clock: minute resolution, so a 15s tick is plenty ──
 const now = ref(new Date());
 let clockTimer = null;
-onMounted(() => { clockTimer = setInterval(() => { now.value = new Date(); }, 15_000); });
-onUnmounted(() => clearInterval(clockTimer));
+onMounted(() => {
+  clockTimer = setInterval(() => { now.value = new Date(); }, 15_000);
+  ttrTimer = setInterval(() => { ttrTick.value = Date.now(); }, 1000);
+});
+onUnmounted(() => {
+  clearInterval(clockTimer);
+  clearInterval(ttrTimer);
+});
 
 const clockLabel = computed(() => formatClock(now.value));
 </script>
@@ -135,7 +178,7 @@ const clockLabel = computed(() => formatClock(now.value));
     <span class="st-left">
       <span class="st-state" :class="statusClass">
         <span class="st-dot" :class="statusClass"></span>
-        {{ statusLabel }}
+        {{ statusLabel }}<span v-if="readyInLabel" class="st-ttr">{{ readyInLabel }}</span>
       </span>
       <button class="st-item st-scale-btn" :class="{ off: !machine.scaleConnected }" :aria-label="t('machineSettings.scale')" @click="onScaleTap">
         <svg class="st-scale-icon" viewBox="0 0 110 70" aria-hidden="true" fill="currentColor">
