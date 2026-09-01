@@ -11,6 +11,7 @@ import {
 } from '../composables/useDiary.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { openTextField, openConfirm, openChooser } from '../composables/useModals.js';
+import { useLongPress } from '../composables/useLongPress.js';
 import { recipeIdentityParts } from '../composables/useCore.js';
 import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
@@ -89,40 +90,8 @@ function savedRecipeForGroup(group) {
  * A profile row: tap loads the recipe, press-and-hold opens Load / Pin /
  * Delete. The chevron on the right keeps expanding the shot history — that is
  * why the row itself was free to become the load action.
- *
- * Driven from pointer events rather than @click, so the hold can be detected
- * and the tap suppressed once it fires. The move threshold matters on a list
- * that scrolls: a finger dragging the list past a row must not be read as a
- * hold on it.
  */
-const HOLD_MS = 450;
-const HOLD_SLOP_PX = 10;
-let holdTimer = null;
-let holdFired = false;
-let holdStart = { x: 0, y: 0 };
-
-function onGroupDown(evt, group) {
-  holdFired = false;
-  holdStart = { x: evt.clientX, y: evt.clientY };
-  clearTimeout(holdTimer);
-  holdTimer = setTimeout(() => { holdFired = true; openGroupMenu(group); }, HOLD_MS);
-}
-function onGroupMove(evt) {
-  if (holdTimer === null) return;
-  if (Math.abs(evt.clientX - holdStart.x) > HOLD_SLOP_PX || Math.abs(evt.clientY - holdStart.y) > HOLD_SLOP_PX) {
-    cancelHold();
-  }
-}
-function cancelHold() {
-  clearTimeout(holdTimer);
-  holdTimer = null;
-}
-function onGroupUp(group) {
-  const wasHold = holdFired;
-  cancelHold();
-  holdFired = false;
-  if (!wasHold) goToRecipe(group); // a plain tap loads
-}
+const groupPress = useLongPress({ tap: goToRecipe, hold: openGroupMenu });
 
 async function openGroupMenu(group) {
   const saved = savedRecipeForGroup(group);
@@ -354,11 +323,11 @@ watch(
         <div class="list-row bean-row">
           <button
             class="row-main"
-            @pointerdown="onGroupDown($event, group)"
-            @pointermove="onGroupMove"
-            @pointerup="onGroupUp(group)"
-            @pointercancel="cancelHold"
-            @pointerleave="cancelHold"
+            @pointerdown="groupPress.down($event, group)"
+            @pointermove="groupPress.move"
+            @pointerup="groupPress.up(group)"
+            @pointercancel="groupPress.cancel"
+            @pointerleave="groupPress.cancel"
           >
             <span class="rmeta">
               <span class="row-title">

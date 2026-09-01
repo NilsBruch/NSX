@@ -15,9 +15,10 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, recipes, refreshRecipes, selectRecipe, beanForRecipe } from '../composables/useRecipe.js';
+import { recipe, recipes, refreshRecipes, selectRecipe, beanForRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots, grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
-import { openTextField } from '../composables/useModals.js';
+import { openTextField, openChooser, openConfirm } from '../composables/useModals.js';
+import { useLongPress } from '../composables/useLongPress.js';
 import StarRating from './StarRating.vue';
 
 const emit = defineEmits(['close', 'pickBean', 'pickGrinder', 'pickProfile']);
@@ -102,6 +103,42 @@ async function pick(entry) {
   await selectRecipe(entry);
   emit('close');
 }
+
+/**
+ * Same gesture as the Diary's profile rows: tap switches to the recipe — that
+ * is what this browser is FOR, so it stays one tap — and press-and-hold opens
+ * the actions on it. Every card here is a saved recipe, so unlike the Diary all
+ * three entries are always available.
+ *
+ * The overlay closes on Load (the recipe it was browsing away from has
+ * changed), but stays open on Pin and Delete: both are list housekeeping, and
+ * shutting the list to show the result of tidying it would be backwards.
+ */
+async function openCardMenu(entry) {
+  const choice = await openChooser({
+    title: `${entry.coffeeRoaster} ${entry.coffeeName}`,
+    options: [
+      ['load', t('diary.loadRecipe')],
+      ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
+      ['delete', t('common.delete')],
+    ],
+  });
+  if (choice === 'load') {
+    await pick(entry);
+  } else if (choice === 'pin') {
+    await togglePinRecipe(entry);
+  } else if (choice === 'delete') {
+    const ok = await openConfirm({
+      title: t('diary.deleteRecipeConfirm'),
+      message: `${entry.coffeeRoaster} – ${entry.coffeeName}`,
+      confirmLabel: t('common.delete'),
+      danger: true,
+    });
+    if (ok) await deleteRecipe(entry.id);
+  }
+}
+
+const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
 </script>
 
 <template>
@@ -143,7 +180,11 @@ async function pick(entry) {
           :key="entry.id"
           class="rp-card"
           :class="{ current: isCurrent(entry) }"
-          @click="pick(entry)"
+          @pointerdown="cardPress.down($event, entry)"
+          @pointermove="cardPress.move"
+          @pointerup="cardPress.up(entry)"
+          @pointercancel="cardPress.cancel"
+          @pointerleave="cardPress.cancel"
         >
           <span v-if="isCurrent(entry)" class="rp-badge">{{ t('common.current') }}</span>
           <div class="rp-head">
