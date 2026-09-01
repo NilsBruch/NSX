@@ -12,7 +12,7 @@ import {
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { openTextField, openConfirm } from '../composables/useModals.js';
 import { recipeIdentityParts } from '../composables/useCore.js';
-import { selectRecipe, deleteRecipe } from '../composables/useRecipe.js';
+import { selectRecipe, deleteRecipe, findRecipeForBeanProfile } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
 import RecipePicker from '../components/RecipePicker.vue';
 import DiaryShotRow from '../components/DiaryShotRow.vue';
@@ -72,6 +72,17 @@ function recipeFacts(r) {
     `${t('espresso.grindSize')} ${r.grinderSetting}`,
     `${Number(r.groupTemp) || 0} °C`,
   ].join(' · ');
+}
+
+/**
+ * The saved recipe behind a profile group, if there is one. These rows are
+ * derived from SHOTS, not from the library — a bean brewed on a profile always
+ * has a row, whether or not a recipe was ever saved for that pairing (Load
+ * Recipe creates one on the spot). So the delete button only appears where
+ * there is actually something to delete.
+ */
+function savedRecipeForGroup(group) {
+  return findRecipeForBeanProfile(diaryState.bean, group.title);
 }
 
 async function removeRecipe(recipe) {
@@ -292,6 +303,16 @@ watch(
           </button>
           <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleProfileExpanded(group.title)">
             <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
+          </button>
+          <!-- Only where a recipe was actually saved for this bean+profile;
+               the row itself outlives it, since the shots that built it do. -->
+          <button
+            v-if="savedRecipeForGroup(group)"
+            class="row-edit danger"
+            :aria-label="t('common.delete')"
+            @click="removeRecipe(savedRecipeForGroup(group))"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
           </button>
           <button class="load-recipe-btn" @click="goToRecipe(group)">{{ t('diary.loadRecipe') }}</button>
         </div>
