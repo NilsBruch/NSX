@@ -1150,6 +1150,22 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .load-more:disabled { opacity: 0.5; }
 .list-row .rmeta { display: flex; flex-direction: column; gap: 2px; }
 .list-row .rsub { font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.04em; text-transform: none; color: var(--muted); }
+/* Name and details on ONE line rather than stacked: these rows are as wide as
+   the page and were carrying two short strings in their left third, leaving
+   the middle empty. Baseline-aligned, since the two are different sizes and
+   aligning their boxes would leave the smaller one floating.
+   The separator is a pseudo-element, so the dot belongs to the presentation
+   and beanFacts keeps returning plain data. */
+/* Pushed to the trailing edge of the row's main button, so ratings line up
+   with each other down the list rather than trailing each title at whatever
+   width it happens to have. */
+.bean-row .row-stars { margin-left: auto; flex: none; }
+.list-row .rmeta-inline { flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; }
+.list-row .rmeta-inline .bean-name { flex: none; }
+.list-row .rmeta-inline .rsub {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.list-row .rmeta-inline .rsub::before { content: "· "; color: var(--faint); }
 .list-row .chev { color: var(--muted); font-size: var(--fs-md); font-weight: 400; }
 
 /* Legend row (profile plots, later shot graphs) */
@@ -1737,6 +1753,86 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .shot-row .stars svg.on { fill: var(--accent); stroke: var(--accent); }
 
 /* Expanded profile group's shot list — indented one step under its row. */
+/* ── Browse as cards ────────────────────────────────────────────────────────
+   The Diary's browse levels drop the single panel and give each entry its own
+   card. A hairline-separated row reads as text; a card with air around it
+   reads as an object you can press — which is what these are, and what was not
+   obvious before.
+   It also earns the press feedback back: .list-row is deliberately exempt from
+   it (a full-bleed row pulls BOTH ends away from the edges the eye tracks, so
+   it twitches rather than depresses), but a card has margin to shrink into,
+   exactly like .rp-card.
+   The edges fade only where something is actually hidden — v-scroll-fade
+   (useScrollFade.js) measures that and sets the two classes. A mask that is
+   always on dims the first card even when the whole list fits, which reads as
+   "disabled" rather than "scrollable"; the top stays flush until you have
+   scrolled away from it, while the bottom fades as soon as there is more below,
+   because there the soft cut IS the hint. 18px, a fraction of a row: enough to
+   soften the edge, not so much that an item is lost in it. */
+.list.list-cards {
+  background: none;
+  /* Horizontal room for the cards' shadows. A container with overflow-y: auto
+     cannot keep overflow-x visible (CSS forces the other axis to auto/hidden
+     too), so without this the shadow would be sliced off flush at both sides —
+     the one thing that makes a card look raised, clipped exactly where it is
+     read. */
+  padding: 2px 8px;
+  /* Both fades start at zero, so the mask is fully opaque until a class turns
+     one on — expressed as custom properties because a mask-image cannot be
+     partially overridden, only replaced whole. */
+  --fade-top: 0px;
+  --fade-bottom: 0px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+}
+.list-cards.fade-top { --fade-top: 18px; }
+.list-cards.fade-bottom { --fade-bottom: 18px; }
+/* Direct children only: the shot rows inside an expanded .sublist stay rows in
+   a well, which is what makes the nesting readable — cards at the top level,
+   a recessed list under the one that is open. */
+/* ── Browse level transitions ───────────────────────────────────────────────
+   Deeper slides in from the right, back slides out to it. The panes are
+   absolutely positioned so the outgoing and incoming lists can overlap for the
+   length of the slide; stacked in flow they would jump the layout instead.
+   The outgoing pane moves only a third as far as the incoming one travels and
+   fades as it goes — the classic depth cue: the level you are leaving recedes
+   rather than being shoved off the edge.
+   220ms: long enough to be read as a direction, short enough that a
+   double-tap-happy finger never waits on it. */
+.drill-stage { position: relative; flex: 1; min-height: 0; }
+.drill-stage > .list { position: absolute; inset: 0; }
+.drill-fwd-enter-active, .drill-fwd-leave-active,
+.drill-back-enter-active, .drill-back-leave-active {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.drill-fwd-enter-from { transform: translateX(100%); opacity: 0; }
+.drill-fwd-leave-to { transform: translateX(-33%); opacity: 0; }
+.drill-back-enter-from { transform: translateX(-33%); opacity: 0; }
+.drill-back-leave-to { transform: translateX(100%); opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .drill-fwd-enter-active, .drill-fwd-leave-active,
+  .drill-back-enter-active, .drill-back-leave-active { transition: opacity 0.12s ease; }
+  .drill-fwd-enter-from, .drill-fwd-leave-to,
+  .drill-back-enter-from, .drill-back-leave-to { transform: none; }
+}
+
+/* The scroller keeps the padding, the mask and a fixed box; .lc-inner carries
+   the stacking of cards and is the element the rubber band translates (see
+   useScrollEdges.js). */
+.lc-inner { display: flex; flex-direction: column; gap: 10px; will-change: transform; }
+.list-cards > .lc-inner > .list-row {
+  background: var(--card-bg);
+  border-bottom: none;
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-1);
+  transition: transform 0.09s ease, filter 0.09s ease;
+}
+.list-cards > .lc-inner > .list-row:active {
+  transform: scale(0.985);
+  filter: var(--press-filter);
+}
+.list-cards > .lc-inner > .sublist { border-radius: var(--r-md); overflow: hidden; }
+
 .sublist { display: flex; flex-direction: column; background: var(--well); }
 .sublist .shot-row { padding-left: 34px; }
 

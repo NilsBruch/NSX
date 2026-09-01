@@ -12,6 +12,9 @@ import {
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { openTextField, openConfirm, openChooser } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
+// A `vFoo` binding in <script setup> registers as the v-foo directive.
+import { vScrollEdges } from '../composables/useScrollEdges.js';
+import { confirmAndDeleteBean, toggleArchiveBean } from '../composables/useBeanActions.js';
 import { recipeIdentityParts } from '../composables/useCore.js';
 import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
@@ -76,6 +79,24 @@ function recipeFacts(r) {
 }
 
 /**
+ * Origin, variety and process as one dot-separated line under a bean's name.
+ * All three are optional and a bean with none of them is common, so empties are
+ * dropped rather than printed as "—" — the same rule recipeIdentityParts
+ * follows for the Coffee page's title. A bean with nothing to add keeps just
+ * its name instead of gaining an empty second line.
+ *
+ * `variety` is an array in the bean record while the other two are plain
+ * strings, so it is joined before the shared filter sees it.
+ */
+function beanFacts(bean) {
+  const variety = Array.isArray(bean?.variety) ? bean.variety.join(', ') : bean?.variety;
+  return [bean?.country, variety, bean?.processing]
+    .map((v) => String(v ?? '').trim())
+    .filter((v) => v && v !== '—')
+    .join(' · ');
+}
+
+/**
  * The saved recipe behind a profile group, if there is one. These rows are
  * derived from SHOTS, not from the library — a bean brewed on a profile always
  * has a row, whether or not a recipe was ever saved for that pairing (Load
@@ -92,6 +113,39 @@ function savedRecipeForGroup(group) {
  * why the row itself was free to become the load action.
  */
 const groupPress = useLongPress({ tap: goToRecipe, hold: openGroupMenu });
+
+/**
+ * Bean rows behave like the profile rows below them: tap opens the bean, hold
+ * offers what used to be a pencil button. Dropping that button is the point —
+ * a row with a permanent affordance on the right invites aiming at it, while
+ * the row itself (the far bigger target) did the more common thing.
+ */
+async function openBeanMenu(bean) {
+  const choice = await openChooser({
+    title: bean.name || '—',
+    options: [
+      ['edit', t('diary.editBean')],
+      ['archive', bean.archived ? t('diary.unarchive') : t('diary.archive')],
+      ['delete', t('common.delete')],
+    ],
+  });
+  if (choice === 'edit') openEditBean(bean);
+  else if (choice === 'archive') await toggleArchiveBean(bean);
+  else if (choice === 'delete') await confirmAndDeleteBean(bean);
+}
+const beanPress = useLongPress({ tap: enterBean, hold: openBeanMenu });
+
+/**
+ * Which way the browse levels slide. Derived from the level itself rather than
+ * set by each caller: enterRoaster/enterBean/goBack all just change the level,
+ * and a direction that is computed from it cannot fall out of step with a new
+ * caller someone adds later.
+ */
+const drill = ref('drill-fwd');
+watch(
+  () => diaryState.level,
+  (level, prev) => { drill.value = level >= prev ? 'drill-fwd' : 'drill-back'; }
+);
 
 async function openGroupMenu(group) {
   const saved = savedRecipeForGroup(group);
@@ -294,66 +348,101 @@ watch(
       <div v-if="!recipeRows.length" class="list-row"><span class="rsub">{{ t('diary.noRecipesYet') }}</span></div>
     </div>
 
-    <!-- Browse: roasters -->
-    <div v-else-if="diaryState.level === 0" class="list">
-      <button v-for="g in roasterGroups" :key="g.name" class="list-row" @click="enterRoaster(g.name)">
-        <span class="rmeta">{{ g.name }}<span class="rsub">{{ g.beans.length }} bean{{ g.beans.length !== 1 ? 's' : '' }}</span></span>
-        <span class="chev">›</span>
-      </button>
-      <div v-if="!roasterGroups.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
-    </div>
-
-    <!-- Browse: beans in a roaster -->
-    <div v-else-if="diaryState.level === 1" class="list">
-      <div v-for="bean in beansInRoaster" :key="bean.id" class="list-row bean-row">
-        <button class="row-main" @click="enterBean(bean)">
-          <span class="rmeta">{{ bean.name }}</span>
-          <span class="chev">›</span>
-        </button>
-        <button class="row-edit" :aria-label="t('diary.editBean')" @click="openEditBean(bean)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1L20 7l-3-3L5 16l-1 4z" /></svg>
-        </button>
-      </div>
-      <div v-if="!beansInRoaster.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
-    </div>
-
-    <!-- Browse: profiles used with this bean, one entry each -->
-    <div v-else class="list">
-      <template v-for="group in profileGroupsInBean" :key="group.title">
-        <div class="list-row bean-row">
-          <button
-            class="row-main"
-            @pointerdown="groupPress.down($event, group)"
-            @pointermove="groupPress.move"
-            @pointerup="groupPress.up(group)"
-            @pointercancel="groupPress.cancel"
-            @pointerleave="groupPress.cancel"
-          >
-            <span class="rmeta">
-              <span class="row-title">
-                <svg v-if="savedRecipeForGroup(group)?.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
-                </svg>
-                {{ group.title }}
-              </span>
-            </span>
-          </button>
-          <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleProfileExpanded(group.title)">
-            <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
-          </button>
+    <!-- One stage, three panes: the levels slide instead of cutting, so
+         going deeper reads as going deeper. Each pane fills the stage
+         absolutely, which is what lets the outgoing and incoming lists
+         overlap during the slide instead of stacking vertically.
+         The three panes are roasters (0) -> beans in a roaster (1) -> profiles
+         used with a bean (2). Their labels live here rather than above each
+         branch because <Transition> counts a comment as a child and rejects
+         anything but exactly one. -->
+    <div v-if="diaryState.view === 'browse'" class="drill-stage">
+      <Transition :name="drill">
+        <div v-if="diaryState.level === 0" key="roasters" v-scroll-edges class="list list-cards">
+          <div class="lc-inner">
+            <button v-for="g in roasterGroups" :key="g.name" class="list-row" @click="enterRoaster(g.name)">
+              <span class="rmeta">{{ g.name }}<span class="rsub">{{ g.beans.length }} bean{{ g.beans.length !== 1 ? 's' : '' }}</span></span>
+              <span class="chev">›</span>
+            </button>
+            <div v-if="!roasterGroups.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
+          </div>
         </div>
-        <div v-if="diaryState.expandedProfile === group.title" class="sublist">
-          <button
-            v-for="shot in group.shots"
-            :key="shot.id"
-            class="list-row shot-row as-btn"
-            @click="openHistoryAt(group.shots, shot)"
-          >
-            <DiaryShotRow :shot="shot" scope="profile" />
-          </button>
+
+        <div v-else-if="diaryState.level === 1" key="beans" v-scroll-edges class="list list-cards">
+          <div class="lc-inner">
+            <div v-for="bean in beansInRoaster" :key="bean.id" class="list-row bean-row">
+              <button
+                class="row-main"
+                @pointerdown="beanPress.down($event, bean)"
+                @pointermove="beanPress.move"
+                @pointerup="beanPress.up(bean)"
+                @pointercancel="beanPress.cancel"
+                @pointerleave="beanPress.cancel"
+              >
+                <span class="rmeta rmeta-inline">
+                  <span class="bean-name">{{ bean.name }}</span>
+                  <span v-if="beanFacts(bean)" class="rsub">{{ beanFacts(bean) }}</span>
+                </span>
+                <span class="chev">›</span>
+              </button>
+            </div>
+            <div v-if="!beansInRoaster.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
+          </div>
         </div>
-      </template>
-      <div v-if="!profileGroupsInBean.length" class="list-row"><span class="rsub">{{ t('diary.noShotsYet') }}</span></div>
+
+        <div v-else key="profiles" v-scroll-edges class="list list-cards">
+          <div class="lc-inner">
+            <template v-for="group in profileGroupsInBean" :key="group.title">
+              <div class="list-row bean-row">
+                <button
+                  class="row-main"
+                  @pointerdown="groupPress.down($event, group)"
+                  @pointermove="groupPress.move"
+                  @pointerup="groupPress.up(group)"
+                  @pointercancel="groupPress.cancel"
+                  @pointerleave="groupPress.cancel"
+                >
+                  <span class="rmeta">
+                    <span class="row-title">
+                      <svg v-if="savedRecipeForGroup(group)?.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
+                      </svg>
+                      {{ group.title }}
+                    </span>
+                  </span>
+                  <!-- The recipe's own rating, which until now only the Recipes
+                       view showed — and that view is hidden, so it had nowhere
+                       left to appear. Only for a pairing that HAS a saved
+                       recipe, and only once it is actually rated: an empty row
+                       of outlines on every line would read as "rated zero". -->
+                  <StarRating
+                    v-if="Number(savedRecipeForGroup(group)?.rating) > 0"
+                    class="row-stars"
+                    :model-value="Number(savedRecipeForGroup(group).rating)"
+                    readonly
+                    :size="15"
+                  />
+                </button>
+                <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleProfileExpanded(group.title)">
+                  <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
+                </button>
+              </div>
+              <div v-if="diaryState.expandedProfile === group.title" class="sublist">
+                <button
+                  v-for="shot in group.shots"
+                  :key="shot.id"
+                  class="list-row shot-row as-btn"
+                  @click="openHistoryAt(group.shots, shot)"
+                >
+                  <DiaryShotRow :shot="shot" scope="profile" />
+                </button>
+              </div>
+            </template>
+            <div v-if="!profileGroupsInBean.length" class="list-row"><span class="rsub">{{ t('diary.noShotsYet') }}</span></div>
+          </div>
+        </div>
+
+      </Transition>
     </div>
 
     <div class="diary-bottom">

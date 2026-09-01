@@ -7,8 +7,8 @@
  */
 import { reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { openTextField, openConfirm } from '../composables/useModals.js';
-import { recipesUsingBean, deleteRecipesUsingBean, refreshRecipes } from '../composables/useRecipe.js';
+import { openTextField } from '../composables/useModals.js';
+import { confirmAndDeleteBean } from '../composables/useBeanActions.js';
 
 const props = defineProps({
   bean: { type: Object, default: null }, // null = new bean
@@ -135,46 +135,11 @@ async function toggleArchive() {
 }
 
 /**
- * Deleting a bean used to happen on the tap, with no confirmation and no
- * regard for what pointed at it. Both are fixed here.
- *
- * The bridge CASCADES: deleting a bean deletes its batches. Past shots are not
- * touched and keep their ratings and notes, but the batch id they carry is now
- * dangling — useDiary's shotMatchesBean falls through to roaster/name matching,
- * and with the bean gone they simply group under no bean, staying visible in
- * the flat History. That is unavoidable once the bean is deleted, so the
- * dialog says it rather than pretending otherwise.
- *
- * Recipes cascade with the bean, the way the bridge's batches do: deleting a
- * coffee means it is gone, and a recipe for a coffee you no longer have is
- * clutter. The count is named in the confirmation because it is the part that
- * is NOT obvious — a recipe carries the grind, dose, yield, temperature,
- * profile, rating and the volume calibration learned over many shots, and all
- * of that goes with it. Archiving the bean instead keeps everything, which is
- * why the dialog points at it.
+ * Delete lives in useBeanActions so the Diary's own row menu runs the exact
+ * same sequence — see there for why it is more than a DELETE call.
  */
 async function del() {
-  // Re-read the library first: the count is what the user decides on, so it
-  // must not come from a cache another device may have moved on from.
-  await refreshRecipes().catch(() => { /* fall back to what's cached */ });
-  const affected = recipesUsingBean(props.bean);
-
-  const ok = await openConfirm({
-    title: affected.length
-      ? t('diary.deleteBeanAndRecipes', { n: affected.length }, affected.length)
-      : t('diary.deleteBeanConfirm'),
-    message: t('diary.deleteBeanArchiveHint'),
-    confirmLabel: t('common.delete'),
-    danger: true,
-  });
-  if (!ok) return;
-
-  // Recipes first: if the gateway then refuses the bean, nothing is left
-  // pointing at a bean that is still there but no longer referenced.
-  if (affected.length) await deleteRecipesUsingBean(props.bean);
-  await NSXCore.deleteBean(props.bean.id);
-  await NSXCore.loadBeans();
-  emit('deleted');
+  if (await confirmAndDeleteBean(props.bean)) emit('deleted');
 }
 </script>
 
