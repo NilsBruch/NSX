@@ -296,6 +296,11 @@ export default {
     shotCount: 'no shots | 1 shot | {n} shots',
     noRecipesYet: 'No recipes yet',
     deleteRecipeConfirm: 'Delete this recipe?',
+    deleteBeanConfirm: 'Delete this bean?',
+    deleteBeanArchiveHint: 'Its bags go too, and past shots keep their data but lose the link to this bean. Archiving hides it from the list instead.',
+    // vue-i18n plural forms (zero | one | other), selected by the third
+    // argument at the call site.
+    deleteBeanAndRecipes: 'Delete this bean? | Delete this bean and its 1 recipe? | Delete this bean and its {n} recipes?',
     add: 'Add',
     addRecipe: 'New recipe',
     search: 'Search',

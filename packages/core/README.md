@@ -113,6 +113,14 @@ global (keeps core app-state-free).
   bag reports). The batch is also the only structural link a shot has back to a
   bean (`shot.workflow.context.beanBatchId → batch.beanId → bean`), so a
   workflow without one leaves that link to roaster/name string matching.
+  **Deleting a bean cascades on the gateway: its batches go with it.** Past
+  shots keep their own record (including the now-dangling `beanBatchId`) — they
+  are never deleted — but that link is gone, so they fall back to roaster/name
+  matching and, with the bean itself deleted, group under no bean at all. A
+  skin offering bean deletion should say so, and should also cut any recipe
+  still pointing at that bean: `resolveBean` is find-or-CREATE, so a recipe
+  that keeps resolving its roaster/name will silently resurrect the deleted
+  bean, stripped of everything but those two fields.
 - **`shot.js`** — per-shot-id detail cache (a `Map`, no single canonical list):
   `getCachedShotDetails(id)` (sync, cache-only), `getShotDetails(id)`
   (fetch-or-cache), `invalidateShotDetails`, `deleteShot`, `updateShot`,

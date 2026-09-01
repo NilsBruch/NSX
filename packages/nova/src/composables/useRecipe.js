@@ -32,7 +32,7 @@
  * on that bag reports. The bean itself is managed in the Diary.
  */
 import { reactive, computed, ref, watch } from 'vue';
-import { currentWorkflow, machine, grinders } from './useCore.js';
+import { currentWorkflow, machine, grinders, beans } from './useCore.js';
 
 const { NSXCore, NSXApi } = window;
 
@@ -61,6 +61,13 @@ export const recipe = reactive({
   grinderId: null,
   beanId: null,      // resolved from coffeeRoaster+coffeeName (see ensureRecipeBatch)
   beanBatchId: null, // the bag: (beanId, roastDate) — never one per shot
+  // Set when the bean this recipe was built on was DELETED in the Diary and
+  // the user chose to keep the recipe. Without it, ensureRecipeBatch would
+  // hand the recipe's roaster/name to resolveBean — which is find-or-CREATE —
+  // and silently resurrect the bean the user had just deleted, minus its
+  // origin, variety, process and notes. Cleared the moment a bean is picked
+  // again (setRecipeBean).
+  beanUnlinked: false,
   roastDate: null,   // ISO date string, or null = "not set". Derived from the batch,
                      // which is the source of truth; deliberately NOT persisted on the recipe.
   // ml-per-gram factor this recipe has learned for estimating weight from the
@@ -113,6 +120,7 @@ function snapshotFromCurrentRecipe(existing = {}) {
     grinderId: recipe.grinderId,
     beanId: recipe.beanId,
     beanBatchId: recipe.beanBatchId,
+    beanUnlinked: recipe.beanUnlinked,
     volumeCalibration: recipe.volumeCalibration,
     rating: Number(recipe.rating) || 0,
   };
@@ -184,6 +192,10 @@ export const roastAge = computed(() => NSXCore.getBatchAge(recipe.roastDate));
  */
 async function ensureRecipeBatch() {
   if (recipe.beanBatchId && recipe.beanId) return;
+  // The bean was deleted and this recipe deliberately kept. Resolving would
+  // re-create it (resolveBean is find-or-create), so the recipe brews without
+  // a bag — exactly as it did before a bean was ever resolved for it.
+  if (recipe.beanUnlinked) return;
 
   const roaster = recipe.coffeeRoaster;
   const name = recipe.coffeeName;
@@ -457,6 +469,7 @@ export async function selectRecipe(entry) {
     grinderId: entry.grinderId ?? null,
     beanId: entry.beanId ?? null,
     beanBatchId: entry.beanBatchId ?? null,
+    beanUnlinked: entry.beanUnlinked === true,
     roastDate: null,
     volumeCalibration: entry.volumeCalibration && typeof entry.volumeCalibration === 'object'
       ? entry.volumeCalibration
@@ -501,6 +514,7 @@ export async function composeNewRecipe({ bean, profile, seedContext = null }) {
     // one until the user sets a roast date.
     beanId: bean.id ?? null,
     beanBatchId: null,
+    beanUnlinked: false,
     roastDate: null,
     volumeCalibration: { factor: 1.0, samples: [] },
     rating: 0, // a freshly composed recipe starts unrated
@@ -698,6 +712,7 @@ export async function setRecipeBean(bean) {
   recipe.coffeeRoaster = bean?.roaster || '—';
   recipe.coffeeName = bean?.name || '—';
   recipe.beanId = bean?.id ?? null;
+  recipe.beanUnlinked = false; // an explicit pick always re-links
   // ensureRecipeBatch early-returns when beanId AND beanBatchId are both set,
   // so these must be cleared for it to resolve the NEW bean's bag.
   recipe.beanBatchId = null;
@@ -734,6 +749,57 @@ export async function assignGrinderToRecipesWithout(grinder) {
     await pushRecipe();
   }
   return targets.length;
+}
+
+const sameText = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
+/**
+ * Does this recipe stand on this bean? By id, falling back to roaster/name for
+ * the older recipes saved before recipes carried a beanId at all — without that
+ * fallback those look unattached to anything, which is wrong in both directions
+ * (they'd survive their bean's deletion, and quietly re-create it on the next
+ * push). The one definition of the link; both helpers below read it.
+ */
+export function recipeMatchesBean(entry, bean) {
+  if (!entry || !bean) return false;
+  if (entry.beanId) return entry.beanId === bean.id;
+  return sameText(entry.coffeeRoaster, bean.roaster) && sameText(entry.coffeeName, bean.name);
+}
+
+/** Recipes built on `bean`. */
+export function recipesUsingBean(bean) {
+  if (!bean) return [];
+  return recipes.value.filter((r) => recipeMatchesBean(r, bean));
+}
+
+/** The bean a recipe stands on, or null if it has none / it is gone. */
+export function beanForRecipe(entry) {
+  return beans.value.find((b) => recipeMatchesBean(entry, b)) ?? null;
+}
+
+/**
+ * Deletes every recipe built on `bean` — a bean's deletion takes its recipes
+ * with it, matching the bridge, which already takes the bean's batches.
+ *
+ * The loaded recipe needs more than removal from the library: it stays on
+ * screen and keeps being pushed to the machine after this. So its id goes
+ * (edits must not write back to an entry that no longer exists) and its bean
+ * link is cut with beanUnlinked — otherwise the next push hands its
+ * roaster/name to resolveBean, which is find-or-CREATE, and re-creates the
+ * bean the user just deleted, stripped of everything but those two fields.
+ */
+export async function deleteRecipesUsingBean(bean) {
+  const doomed = new Set(recipesUsingBean(bean).map((r) => r.id));
+  if (!doomed.size) return 0;
+  recipes.value = await NSXCore.saveRecipes(recipes.value.filter((r) => !doomed.has(r.id)));
+  if (doomed.has(recipe.id)) {
+    recipe.id = null;
+    recipe.beanId = null;
+    recipe.beanBatchId = null;
+    recipe.beanUnlinked = true;
+    recipe.roastDate = null;
+  }
+  return doomed.size;
 }
 
 /** Swap only the GRINDER of the loaded recipe (the grind SETTING stays — it's
