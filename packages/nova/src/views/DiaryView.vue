@@ -37,6 +37,14 @@ async function goToRecipe(group) {
 // "+" creates a RECIPE (choose/add bean -> choose profile), not a bare bean —
 // a bean on its own can't be brewed, so the recipe flow is the useful thing to
 // start from here. Adding a bean is still reachable: it's step 1 of that flow.
+// The Recipes view is hidden for now: in practice it shows much the same thing
+// as Browse, only grouped by recipe instead of by roaster. Everything behind it
+// stays — the view, its rows, the delete mode, the recipeRows computed — so
+// bringing it back is flipping this one flag, not rebuilding it. Kept as a
+// const rather than deleted-and-in-git because the segmented control's geometry
+// depends on the count, and this way both places read it from the same value.
+const SHOW_RECIPES_VIEW = false;
+
 const showRecipeCreator = ref(false);
 function closeRecipeCreator() { showRecipeCreator.value = false; }
 async function onRecipeCreated() {
@@ -302,11 +310,19 @@ watch(
     </div>
 
     <div class="diary-bottom">
-      <div class="seg seg-3" :data-pos="diaryState.view === 'full' ? 1 : diaryState.view === 'recipes' ? 2 : 0">
+      <!-- seg-3 only while there are three: the thumb's width and its
+           travel per position are both derived from the count, so leaving the
+           class on with a button hidden would size it for a segment that
+           isn't there. -->
+      <div
+        class="seg"
+        :class="{ 'seg-3': SHOW_RECIPES_VIEW }"
+        :data-pos="diaryState.view === 'full' ? 1 : diaryState.view === 'recipes' ? 2 : 0"
+      >
         <span class="seg-thumb"></span>
         <button :class="{ on: diaryState.view === 'browse' }" @click="setView('browse')">{{ t('diary.browse') }}</button>
         <button :class="{ on: diaryState.view === 'full' }" @click="setView('full')">{{ t('diary.fullHistory') }}</button>
-        <button :class="{ on: diaryState.view === 'recipes' }" @click="setView('recipes')">{{ t('diary.recipes') }}</button>
+        <button v-if="SHOW_RECIPES_VIEW" :class="{ on: diaryState.view === 'recipes' }" @click="setView('recipes')">{{ t('diary.recipes') }}</button>
       </div>
       <span class="spacer" style="flex: 1"></span>
       <button v-if="diaryState.query" class="filter-chip" @click="clearQuery">
