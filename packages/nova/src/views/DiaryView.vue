@@ -491,8 +491,12 @@ watch(
       @deleted="closeEditor"
     />
 
+    <!-- Seeded from the current browse position: inside a roaster it opens
+         there, and on a bean's own page the bean step is already answered. -->
     <RecipePicker
       v-if="showRecipeCreator"
+      :preset-bean="diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
+      :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
 
       @back="closeRecipeCreator"
       @created="onRecipeCreated"

@@ -1,19 +1,20 @@
 <script setup>
-/** Step 1 of "new recipe": pick the bean — or add one right here, so starting a
+/** First half of "new recipe": pick the bean — or add one right here, so starting a
  *  recipe for a coffee you just opened doesn't mean bailing out to the Diary
  *  first. A bean added here is a real Diary bean (BeanEditor writes it); this
- *  screen just carries it straight into step 2 instead of making the user find
- *  it again in the list. */
-import { computed, ref } from 'vue';
+ *  screen just carries it straight on to the profile instead of making the
+ *  user find it again in the list.
+ *
+ *  No step counter: the flow is two screens with a Back button, which is its
+ *  own progress indicator, and the same component is also used on its own to
+ *  swap an existing recipe's bean — where "Step 1 of 2" was simply untrue. */
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { beans } from '../composables/useCore.js';
+import { vScrollEdges } from '../composables/useScrollEdges.js';
 import { openTextField } from '../composables/useModals.js';
 import BeanEditor from './BeanEditor.vue';
 
-// The "Step 1" badge only makes sense inside the new-recipe wizard; swapping
-// the bean of an existing recipe (the Espresso page's bean tile) is a
-// one-step action, so that caller turns it off.
-defineProps({ showStep: { type: Boolean, default: true } });
 const emit = defineEmits(['pick', 'back']);
 const { t } = useI18n();
 
@@ -27,13 +28,60 @@ function onBeanSaved(bean) {
 // Same search pattern as RecipePicker/Diary — a text-field modal rather than
 // a live inline input, matching every other list-with-search screen in Nova.
 const query = ref('');
-const visibleBeans = computed(() => {
+
+/**
+ * Roaster first, then that roaster's beans — the Diary's browse structure, on
+ * the screen you reach from "+ recipe". A flat "Roaster – Bean" list made the
+ * roaster a prefix repeated down the page; here it is the thing you pick
+ * first, and the second screen is short enough to read at a glance.
+ *
+ * Archived beans stay out: they are bags you are done with, and starting a new
+ * recipe on one is not what the button was pressed for. (The Diary is where an
+ * archived bean is still reachable, via "Show all".)
+ */
+const activeBeans = computed(() => beans.value.filter((b) => !b.archived));
+
+const matches = (bean, q) =>
+  [bean.roaster, bean.name, bean.country, bean.processing]
+    .some((v) => String(v || '').toLowerCase().includes(q));
+
+const foundBeans = computed(() => {
   const q = query.value.trim().toLowerCase();
-  if (!q) return beans.value;
-  return beans.value.filter((bean) =>
-    [bean.roaster, bean.name, bean.country, bean.processing].some((v) => String(v || '').toLowerCase().includes(q))
-  );
+  return q ? activeBeans.value.filter((b) => matches(b, q)) : activeBeans.value;
 });
+
+const roasterGroups = computed(() => {
+  const byRoaster = new Map();
+  for (const bean of foundBeans.value) {
+    // '—' for a bean with no roaster, exactly as the Diary groups them: the
+    // preset arrives as one of the Diary's own group names, and a translated
+    // "No roaster" here would simply never match it.
+    const key = bean.roaster || '—';
+    if (!byRoaster.has(key)) byRoaster.set(key, []);
+    byRoaster.get(key).push(bean);
+  }
+  return [...byRoaster.entries()].map(([name, list]) => ({ name, beans: list }));
+});
+
+// Seeded from wherever the caller already was — the Diary's "+" hands over the
+// roaster the user is standing in, so the wizard doesn't ask them to find it
+// again. An unknown or now-empty roaster falls back to the list via the watch
+// below, so a stale name can't strand anyone on an empty screen.
+const props = defineProps({ presetRoaster: { type: String, default: '' } });
+const roaster = ref(props.presetRoaster || null); // null = showing roasters
+const beansInRoaster = computed(() =>
+  roasterGroups.value.find((g) => g.name === roaster.value)?.beans ?? []
+);
+// A search that empties the open roaster drops back to the list rather than
+// leaving the user on a screen with nothing on it.
+watch(foundBeans, () => {
+  if (roaster.value && !beansInRoaster.value.length) roaster.value = null;
+});
+
+const drill = ref('drill-fwd');
+function enterRoaster(name) { drill.value = 'drill-fwd'; roaster.value = name; }
+function leaveRoaster() { drill.value = 'drill-back'; roaster.value = null; }
+function onBack() { roaster.value ? leaveRoaster() : emit('back'); }
 async function openSearch() {
   const value = await openTextField({ title: t('recipePicker.search'), value: query.value, placeholder: t('recipePicker.searchPlaceholder') });
   if (value !== null) query.value = value;
@@ -43,22 +91,50 @@ async function openSearch() {
 <template>
   <div class="overlay-full">
     <div class="ov-top">
-      <button class="ov-back" @click="emit('back')">
+      <button class="ov-back" @click="onBack">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('common.back') }}
       </button>
-      <span class="ov-title">{{ t('recipePicker.chooseBean') }}</span>
-      <span v-if="showStep" class="ov-title" style="flex: 0; color: var(--accent)">{{ t('recipePicker.step1') }}</span>
+      <!-- The wizard puts its progress bubbles here, on the header's own row;
+           used on its own (swapping an existing recipe's bean) the title
+           stands instead — the bubbles would be telling a story of one step. -->
+      <slot name="crumbs"><span class="ov-title">{{ t('recipePicker.chooseBean') }}</span></slot>
+      <!-- Reserves exactly the width of the profile step's show-hidden button,
+           so the progress bubbles sit in the same place on both screens instead
+           of jumping sideways when the wizard advances. It carries the same
+           classes and the same 15px glyph box as the real thing rather than a
+           measured width, so it cannot drift out of step with it; hidden by
+           visibility, which keeps the space it is there to hold. -->
+      <span v-if="$slots.crumbs" class="sort-btn lg icon-only" aria-hidden="true" style="visibility: hidden">
+        <svg viewBox="0 0 24 24"></svg>
+      </span>
     </div>
-    <div class="list">
-      <button v-for="bean in visibleBeans" :key="bean.id" class="list-row" @click="emit('pick', bean)">
-        <span class="rmeta">
-          {{ bean.roaster || t('recipePicker.noRoaster') }} – {{ bean.name }}
-          <span class="rsub">{{ [bean.country, bean.processing].filter(Boolean).join(' · ') }}</span>
-        </span>
-        <span class="chev">›</span>
-      </button>
-      <div v-if="beans.length && !visibleBeans.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
-      <div v-if="!beans.length" class="list-row"><span class="rsub">{{ t('recipePicker.noBeansYet') }}</span></div>
+    <!-- Two panes on one stage, sliding the same way the Diary's levels do. -->
+    <div class="drill-stage">
+      <Transition :name="drill">
+        <div v-if="!roaster" key="roasters" v-scroll-edges class="list list-cards">
+          <div class="lc-inner">
+            <button v-for="g in roasterGroups" :key="g.name" class="list-row" @click="enterRoaster(g.name)">
+              <span class="rmeta">{{ g.name }}<span class="rsub">{{ g.beans.length }} bean{{ g.beans.length !== 1 ? 's' : '' }}</span></span>
+              <span class="chev">›</span>
+            </button>
+            <div v-if="activeBeans.length && !roasterGroups.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
+            <div v-if="!activeBeans.length" class="list-row"><span class="rsub">{{ t('recipePicker.noBeansYet') }}</span></div>
+          </div>
+        </div>
+        <div v-else key="beans" v-scroll-edges class="list list-cards">
+          <div class="lc-inner">
+            <button v-for="bean in beansInRoaster" :key="bean.id" class="list-row" @click="emit('pick', bean)">
+              <span class="rmeta rmeta-inline">
+                <span class="bean-name">{{ bean.name }}</span>
+                <span v-if="[bean.country, bean.processing].filter(Boolean).length" class="rsub">
+                  {{ [bean.country, bean.processing].filter(Boolean).join(' · ') }}
+                </span>
+              </span>
+              <span class="chev">›</span>
+            </button>
+          </div>
+        </div>
+      </Transition>
     </div>
 
     <div class="prep-bottom">

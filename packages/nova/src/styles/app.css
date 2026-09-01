@@ -830,6 +830,27 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   color: var(--text); font-family: inherit;
 }
 .rov-bubble.plain { background: none; }
+/* The same bubbles as a progress trail (RecipeCrumbs). An unfilled step is
+   outlined rather than solid: it has to read as "still to come", and a row of
+   three identical filled bubbles would say nothing about where you are. The
+   filled one takes the accent border, so the trail also shows which step just
+   completed without a separate marker. */
+/* On the header's own row, in the space .ov-title used to hold — so the trail
+   sits at the back button's height rather than pushing the content down.
+   flex: 1 with a max-width is what keeps the three bubbles the same size
+   whether they are empty or hold a long roaster name: sized to their content
+   they would resize as the trail fills, which is the one thing a progress
+   indicator must not do. Names already ellipsis inside (.rov-bubble-name).
+   The bubbles keep the recipe browser's full size and the header row grows to
+   fit them: squeezed to the back button's 41px they were legible but cramped,
+   and the bar is the one place on these screens with room to spare. The back
+   button and the gutter simply centre themselves in the taller row. */
+.crumbs { flex: 1; max-width: 620px; margin: 0 auto; }
+.crumbs .rov-bubble { padding: 8px 16px; }
+.crumbs .rov-bubble { background: none; border: 1px solid var(--line); opacity: 0.55; }
+.crumbs .rov-bubble.filled { background: var(--card-bg); border-color: var(--accent); opacity: 1; }
+.crumbs .rov-bubble-name { color: var(--muted); }
+.crumbs .rov-bubble.filled .rov-bubble-name { color: var(--text); }
 .rov-bubble-label {
   font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
 }

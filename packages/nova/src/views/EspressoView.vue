@@ -376,7 +376,7 @@ async function openRateRecipe() {
       @back="showRecipeCreator = false"
       @created="showRecipeCreator = false"
     />
-    <BeanChooser v-if="showBeanChooser" :show-step="false" @pick="onBeanPicked" @back="showBeanChooser = false" />
+    <BeanChooser v-if="showBeanChooser" @pick="onBeanPicked" @back="showBeanChooser = false" />
     <ProfilePicker
       v-if="showProfilePicker"
       mode="pick"

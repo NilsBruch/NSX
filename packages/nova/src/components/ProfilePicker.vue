@@ -17,6 +17,8 @@ import ProfileEditor from './settings/ProfileEditor.vue';
 const props = defineProps({
   mode: { type: String, default: 'pick' }, // 'pick' | 'manage'
   currentTitle: { type: String, default: '' },
+  // Overrides the pick-mode confirm button's label; empty keeps "Select".
+  confirmLabel: { type: String, default: '' },
 });
 const emit = defineEmits(['select', 'back']);
 
@@ -318,7 +320,11 @@ async function onEditorSaved({ profile: built, originalProfile }) {
       <button class="ov-back" @click="emit('back')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('common.back') }}
       </button>
-      <span class="ov-title">{{ mode === 'manage' ? t('profilePicker.manageTitle') : t('profilePicker.pickTitle') }}</span>
+      <!-- `selected` is passed to the slot so a wizard's progress trail can fill
+           its Profile bubble the moment one is highlighted, rather than only
+           after the confirm button — the highlight IS the choice; the button
+           just commits it. -->
+      <slot name="crumbs" :selected="selected"><span class="ov-title">{{ mode === 'manage' ? t('profilePicker.manageTitle') : t('profilePicker.pickTitle') }}</span></slot>
       <button
         class="sort-btn lg icon-only"
         :aria-pressed="showHidden"
@@ -437,7 +443,10 @@ async function onEditorSaved({ profile: built, originalProfile }) {
                  profile based on one now, not this button. -->
             <button v-if="isUserOwned(selected)" class="btn accent" @click="openEditProfile">{{ t('common.edit') }}</button>
           </template>
-          <button v-if="mode === 'pick'" class="btn" @click="confirmSelect">{{ t('profilePicker.select') }}</button>
+          <!-- The caller names this: inside the new-recipe wizard the press
+               creates the recipe, and "Select profile" would understate what
+               happens next. -->
+          <button v-if="mode === 'pick'" class="btn accent" @click="confirmSelect">{{ props.confirmLabel || t('profilePicker.select') }}</button>
         </div>
       </div>
     </div>
