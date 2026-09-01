@@ -1266,7 +1266,28 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .wbar-track { width: 340px; max-width: 46vw; height: 16px; border-radius: var(--r-pill); background: var(--well); overflow: hidden; }
 .wbar-fill { height: 100%; width: 0; background: var(--wflow-color); border-radius: var(--r-pill); }
 
-.shot-graph { flex: 1; min-height: 0; background: var(--modal-bg); border-radius: var(--r-lg); padding: 14px; display: flex; }
+/* flex:1 with a ceiling. Without the cap the graph swallowed every pixel the
+   column had spare — including the row the legend gave back — and the metric
+   tiles stayed pinned near the bottom whatever else changed. The cap is a
+   share of the VIEWPORT rather than a percentage of the parent, deliberately:
+   percentages resolve against .overlay-full's content box, so they would shift
+   silently if its padding ever changed, and the tablet's Android 12 WebView is
+   unreliable about resolving percentage heights at all (see .rail). Paired
+   with the margin-top: auto below, which keeps the bottom row at the bottom so
+   any slack lands between the tiles and it, not as a dead band under the
+   controls. */
+.shot-graph {
+  position: relative; flex: 1; min-height: 0; max-height: 65vh;
+  background: var(--modal-bg); border-radius: var(--r-lg); padding: 14px; display: flex;
+}
+/* The legend, laid over the plot's top-right corner instead of taking a row of
+   its own underneath. pointer-events: none is load-bearing on the history
+   graph, which is scrubbed by holding a finger on it — a legend that ate that
+   touch would leave a dead corner exactly where the curve peaks. */
+.glabel-inset {
+  position: absolute; top: 14px; right: 18px; z-index: 1;
+  gap: 14px; pointer-events: none;
+}
 .shot-graph-canvas { width: 100%; height: 100%; }
 /* Hold-to-scrub the history graph: stop the touch from scrolling the panel. */
 .shot-graph-canvas.scrubbable { touch-action: none; }
@@ -1280,7 +1301,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .metric .mv small { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
 
 /* Skip on the left, the (now larger) weight progress pinned bottom-right. */
-.live-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.live-bottom { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .skip-btn {
   background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r-lg);
   height: 66px; min-width: 220px; font-family: inherit; font-size: var(--fs-base); font-weight: 700;

@@ -159,13 +159,18 @@ async function editGrindSetting() {
       <!-- No top-right timer here: the elapsed time already runs in the metrics
            row below (liveShot.mTime), so a second one would be redundant. -->
     </div>
-    <div class="shot-graph"><ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" /></div>
-    <!-- No temperature entry: the strip chart doesn't plot temp (the metric
-         tile below carries it) — a legend swatch for an absent line lies. -->
-    <div class="glabel">
-      <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}</i>
-      <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}</i>
-      <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}</i>
+    <div class="shot-graph">
+      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" />
+      <!-- Inside the plot, top right, rather than on a row of its own below it:
+           a legend is a caption for the graph, and it was costing a full row of
+           the column for three short words.
+           No temperature entry: the strip chart doesn't plot temp (the metric
+           tile below carries it) — a legend swatch for an absent line lies. -->
+      <div class="glabel glabel-inset">
+        <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}</i>
+        <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}</i>
+        <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}</i>
+      </div>
     </div>
     <div class="live-metrics">
       <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.temp }">{{ t('liveShot.mTemp') }}</div><div class="mv">{{ last(series.temperature, 0) }}<small>°C</small></div></div>
@@ -213,14 +218,16 @@ async function editGrindSetting() {
     </div>
 
     <template v-if="currentShot">
-      <div class="shot-graph"><ShotStripChart :series="historyStripSeries" mode="static" @scrub="scrub = $event" /></div>
-      <!-- No temperature swatch: the strip chart doesn't plot temp, matching
-           the live view exactly (see the request that spawned this). Holding a
-           finger on the graph fills each label with that point's value. -->
-      <div class="glabel">
-        <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
-        <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
-        <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
+      <div class="shot-graph">
+        <ShotStripChart :series="historyStripSeries" mode="static" @scrub="scrub = $event" />
+        <!-- No temperature swatch: the strip chart doesn't plot temp, matching
+             the live view exactly (see the request that spawned this). Holding a
+             finger on the graph fills each label with that point's value. -->
+        <div class="glabel glabel-inset">
+          <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
+          <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
+          <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
+        </div>
       </div>
       <div class="shot-metrics">
         <button class="metric as-btn" @click="editGrindSetting">
