@@ -186,12 +186,19 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
           @pointercancel="cardPress.cancel"
           @pointerleave="cardPress.cancel"
         >
-          <span v-if="isCurrent(entry)" class="rp-badge">{{ t('common.current') }}</span>
           <div class="rp-head">
-            <svg v-if="entry.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
-            </svg>
-            <span class="rp-roaster">{{ entry.coffeeRoaster }}</span>
+            <!-- On the roaster's line and pushed to the card's right edge, where
+                 the "Current" badge used to sit and nothing else does. Inside
+                 the line rather than above it because .rp-head is a COLUMN: a
+                 sibling svg would take a row of its own and make a pinned card
+                 taller than its neighbours. Last in the row, so its presence
+                 cannot shift the roaster name — no reserved space needed. -->
+            <span class="rp-roaster">
+              <span class="rp-roaster-text">{{ entry.coffeeRoaster }}</span>
+              <svg v-if="entry.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
+              </svg>
+            </span>
             <span class="rp-name">{{ entry.coffeeName }}</span>
             <div class="rp-rating">
               <StarRating v-if="Number(entry.rating) > 0" :model-value="Number(entry.rating)" readonly :size="16" />
