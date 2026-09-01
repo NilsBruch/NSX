@@ -1079,6 +1079,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   padding: 18px 20px; color: var(--text); font-family: inherit;
 }
 .rp-card.current { border-color: var(--accent); }
+/* Marks a pinned recipe — on its card in the browser, and on its row in the
+   Diary. Sits before the name rather than in a corner: the pin explains the
+   card's POSITION at the top of the list, so it belongs where the eye lands
+   first, not off in the margin. */
+.rp-pin {
+  width: 14px; height: 14px; flex: none; margin-right: 6px;
+  stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
 .rp-badge {
   position: absolute; top: 16px; right: 16px;
   color: var(--accent); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
@@ -1533,14 +1541,19 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .recipe-row-id .dot { color: var(--faint); padding: 0 0.4em; }
 .recipe-row-meta .rsub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Explicit "load this recipe" action — tapping the row itself only expands the
-   shot list now, so loading is this button, not a whole-row tap. */
+/* The Recipes view's explicit load action. The Browse rows no longer carry one:
+   there, tapping the row loads and holding it opens Load / Pin / Delete, with
+   the chevron left to expand the history. */
 .bean-row .load-recipe-btn {
   flex: none; align-self: center; margin: 0 14px 0 4px; padding: 9px 16px;
   background: var(--accent); color: #12161b; border: none; border-radius: var(--r-sm);
   font-family: inherit; font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; cursor: pointer;
 }
+
+/* Title line of a Browse profile row, so a pin marker can sit inline with the
+   name instead of stacking above it in .rmeta's column. */
+.bean-row .row-title { display: inline-flex; align-items: center; min-width: 0; }
 
 /* Diary shot rows (flat, not the card-metric grid used elsewhere) */
 .shot-row { letter-spacing: normal; text-transform: none; cursor: pointer; width: 100%; min-height: 72px; padding: 10px 22px; gap: 14px; }

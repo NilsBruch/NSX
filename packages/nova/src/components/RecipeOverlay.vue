@@ -55,11 +55,16 @@ const sortLabel = computed(() => t(sortMode.value === 'rating' ? 'recipePicker.s
 
 const sortedRecipes = computed(() => {
   const byUse = window.NSXCore.sortRecipesByLastUsed(recipes.value, shots.value);
-  if (sortMode.value !== 'rating') return byUse;
-  const pos = new Map(byUse.map((r, i) => [r, i]));
-  return byUse.slice().sort((a, b) =>
-    ((Number(b.rating) || 0) - (Number(a.rating) || 0)) || (pos.get(a) - pos.get(b))
-  );
+  const sorted = sortMode.value !== 'rating' ? byUse : (() => {
+    const pos = new Map(byUse.map((r, i) => [r, i]));
+    return byUse.slice().sort((a, b) =>
+      ((Number(b.rating) || 0) - (Number(a.rating) || 0)) || (pos.get(a) - pos.get(b))
+    );
+  })();
+  // Pinned first, in whatever order the active sort gave them — a partition,
+  // not another sort key, so pinning never reshuffles anything among itself and
+  // the sort button still visibly does what it says within each half.
+  return [...sorted.filter((r) => r.pinned), ...sorted.filter((r) => !r.pinned)];
 });
 
 /**
@@ -142,6 +147,9 @@ async function pick(entry) {
         >
           <span v-if="isCurrent(entry)" class="rp-badge">{{ t('common.current') }}</span>
           <div class="rp-head">
+            <svg v-if="entry.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
+            </svg>
             <span class="rp-roaster">{{ entry.coffeeRoaster }}</span>
             <span class="rp-name">{{ entry.coffeeName }}</span>
             <div class="rp-rating">

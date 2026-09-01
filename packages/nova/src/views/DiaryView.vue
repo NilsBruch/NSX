@@ -10,9 +10,9 @@ import {
   recipeRows, toggleRecipeExpanded, toggleEditingRecipes,
 } from '../composables/useDiary.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
-import { openTextField, openConfirm } from '../composables/useModals.js';
+import { openTextField, openConfirm, openChooser } from '../composables/useModals.js';
 import { recipeIdentityParts } from '../composables/useCore.js';
-import { selectRecipe, deleteRecipe, findRecipeForBeanProfile } from '../composables/useRecipe.js';
+import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
 import RecipePicker from '../components/RecipePicker.vue';
 import DiaryShotRow from '../components/DiaryShotRow.vue';
@@ -83,6 +83,60 @@ function recipeFacts(r) {
  */
 function savedRecipeForGroup(group) {
   return findRecipeForBeanProfile(diaryState.bean, group.title);
+}
+
+/**
+ * A profile row: tap loads the recipe, press-and-hold opens Load / Pin /
+ * Delete. The chevron on the right keeps expanding the shot history — that is
+ * why the row itself was free to become the load action.
+ *
+ * Driven from pointer events rather than @click, so the hold can be detected
+ * and the tap suppressed once it fires. The move threshold matters on a list
+ * that scrolls: a finger dragging the list past a row must not be read as a
+ * hold on it.
+ */
+const HOLD_MS = 450;
+const HOLD_SLOP_PX = 10;
+let holdTimer = null;
+let holdFired = false;
+let holdStart = { x: 0, y: 0 };
+
+function onGroupDown(evt, group) {
+  holdFired = false;
+  holdStart = { x: evt.clientX, y: evt.clientY };
+  clearTimeout(holdTimer);
+  holdTimer = setTimeout(() => { holdFired = true; openGroupMenu(group); }, HOLD_MS);
+}
+function onGroupMove(evt) {
+  if (holdTimer === null) return;
+  if (Math.abs(evt.clientX - holdStart.x) > HOLD_SLOP_PX || Math.abs(evt.clientY - holdStart.y) > HOLD_SLOP_PX) {
+    cancelHold();
+  }
+}
+function cancelHold() {
+  clearTimeout(holdTimer);
+  holdTimer = null;
+}
+function onGroupUp(group) {
+  const wasHold = holdFired;
+  cancelHold();
+  holdFired = false;
+  if (!wasHold) goToRecipe(group); // a plain tap loads
+}
+
+async function openGroupMenu(group) {
+  const saved = savedRecipeForGroup(group);
+  const options = [['load', t('diary.loadRecipe')]];
+  // Pin and Delete need something saved to act on. A pairing that was brewed
+  // but never saved has only Load, which is what creates the recipe.
+  if (saved) {
+    options.push(['pin', saved.pinned ? t('diary.unpin') : t('diary.pin')]);
+    options.push(['delete', t('common.delete')]);
+  }
+  const choice = await openChooser({ title: group.title, options });
+  if (choice === 'load') await goToRecipe(group);
+  else if (choice === 'pin') await togglePinRecipe(saved);
+  else if (choice === 'delete') await removeRecipe(saved);
 }
 
 async function removeRecipe(recipe) {
@@ -298,23 +352,26 @@ watch(
     <div v-else class="list">
       <template v-for="group in profileGroupsInBean" :key="group.title">
         <div class="list-row bean-row">
-          <button class="row-main" @click="toggleProfileExpanded(group.title)">
-            <span class="rmeta">{{ group.title }}</span>
+          <button
+            class="row-main"
+            @pointerdown="onGroupDown($event, group)"
+            @pointermove="onGroupMove"
+            @pointerup="onGroupUp(group)"
+            @pointercancel="cancelHold"
+            @pointerleave="cancelHold"
+          >
+            <span class="rmeta">
+              <span class="row-title">
+                <svg v-if="savedRecipeForGroup(group)?.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
+                </svg>
+                {{ group.title }}
+              </span>
+            </span>
           </button>
           <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleProfileExpanded(group.title)">
             <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
           </button>
-          <!-- Only where a recipe was actually saved for this bean+profile;
-               the row itself outlives it, since the shots that built it do. -->
-          <button
-            v-if="savedRecipeForGroup(group)"
-            class="row-edit danger"
-            :aria-label="t('common.delete')"
-            @click="removeRecipe(savedRecipeForGroup(group))"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
-          </button>
-          <button class="load-recipe-btn" @click="goToRecipe(group)">{{ t('diary.loadRecipe') }}</button>
         </div>
         <div v-if="diaryState.expandedProfile === group.title" class="sublist">
           <button

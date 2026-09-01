@@ -68,6 +68,8 @@ export const recipe = reactive({
   // origin, variety, process and notes. Cleared the moment a bean is picked
   // again (setRecipeBean).
   beanUnlinked: false,
+  // Sorted to the top of the recipe browser — see togglePinRecipe.
+  pinned: false,
   roastDate: null,   // ISO date string, or null = "not set". Derived from the batch,
                      // which is the source of truth; deliberately NOT persisted on the recipe.
   // ml-per-gram factor this recipe has learned for estimating weight from the
@@ -121,6 +123,7 @@ function snapshotFromCurrentRecipe(existing = {}) {
     beanId: recipe.beanId,
     beanBatchId: recipe.beanBatchId,
     beanUnlinked: recipe.beanUnlinked,
+    pinned: recipe.pinned,
     volumeCalibration: recipe.volumeCalibration,
     rating: Number(recipe.rating) || 0,
   };
@@ -470,6 +473,7 @@ export async function selectRecipe(entry) {
     beanId: entry.beanId ?? null,
     beanBatchId: entry.beanBatchId ?? null,
     beanUnlinked: entry.beanUnlinked === true,
+    pinned: entry.pinned === true,
     roastDate: null,
     volumeCalibration: entry.volumeCalibration && typeof entry.volumeCalibration === 'object'
       ? entry.volumeCalibration
@@ -515,6 +519,7 @@ export async function composeNewRecipe({ bean, profile, seedContext = null }) {
     beanId: bean.id ?? null,
     beanBatchId: null,
     beanUnlinked: false,
+    pinned: false,
     roastDate: null,
     volumeCalibration: { factor: 1.0, samples: [] },
     rating: 0, // a freshly composed recipe starts unrated
@@ -775,6 +780,26 @@ export function recipesUsingBean(bean) {
 /** The bean a recipe stands on, or null if it has none / it is gone. */
 export function beanForRecipe(entry) {
   return beans.value.find((b) => recipeMatchesBean(entry, b)) ?? null;
+}
+
+/**
+ * Pin/unpin a saved recipe. Pinned recipes sort to the top of the Coffee page's
+ * recipe browser (RecipeOverlay), ahead of last-used and rating — "one I keep
+ * coming back to", stated by hand rather than inferred from history.
+ *
+ * Stored on the recipe entry rather than as a separate list of ids: it travels
+ * with the recipe through the 3-way merge saveRecipes already does, so two
+ * devices pinning different recipes don't clobber each other, and a deleted
+ * recipe can't leave a dangling pin behind.
+ */
+export async function togglePinRecipe(entry) {
+  if (!entry?.id) return false;
+  const pinned = !entry.pinned;
+  recipes.value = await NSXCore.saveRecipes(
+    recipes.value.map((r) => (r.id === entry.id ? { ...r, pinned } : r))
+  );
+  if (recipe.id === entry.id) recipe.pinned = pinned;
+  return pinned;
 }
 
 /**

@@ -315,6 +315,8 @@ export default {
     loadMore: 'Load {n} more shots',
     loading: 'Loading…',
     loadRecipe: 'Load Recipe',
+    pin: 'Pin to the top',
+    unpin: 'Unpin',
     expandProfile: 'Show shots for this profile',
     editBean: 'Edit bean',
     newBean: 'New bean',
