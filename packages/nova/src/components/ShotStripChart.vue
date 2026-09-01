@@ -19,6 +19,8 @@
  *  - weight flow -> brown fill painted over each bar from the bottom;
  *                   in == out ⇒ the bar reads fully brown
  *  - pressure    -> solid curve;  pressure goal -> dashed curve
+ * Both GOAL encodings are optional -- the `showTargets` prop drops them, on a
+ * skin setting, leaving only what the machine actually did.
  * Temperature is deliberately NOT plotted — it lives in the metric tiles; the
  * strip chart is about extraction dynamics on the shared 0-12 scale.
  *
@@ -36,6 +38,10 @@ const props = defineProps({
   mode: { type: String, default: 'scroll' }, // 'scroll' | 'static'
   originMs: { type: Number, default: 0 },    // scroll mode: Date.now() at elapsed=0
   windowS: { type: Number, default: 35 },    // scroll mode: seconds visible in the viewport
+  // true = also draw the profile's target pressure curve and target flow bars.
+  // Off by default here too, matching the skin setting that drives it
+  // (SkinPanel) — a caller that passes nothing gets the plain plot.
+  showTargets: { type: Boolean, default: false },
 });
 // Touch-and-hold scrubbing (static/history mode only): emits the sample under
 // the finger so the legend can read out pressure/flow/weight-flow at that point,
@@ -144,7 +150,7 @@ function draw() {
       ctx.fillStyle = COLORS.weight;
       ctx.fillRect(x0, yFor(wflow), bw, h - yFor(wflow));
     }
-    if (goal > 0.02) {
+    if (props.showTargets && goal > 0.02) {
       ctx.strokeStyle = COLORS.flowGoal;
       ctx.lineWidth = 1;
       ctx.strokeRect(x0 + 0.5, yFor(goal) + 0.5, bw - 1, h - yFor(goal) - 1);
@@ -201,7 +207,7 @@ function draw() {
     }
     ctx.stroke();
   };
-  line(props.series.targetPressure, COLORS.pressureGoal, [6, 5]);
+  if (props.showTargets) line(props.series.targetPressure, COLORS.pressureGoal, [6, 5]);
   smoothLine(props.series.pressure, COLORS.pressure);
 
   // Leading dot on the newest pressure sample — the "pen" of the strip chart.

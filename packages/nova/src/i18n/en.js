@@ -404,6 +404,7 @@ export default {
     tabColors: 'Colour by tab',
     tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',
+    showTargets: 'Profile targets', showTargetsSub: "Draw the profile's pressure and flow targets in the shot graph",
     reviewAutoCloseOff: 'Stay open', reviewAutoCloseSec: 'After {n}s',
   },
   grinderEditor: {

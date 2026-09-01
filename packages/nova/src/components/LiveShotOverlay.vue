@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { phase, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, liveFrame } from '../composables/useLiveShot.js';
 import { recipe } from '../composables/useRecipe.js';
+import { skinSettings } from '../composables/useSettings.js';
 import { machine, currentWorkflow } from '../composables/useCore.js';
 import { openNumberPad, openConfirm } from '../composables/useModals.js';
 import { showToast } from '../composables/useToast.js';
@@ -180,7 +181,7 @@ async function editGrindSetting() {
            row below (liveShot.mTime), so a second one would be redundant. -->
     </div>
     <div class="shot-graph">
-      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" />
+      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" />
       <!-- Inside the plot, top right, rather than on a row of its own below it:
            a legend is a caption for the graph, and it was costing a full row of
            the column for three short words.
@@ -239,7 +240,7 @@ async function editGrindSetting() {
 
     <template v-if="currentShot">
       <div class="shot-graph">
-        <ShotStripChart :series="historyStripSeries" mode="static" @scrub="scrub = $event" />
+        <ShotStripChart :series="historyStripSeries" mode="static" :show-targets="skinSettings.showTargets" @scrub="scrub = $event" />
         <!-- No temperature swatch: the strip chart doesn't plot temp, matching
              the live view exactly (see the request that spawned this). Holding a
              finger on the graph fills each label with that point's value. -->

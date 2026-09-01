@@ -216,6 +216,11 @@ export const skinSettings = reactive({
   // Both are the same rules with a different token block (app.css).
   lightMode: false,
   shotReviewAutoCloseSec: 5, // 0 = stay open until dismissed
+  // true = the profile's pressure/flow TARGETS are drawn alongside the actual
+  // ones (dashed curve + outlined bars, see ShotStripChart). OFF by default:
+  // what the machine actually did is the reading that matters, and the target
+  // encodings double the ink in the plot for a question you only sometimes ask.
+  showTargets: false,
 });
 const SKIN_KEYS = {
   wakeOnUnlock: 'nova_wake_on_unlock',
@@ -228,6 +233,7 @@ const SKIN_KEYS = {
   tabColors: 'nova_tab_colors',
   lightMode: 'nova_light_mode',
   shotReviewAutoCloseSec: 'nova_shot_review_autoclose',
+  showTargets: 'nova_show_targets',
 };
 export function loadSkinSettings() {
   const s = NSXCore.getStore();
@@ -246,6 +252,7 @@ export function loadSkinSettings() {
   skinSettings.lightMode = s.nova_light_mode === true;  // default dark
   // Default 5s; an explicit stored 0 (off) must survive, so don't `|| 5`.
   skinSettings.shotReviewAutoCloseSec = s.nova_shot_review_autoclose != null ? Number(s.nova_shot_review_autoclose) : 5;
+  skinSettings.showTargets = s.nova_show_targets === true; // default off
 }
 export async function saveSkinSetting(key, value) {
   skinSettings[key] = value;

@@ -20,6 +20,7 @@ import {
 } from '../../composables/useLiveShot.js';
 import { openNumberPad, openConfirm } from '../../composables/useModals.js';
 import ShotStripChart from '../ShotStripChart.vue';
+import { skinSettings } from '../../composables/useSettings.js';
 
 const { t } = useI18n();
 const { NSXCore } = window;
@@ -125,7 +126,7 @@ async function editGrindSetting() {
 
     <template v-if="currentShot">
       <div class="shot-graph">
-        <ShotStripChart :series="historyStripSeries" mode="static" @scrub="scrub = $event" />
+        <ShotStripChart :series="historyStripSeries" mode="static" :show-targets="skinSettings.showTargets" @scrub="scrub = $event" />
         <div class="glabel glabel-inset">
           <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
           <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>

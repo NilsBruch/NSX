@@ -115,6 +115,17 @@ async function pickReviewAutoClose() {
         <span class="sr-name">{{ t('skinSettings.wakelock') }}</span>
         <button class="switch" :class="{ on: skinSettings.wakelock }" role="switch" :aria-checked="skinSettings.wakelock" @click="saveSkinSetting('wakelock', !skinSettings.wakelock)"></button>
       </div>
+      <!-- The graph's dashed pressure curve and outlined flow bars are the
+           PROFILE's targets; this hides them, leaving only what the machine
+           actually did. Applies to the live graph and the history one alike —
+           they are the same renderer. -->
+      <div class="setting-row">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('skinSettings.showTargets') }}</span>
+          <span class="sr-sub">{{ t('skinSettings.showTargetsSub') }}</span>
+        </span>
+        <button class="switch" :class="{ on: skinSettings.showTargets }" role="switch" :aria-checked="skinSettings.showTargets" @click="saveSkinSetting('showTargets', !skinSettings.showTargets)"></button>
+      </div>
       <button class="setting-row as-btn" @click="pickReviewAutoClose">
         <span class="sr-main"><span class="sr-name">{{ t('skinSettings.reviewAutoClose') }}</span><span class="sr-sub">{{ t('skinSettings.reviewAutoCloseSub') }}</span></span>
         <span class="sr-value">{{ autoCloseLabel(skinSettings.shotReviewAutoCloseSec) }}<span class="sr-chev">›</span></span>
