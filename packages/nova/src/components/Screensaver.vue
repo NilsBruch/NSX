@@ -32,7 +32,14 @@ const { t } = useI18n();
 // *.jpg` path (Nova's previous approach) 404s there even though the exact
 // same relative-path pattern works fine for NSX, which IS served as a real
 // folder — see the design log. Inlining removes the dependency on a base URL
-// existing at all. Index.html grows by ~5MB (the photos' base64 size) for it.
+// existing at all.
+//
+// Which is why the photos themselves are kept at JPEG q75 (mozjpeg), 1280x800
+// -- the tablet's exact panel size. Base64 in index.html means every byte here
+// is a byte the WebView parses at EVERY app start, minutes before the
+// screensaver is ever shown; the originals were near-q95 and cost 3.7MB (5MB
+// once base64'd) for no visible difference on this screen. Re-export at a
+// higher quality and you pay for it on every boot, not on first idle.
 import s1 from '../assets/screensaver/Screen_saver_Decent_1.jpg?inline';
 import s2 from '../assets/screensaver/Screen_saver_Decent_2.jpg?inline';
 import s3 from '../assets/screensaver/Screen_saver_Decent_3.jpg?inline';

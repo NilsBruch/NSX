@@ -48,7 +48,6 @@ window.NSXI18n?.setLang('en');
 window.NSXCore?.setStoreNamespace('Nova');
 
 import { createApp } from 'vue';
-import 'uplot/dist/uPlot.min.css';
 import './styles/app.css';
 import './styles/phone.css';
 
