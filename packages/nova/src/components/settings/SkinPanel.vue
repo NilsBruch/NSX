@@ -66,6 +66,13 @@ async function pickReviewAutoClose() {
         <span class="sr-main"><span class="sr-name">{{ t('skinSettings.wakeOnUnlock') }}</span><span class="sr-sub">{{ t('skinSettings.wakeOnUnlockSub') }}</span></span>
         <button class="switch" :class="{ on: skinSettings.wakeOnUnlock }" role="switch" :aria-checked="skinSettings.wakeOnUnlock" @click="saveSkinSetting('wakeOnUnlock', !skinSettings.wakeOnUnlock)"></button>
       </div>
+      <div class="setting-row">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('skinSettings.tapToUnlock') }}</span>
+          <span class="sr-sub">{{ t('skinSettings.tapToUnlockSub') }}</span>
+        </span>
+        <button class="switch" :class="{ on: skinSettings.tapToUnlock }" role="switch" :aria-checked="skinSettings.tapToUnlock" @click="saveSkinSetting('tapToUnlock', !skinSettings.tapToUnlock)"></button>
+      </div>
       <!-- Both hidden on a host the gateway can't drive: the dim level would
            never be applied, the wake lock never held (core's display domain). -->
       <button v-if="displaySupport.brightness" class="setting-row as-btn" @click="editScreensaverBrightness">

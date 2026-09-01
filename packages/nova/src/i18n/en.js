@@ -69,6 +69,7 @@ export default {
     descaling: 'Descaling',
     idle: 'Idle',
     sleepHint: 'Swipe to unlock',
+    tapHint: 'Tap to wake',
     noMachine: 'No machine',
   },
   espresso: {
@@ -386,6 +387,8 @@ export default {
   },
   skinSettings: {
     lockscreen: 'Lockscreen', wakeOnUnlock: 'Wake DE1 on unlock', wakeOnUnlockSub: 'Off: unlocking the screen leaves the machine asleep',
+    tapToUnlock: 'Tap to wake',
+    tapToUnlockSub: 'Off: slide to unlock, so a wipe of the screen can’t dismiss it',
     general: 'General', brightness: 'Brightness',
     timeFormat: 'Time format', timeFormat24: '24-hour', timeFormat12: '12-hour',
     startPage: 'Start page', wakelock: 'Keep screen awake', screensaverBrightness: 'Screensaver brightness',

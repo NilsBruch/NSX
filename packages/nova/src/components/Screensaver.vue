@@ -2,13 +2,24 @@
 /**
  * The lock face — shown by App.vue whenever `locked` is true (see
  * useScreensaver.js). Ported to Nova from NSX's screensaver: a full-bleed photo
- * that crossfades through a set, a clock/date overlay, and a swipe-to-unlock
- * slider (a tap no longer unlocks — you must slide the thumb across). Whether
- * unlocking also wakes the DE1 depends on the "wake DE1 on unlock" skin setting.
+ * that crossfades through a set, a clock/date overlay, and — by default — a
+ * swipe-to-unlock slider. The slider is not decoration: a lock face that a
+ * tap dismisses is one that a cloth wiping the screen dismisses too, which is
+ * why tapping stopped unlocking in the first place. The "tap to wake" skin
+ * setting turns it back into a single tap for people who would rather have
+ * the convenience; it is opt-in for that reason.
+ *
+ * Even then it listens for a CLICK, not a pointerdown: a click requires press
+ * and release on the same element without much travel, so a finger dragged
+ * across the glass still doesn't wake it.
+ *
+ * Whether unlocking also wakes the DE1 depends on the separate "wake DE1 on
+ * unlock" skin setting.
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { unlock } from '../composables/useScreensaver.js';
+import { skinSettings } from '../composables/useSettings.js';
 import { formatClock } from '../utils/clock.js';
 
 const { t } = useI18n();
@@ -106,7 +117,7 @@ function onUp() {
 </script>
 
 <template>
-  <div class="screensaver">
+  <div class="screensaver" @click="skinSettings.tapToUnlock ? unlock() : null">
     <div class="ss-bg" :style="{ backgroundImage: `url(${layerA})`, opacity: aVisible ? 1 : 0 }"></div>
     <div class="ss-bg" :style="{ backgroundImage: layerB ? `url(${layerB})` : 'none', opacity: aVisible ? 0 : 1 }"></div>
     <div class="ss-gradient"></div>
@@ -117,7 +128,9 @@ function onUp() {
         <div class="ss-date">{{ dateLabel }}</div>
       </div>
 
-      <div class="ss-slide-bar">
+      <div v-if="skinSettings.tapToUnlock" class="ss-tap-hint">{{ t('status.tapHint') }}</div>
+
+      <div v-else class="ss-slide-bar">
         <div
           ref="track"
           class="ss-slide-track"
@@ -169,6 +182,15 @@ function onUp() {
 .ss-date {
   font-size: 18px; font-weight: 400; color: rgba(255,255,255,0.88);
   letter-spacing: 0.02em; text-shadow: 0 1px 10px rgba(0,0,0,0.45); text-transform: capitalize;
+}
+/* Takes the slider's place, so the clock above it doesn't shift between the
+   two modes. No surface of its own — there is nothing to aim at, the whole
+   screen is the target. */
+.ss-tap-hint {
+  height: 64px; display: flex; align-items: center; justify-content: center;
+  font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.16em;
+  text-transform: uppercase; color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 .ss-slide-bar { width: 100%; max-width: 340px; padding: 0 4px; pointer-events: auto; }
 .ss-slide-track {

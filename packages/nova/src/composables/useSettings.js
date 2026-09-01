@@ -201,6 +201,10 @@ export const skinSettings = reactive({
   startTab: 'espresso',
   screensaverBrightness: 30,
   wakelock: true,
+  // false = slide the thumb across to unlock; true = a tap anywhere on the
+  // lock face wakes it. Off by default: the slider exists so a cloth wiping
+  // the screen can't dismiss the lockscreen.
+  tapToUnlock: false,
   waterUnit: 'ml', // 'ml' | 'pct' | 'mm' — how the island shows the tank level
   // true  = each tab paints the whole skin in its own accent and tints the
   //         surfaces with it (useAccent.js);
@@ -216,6 +220,7 @@ const SKIN_KEYS = {
   startTab: 'nova_start_tab',
   screensaverBrightness: 'nova_screensaver_brightness',
   wakelock: 'nova_wakelock',
+  tapToUnlock: 'nova_tap_to_unlock',
   waterUnit: 'nova_water_unit',
   tabColors: 'nova_tab_colors',
   shotReviewAutoCloseSec: 'nova_shot_review_autoclose',
@@ -231,6 +236,7 @@ export function loadSkinSettings() {
   // deliberately does not clamp (see ProfileEditor's note on that path).
   skinSettings.screensaverBrightness = s.nova_screensaver_brightness != null ? Number(s.nova_screensaver_brightness) : 30;
   skinSettings.wakelock = s.nova_wakelock !== false;
+  skinSettings.tapToUnlock = s.nova_tap_to_unlock === true; // default off
   skinSettings.waterUnit = s.nova_water_unit || 'ml';
   skinSettings.tabColors = s.nova_tab_colors !== false; // default on
   // Default 5s; an explicit stored 0 (off) must survive, so don't `|| 5`.
