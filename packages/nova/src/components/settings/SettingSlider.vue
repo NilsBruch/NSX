@@ -39,10 +39,28 @@ const dragValue = ref(null); // non-null only while a drag is in flight
 
 const shown = computed(() => dragValue.value ?? props.modelValue);
 const hasValue = computed(() => shown.value != null && !Number.isNaN(shown.value));
+
+/**
+ * The range actually used, which STRETCHES to contain a value already outside
+ * it. The bounds a caller passes are the useful range for choosing a value —
+ * deliberately tight, so the track has resolution where real values live — but
+ * a value can still arrive from outside it: typed into the number pad (which
+ * is unclamped on purpose, for exactly that), or carried by an imported
+ * profile written for a different range.
+ *
+ * Without this, such a value would be destroyed by a TOUCH: pointerdown sets
+ * the value from the finger's position, so merely brushing the track of a 45s
+ * frame on a 0-30s slider would silently commit 30. Widening instead means the
+ * unusual value stays reachable and adjustable, and the slider narrows back to
+ * its intended range as soon as the value returns to it.
+ */
+const loMin = computed(() => (hasValue.value ? Math.min(props.min, shown.value) : props.min));
+const hiMax = computed(() => (hasValue.value ? Math.max(props.max, shown.value) : props.max));
+
 const pct = computed(() => {
   if (!hasValue.value) return 0;
-  const floor = props.min - props.step;
-  const span = props.max - floor;
+  const floor = loMin.value - props.step;
+  const span = hiMax.value - floor;
   return span <= 0 ? 0 : Math.max(0, Math.min(100, ((shown.value - floor) / span) * 100));
 });
 // While dragging, show the live numeric value (immediate feedback on the
@@ -58,12 +76,12 @@ const display = computed(() => {
 
 function quantize(raw) {
   const stepped = Math.round(raw / props.step) * props.step;
-  return Number(Math.min(props.max, Math.max(props.min, stepped)).toFixed(6));
+  return Number(Math.min(hiMax.value, Math.max(loMin.value, stepped)).toFixed(6));
 }
 function valueFromEvent(evt) {
   const rect = track.value.getBoundingClientRect();
   const ratio = Math.min(1, Math.max(0, (evt.clientX - rect.left) / rect.width));
-  return quantize(props.min + ratio * (props.max - props.min));
+  return quantize(loMin.value + ratio * (hiMax.value - loMin.value));
 }
 function onPointerDown(evt) {
   track.value.setPointerCapture(evt.pointerId);

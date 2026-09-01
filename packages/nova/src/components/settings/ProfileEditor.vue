@@ -159,10 +159,21 @@ async function editFrameValueField(field, enabledField, title, unit) {
 // and vice versa (the DE1 always limits the OPPOSITE axis from the goal).
 const goalField = computed(() => (selectedFrame.value?.pump === 'flow' ? 'flow' : 'pressure'));
 const goalLabel = computed(() => (selectedFrame.value?.pump === 'flow' ? t('profileEditor.flowGoal') : t('profileEditor.pressureGoal')));
-const goalMax = computed(() => (selectedFrame.value?.pump === 'flow' ? 15 : 14));
+/* Ranges are the ESPRESSO range, not the machine's. The DE1 will accept 14 bar
+   and 120 s, but a 14-bar track spends most of its width on values no espresso
+   frame uses, and on a ~300px slider that put roughly a bar under every 20px —
+   which is what made these unusable by finger. Tightened to where real frames
+   live; anything beyond is still reachable by tapping the value and typing it,
+   and SettingSlider widens itself around such a value so it can't be clamped
+   away by a stray touch.
+   The step is a whole unit for both, so dragging lands on 6 bar or 4 ml/s
+   rather than 6.3 — a tenth of a bar is not a decision a finger should be able
+   to make by accident. `decimals` stays at 1 anyway: a value typed as 8.5 must
+   still READ as 8.5 rather than being rounded away in the display. */
+const goalMax = computed(() => (selectedFrame.value?.pump === 'flow' ? 12 : 9));
 const goalUnit = computed(() => (selectedFrame.value?.pump === 'flow' ? ' ml/s' : ' bar'));
 const limitLabel = computed(() => (selectedFrame.value?.pump === 'flow' ? t('profileEditor.pressureLimit') : t('profileEditor.flowLimit')));
-const limitMax = computed(() => (selectedFrame.value?.pump === 'flow' ? 14 : 15));
+const limitMax = computed(() => (selectedFrame.value?.pump === 'flow' ? 9 : 12));
 const limitUnit = computed(() => (selectedFrame.value?.pump === 'flow' ? ' bar' : ' ml/s'));
 
 function setPumpMode(mode) { if (selectedFrame.value) selectedFrame.value.pump = mode; }
@@ -179,7 +190,7 @@ const EXIT_TYPES = ['pressure_over', 'pressure_under', 'flow_over', 'flow_under'
 function setExitType(type) { if (selectedFrame.value) selectedFrame.value.exitType = type; }
 function toggleExitEnabled() { if (selectedFrame.value) selectedFrame.value.exitEnabled = !selectedFrame.value.exitEnabled; }
 const exitIsFlow = computed(() => String(selectedFrame.value?.exitType || '').startsWith('flow'));
-const exitMax = computed(() => (exitIsFlow.value ? 15 : 14));
+const exitMax = computed(() => (exitIsFlow.value ? 12 : 9));
 const exitUnit = computed(() => (exitIsFlow.value ? ' ml/s' : ' bar'));
 
 // ── Limits tab (profile-global fields) — same 0-means-off convention as the
@@ -296,7 +307,7 @@ function save() {
               <span class="pd-panel-label">{{ t('profileEditor.groupTemperature') }}</span>
               <SettingSlider
                 :label="t('profileEditor.temperature')" :model-value="selectedFrame.temperature"
-                :min="70" :max="105" :step="1" unit="°C"
+                :min="70" :max="100" :step="1" unit="°C"
                 @change="selectedFrame.temperature = $event" @edit="editFrameField('temperature', t('profileEditor.temperature'), '°C')"
               />
               <div class="pe-seg-row">
@@ -313,18 +324,18 @@ function save() {
               <span class="pd-panel-label">{{ t('profileEditor.groupMax') }}</span>
               <SettingSlider
                 :label="t('profileEditor.time')" :model-value="selectedFrame.seconds"
-                :min="0" :max="120" :step="1" unit=" s"
+                :min="0" :max="30" :step="1" unit=" s"
                 @change="selectedFrame.seconds = $event" @edit="editFrameField('seconds', t('profileEditor.time'), ' s')"
               />
               <SettingSlider
                 :label="t('profileEditor.volume')" :model-value="selectedFrame.volumeValue"
-                :min="0" :max="200" :step="1" unit=" ml" :off-label="t('common.off')"
+                :min="0" :max="50" :step="1" unit=" ml" :off-label="t('common.off')"
                 @change="setFrameValue('volumeValue', 'volumeEnabled', $event)"
                 @edit="editFrameValueField('volumeValue', 'volumeEnabled', t('profileEditor.volume'), ' ml')"
               />
               <SettingSlider
                 :label="t('profileEditor.weight')" :model-value="selectedFrame.weightValue"
-                :min="0" :max="200" :step="1" unit=" g" :off-label="t('common.off')"
+                :min="0" :max="50" :step="1" unit=" g" :off-label="t('common.off')"
                 @change="setFrameValue('weightValue', 'weightEnabled', $event)"
                 @edit="editFrameValueField('weightValue', 'weightEnabled', t('profileEditor.weight'), ' g')"
               />
@@ -344,12 +355,12 @@ function save() {
               </div>
               <SettingSlider
                 :label="goalLabel" :model-value="selectedFrame[goalField]"
-                :min="0" :max="goalMax" :step="0.1" :decimals="1" :unit="goalUnit"
+                :min="0" :max="goalMax" :step="1" :decimals="1" :unit="goalUnit"
                 @change="selectedFrame[goalField] = $event" @edit="editFrameField(goalField, goalLabel, goalUnit)"
               />
               <SettingSlider
                 :label="limitLabel" :model-value="selectedFrame.limiterValue"
-                :min="0" :max="limitMax" :step="0.1" :decimals="1" :unit="limitUnit" :off-label="t('common.off')"
+                :min="0" :max="limitMax" :step="1" :decimals="1" :unit="limitUnit" :off-label="t('common.off')"
                 @change="setFrameValue('limiterValue', 'limiterEnabled', $event)"
                 @edit="editFrameValueField('limiterValue', 'limiterEnabled', limitLabel, limitUnit)"
               />
@@ -377,7 +388,7 @@ function save() {
               </div>
               <SettingSlider
                 :label="t('profileEditor.exitValue')" :model-value="selectedFrame.exitValue"
-                :min="0" :max="exitMax" :step="0.1" :decimals="1" :unit="exitUnit"
+                :min="0" :max="exitMax" :step="1" :decimals="1" :unit="exitUnit"
                 @change="selectedFrame.exitValue = $event" @edit="editFrameField('exitValue', t('profileEditor.exitValue'), exitUnit)"
               />
             </template>
@@ -440,11 +451,6 @@ function save() {
         <span class="sr-name">{{ t('profileEditor.author') }}</span>
         <span class="sr-value">{{ draft.author || '—' }}<span class="sr-chev">›</span></span>
       </button>
-      <button class="setting-row as-btn stacked" @click="editNotes">
-        <span class="sr-name">{{ t('profileEditor.notes') }}<span class="sr-chev">›</span></span>
-        <span class="sr-value muted">{{ draft.notes || '—' }}</span>
-      </button>
-
       <div class="pe-type-block">
         <span class="sr-name">{{ t('profileEditor.beverageType') }}</span>
         <div class="pe-type-grid">
@@ -456,6 +462,11 @@ function save() {
           >{{ t(`profileEditor.beverageTypes.${ty}`) }}</button>
         </div>
       </div>
+
+      <button class="setting-row as-btn stacked" @click="editNotes">
+        <span class="sr-name">{{ t('profileEditor.notes') }}<span class="sr-chev">›</span></span>
+        <span class="sr-value muted">{{ draft.notes || '—' }}</span>
+      </button>
     </div>
   </div>
 </template>
