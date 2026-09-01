@@ -1320,17 +1320,22 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .date-nav .date-time { font-weight: 600; font-size: var(--fs-xs); color: var(--muted); }
 
-.shot-done { display: flex; align-items: center; justify-content: center; gap: 26px; position: relative; }
+.shot-done { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 26px; position: relative; }
 .rate-stars { display: inline-flex; gap: 8px; }
 /* Delete pinned to the right so the star rating stays visually centred. */
+/* Type and padding are copied from .ov-back on purpose, not tuned to match it:
+   the two sit at opposite corners of the same screen, and matching by height
+   alone would be a magic number that drifts the moment either font size
+   changes. Same box model in, same height out. Only the colours and the corner
+   radius differ, because one is a back action and the other is destructive. */
 .shot-delete {
   position: absolute; right: 0; top: 50%; transform: translateY(-50%);
   display: inline-flex; align-items: center; gap: 8px;
   background: var(--danger-wash); color: var(--alert); border: none; border-radius: var(--r-sm);
-  padding: 8px 14px; font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
+  padding: 11px 16px; font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
 }
-.shot-delete svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.shot-delete svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .star { font-size: var(--fs-xl); line-height: 1; color: var(--faint); background: none; border: none; padding: 0; }
 .star.on { color: var(--accent); }
 
