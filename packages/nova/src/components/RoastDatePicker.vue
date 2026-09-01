@@ -125,5 +125,5 @@ function pick(cell) { if (cell && !cell.future) selected.value = cell.iso; }
 .dp-day.empty { background: none; }
 .dp-day:disabled { opacity: 0.28; cursor: default; }
 .dp-day.today { box-shadow: inset 0 0 0 2px var(--muted); }
-.dp-day.sel { background: var(--accent); color: #12161b; }
+.dp-day.sel { background: var(--accent); color: var(--on-accent); }
 </style>

@@ -15,6 +15,39 @@
   --text: #e9edf2;
   --muted: #8b96a3;
   --faint: #4d5866;
+  /* The roles the rest of this file used to spell out as literal hex. Each is
+     a ROLE, not a shade — which is what makes a light theme possible at all:
+     the rules below say "recessed well" or "text on an accent fill", and the
+     theme block decides what that means. Reversing card and page (recessed in
+     the dark theme, raised in the light one) then costs nothing at the call
+     sites. */
+  --line: #262e39;        /* hairline dividers between rows */
+  --card-hi: #242c37;     /* a step up from a card: selected rows, chips on it */
+  --well: #12171d;        /* recessed: progress tracks, sublists, plot beds */
+  --island-bg: #07090c;   /* the status island — its own token because it is
+                             the one surface that reads as a display rather
+                             than as a panel, and it goes the OTHER way between
+                             themes: near-black on dark, white on light */
+  --modal-bg: #161c23;    /* modals and the shot graph, between app and card */
+  --on-accent: #12161b;   /* text/icons ON an accent fill. Dark here, because
+                             the accents are mid-tones on a near-black page;
+                             the light theme darkens the accents and flips this
+                             to white (see useAccent.js) */
+  --switch-off: #3a4450;
+  --switch-knob: #f2f4f7;
+  --tick: rgba(255, 255, 255, 0.16);        /* slider scale marks */
+  --danger-wash: rgba(232, 132, 111, 0.15); /* tinted danger buttons */
+  --drag-wash: rgba(255, 255, 255, 0.06);   /* the dial's held sub-button */
+  --scrim: rgba(10, 13, 17, 0.72);          /* modal backdrop */
+  --scrim-blur: rgba(12, 16, 22, 0.62);     /* blurred overlays: recipe browser */
+  --scrim-ring: rgba(12, 16, 22, 0.45);     /* the live ring's lighter backdrop */
+  --ring-track: rgba(255, 255, 255, 0.07);  /* LiveRing's unfilled arc */
+  --chart-grid: rgba(233, 237, 242, 0.05);  /* read by ShotStripChart.vue */
+  --chart-scrub: rgba(233, 237, 242, 0.5);
+  /* Press feedback lightens on dark, and has to DARKEN on light — brightening
+     an already-white surface does nothing at all. */
+  --press-filter: brightness(1.14);
+
   /* Hairline border for the five controls that outline rather than fill (the
      espresso orbs, the power button, the text field, the SBW pill, the roast
      chip). White at low alpha, not a fixed grey: it has to hold up on a card,
@@ -95,6 +128,80 @@
   --fs-xl: 2rem;        /* primary dial numbers, timers */
   --fs-2xl: 2.75rem;   /* the single biggest in-flow readout */
   --fs-hero: 4.5rem;   /* screensaver clock — the one deliberate exception */
+}
+
+/* ═══ Light theme ═══════════════════════════════════════════════════════════
+   Set on <html> by useAccent.js. Only the tokens are redefined — not a single
+   rule below is duplicated, which is the payoff for naming the roles above.
+
+   The card/page relationship INVERTS, and that is deliberate rather than an
+   oversight: in the dark theme a card is darker than its page (recessed, the
+   way a hole reads on a lit surface), in the light theme it is lighter (raised,
+   the way paper reads on a desk). Keeping cards "darker" here would have made
+   every panel look like a stain.
+
+   The accent tinting in useAccent.js needs no changes at all: it mixes 5% of
+   the accent into whatever these greys are, so a light theme tints light.
+
+   NOT themed: the screensaver, which is full-bleed photography with white type
+   over it and has no business being light, and the shot graph's series colours,
+   which are mid-tones that hold on either ground (only its grid and scrub line
+   are tokens). */
+:root[data-theme="light"] {
+  /* The page is a step deeper than it first looks, for the same reason the dark
+     theme's card was darkened: at #eef0f4 a white card sat 1.15 from its page
+     and barely read as a plane. #e9ecf2 puts it at 1.20, matching the dark
+     theme's separation. */
+  --app-bg: #c7ceda;
+  --page-bg: #e9ecf2;
+  --card-bg: #ffffff;
+  --tab-bg: #dfe3ea;
+  /* app-bg is the FRAME the rails sit on, and it carries more separation here
+     than the dark theme needs. The first light palette put it at #dbdfe6, one
+     step off the tab islands — 1.04 against them, which is nothing: the tabs
+     had no visible edge at all. Light surfaces compress perceptually as they
+     approach white, so matching the dark theme's 1.09 by the numbers still
+     looks flat; 1.23 against the islands (and 1.34 against the page) is what
+     actually reads as "the page and the tabs sit ON something". */
+
+  --text: #1b2027;
+  --muted: #5c6672;
+  --faint: #98a1ac;
+  --edge: transparent;
+
+  --line: #dde1e7;
+  --card-hi: #e9edf3;
+  --well: #e4e8ee;
+  --island-bg: #ffffff;
+  --modal-bg: #ffffff;
+  /* useAccent darkens every accent by 35% here, so the readable type ON one is
+     white (5.1-6.3:1) rather than near-black (~3:1). */
+  --on-accent: #ffffff;
+  --switch-off: #c4cbd4;
+  --switch-knob: #ffffff;
+  --tick: rgba(27, 32, 39, 0.16);
+  --ring-track: rgba(27, 32, 39, 0.10);
+  --danger-wash: rgba(200, 84, 60, 0.14);
+  --drag-wash: rgba(27, 32, 39, 0.06);
+  --scrim: rgba(28, 33, 40, 0.42);
+  --scrim-blur: rgba(226, 230, 236, 0.55);
+  --scrim-ring: rgba(226, 230, 236, 0.45);
+  --chart-grid: rgba(27, 32, 39, 0.08);
+  --chart-scrub: rgba(27, 32, 39, 0.45);
+  --press-filter: brightness(0.95);
+
+  /* The status colours need real darkening: the dark theme's mint and amber sit
+     at ~6:1 against a near-black page and ~2:1 against a light one, and these
+     carry actual state (ready / heating / needs water), so they have to be
+     readable rather than merely present. These land at 4.6-5.0. */
+  --ok: #17705d;
+  --warn: #8a5518;
+  --alert: #ad4530;
+
+  /* Shadows on light have to come from a much lower alpha or every card looks
+     smudged; the two-layer structure is unchanged. */
+  --elev-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 6px 16px rgba(16, 24, 40, 0.08);
+  --elev-2: 0 2px 6px rgba(16, 24, 40, 0.08), 0 18px 40px rgba(16, 24, 40, 0.12);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -363,7 +470,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
      side groups get (a space-between flex let it drift). */
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px;
   height: 30px; padding: 0 22px;
-  background: #07090c; border-radius: var(--r-pill);
+  background: var(--island-bg); border-radius: var(--r-pill);
   font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.04em; color: var(--muted);
 }
 /* Left group: machine state + the scale readout next to it. */
@@ -418,7 +525,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   display: flex; align-items: center; justify-content: center; color: var(--text);
 }
 .power-btn svg { width: 23px; height: 23px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.power-btn:active { background: #242c37; }
+.power-btn:active { background: var(--card-hi); }
 
 /* ===== Screensaver: the sleep/off face. Tapping wakes the machine. ===== */
 /* Screensaver / lockscreen styles live scoped in Screensaver.vue (image
@@ -427,11 +534,11 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 /* ===== Modal scrim + wheel picker (shared: espresso dials, steam/hotwater phases) ===== */
 .scrim {
   position: fixed; inset: 0; z-index: 30;
-  background: rgba(10, 13, 17, 0.72); backdrop-filter: blur(2px);
+  background: var(--scrim); backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center;
 }
 .modal {
-  background: #161c23; border-radius: var(--r-xl); padding: 22px;
+  background: var(--modal-bg); border-radius: var(--r-xl); padding: 22px;
   display: flex; flex-direction: column; gap: 18px; align-items: center;
   min-width: 300px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
@@ -530,7 +637,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .tf-tag {
   flex: none; max-width: 100%; display: inline-flex; align-items: center; gap: 8px;
   padding: 8px 12px 8px 14px; background: var(--accent); border: none; border-radius: var(--r-pill);
-  color: #12161b; font-family: inherit; font-size: var(--fs-sm); font-weight: 700;
+  color: var(--on-accent); font-family: inherit; font-size: var(--fs-sm); font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
   touch-action: manipulation;
 }
@@ -541,9 +648,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    adjacent-sibling selector; .tf-tags is itself v-if'd on having any). The
    universal border-box means the border and padding come out of the strip's
    fixed height rather than adding to it, so the divider appearing costs no
-   layout shift. #262e39 is the same hairline .list-row and .chooser-item use. */
+   layout shift. var(--line) is the same hairline .list-row and .chooser-item use. */
 .tf-tags + .tf-suggests {
-  border-top: 1px solid #262e39;
+  border-top: 1px solid var(--line);
   padding-top: 10px;
 }
 
@@ -579,22 +686,22 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   touch-action: manipulation;
 }
 .kb-key:disabled { opacity: 0.35; }
-.kb-key.on { background: var(--accent); color: #12161b; }
-.kb-key.accent { background: var(--accent); color: #12161b; }
+.kb-key.on { background: var(--accent); color: var(--on-accent); }
+.kb-key.accent { background: var(--accent); color: var(--on-accent); }
 .kb-key.kb-wide { flex: 1.5 1 0; font-size: var(--fs-base); }
 .kb-key.kb-space { flex: 5 1 0; font-size: var(--fs-base); }
 
 .modal-actions { display: flex; gap: 10px; width: 100%; }
 .modal-actions button { flex: 1; height: 52px; border: none; border-radius: var(--r-md); font-family: inherit; font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.04em; }
 .modal-actions .cancel { background: var(--card-bg); color: var(--text); }
-.modal-actions .confirm { background: var(--accent); color: #12161b; }
-.modal-actions .confirm.danger { background: var(--alert); color: #12161b; }
+.modal-actions .confirm { background: var(--accent); color: var(--on-accent); }
+.modal-actions .confirm.danger { background: var(--alert); color: var(--on-accent); }
 .modal .m-msg { font-size: var(--fs-sm); color: var(--muted); text-align: center; max-width: 320px; line-height: 1.4; }
 
 /* Single-choice list modal (settings pickers, later phases) */
 .chooser { display: flex; flex-direction: column; width: min(320px, 78vw); max-height: 320px; overflow-y: auto; }
 .chooser-item {
-  background: none; border: none; border-bottom: 1px solid #262e39;
+  background: none; border: none; border-bottom: 1px solid var(--line);
   color: var(--text); font-family: inherit; font-size: var(--fs-base); font-weight: 600;
   text-align: left; padding: 14px 12px;
 }
@@ -681,7 +788,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    it an unsupported blur would leave the list sitting on raw page content. */
 .rov-scrim {
   position: fixed; inset: 0; z-index: 15;
-  background: rgba(12, 16, 22, 0.62);
+  background: var(--scrim-blur);
   -webkit-backdrop-filter: blur(9px);
   backdrop-filter: blur(9px);
 }
@@ -765,7 +872,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   text-align: center; line-height: 1.3; border-radius: var(--r-md); padding: 8px 6px;
   touch-action: none; /* drag-to-adjust, see useDragDial.js */
 }
-.dial .duo > button.dragging { background: rgba(255, 255, 255, 0.06); }
+.dial .duo > button.dragging { background: var(--drag-wash); }
 /* Stop-at-weight off -> the target yield isn't used, so dim it (still tappable
    to set a value for when the toggle goes back on). */
 .dial .duo > button.faded { opacity: 0.4; }
@@ -776,9 +883,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    independent of the orb's content, which stays centred as before. */
 .dial.dial-duo { position: relative; }
 .dial.dial-duo .stop-toggle { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); }
-.switch { width: 52px; height: 30px; border-radius: var(--r-pill); background: #3a4450; border: none; position: relative; flex: none; }
+.switch { width: 52px; height: 30px; border-radius: var(--r-pill); background: var(--switch-off); border: none; position: relative; flex: none; }
 .switch.on { background: var(--accent); }
-.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #f2f4f7; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--switch-knob); }
 .switch.on::after { transform: translateX(22px); }
 .switch.sm { width: 40px; height: 24px; }
 .switch.sm::after { width: 18px; height: 18px; }
@@ -792,8 +899,8 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   font-family: inherit; font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.02em;
 }
 .btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.btn.accent { background: var(--accent); color: #12161b; }
-.btn.danger { background: rgba(232, 132, 111, 0.15); color: var(--alert); }
+.btn.accent { background: var(--accent); color: var(--on-accent); }
+.btn.danger { background: var(--danger-wash); color: var(--alert); }
 .prep-bottom .btn { width: 200px; justify-content: center; }
 /* No wrapping in an action row: a two-line label next to three one-line ones
    makes the row look accidental, and it is the label that should give way, not
@@ -832,7 +939,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .picking-banner {
   flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin: 2px 2px 0; padding: 10px 12px; border-radius: var(--r-sm);
-  background: #242c37; font-size: var(--fs-sm); color: var(--text);
+  background: var(--card-hi); font-size: var(--fs-sm); color: var(--text);
 }
 .picking-banner .btn { padding: 6px 12px; font-size: var(--fs-xs); }
 .pick-list .seg { flex: none; margin: 2px 2px 0; }
@@ -861,7 +968,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .pick-type-filter button.type-small { flex: 1 1 0; height: 28px; font-size: 11px; opacity: 0.85; }
 .pick-items { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .pick-item { flex: none; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: none; border-radius: var(--r-md); padding: 10px 12px; color: var(--text); font-family: inherit; text-align: left; }
-.pick-item.sel { background: #242c37; }
+.pick-item.sel { background: var(--card-hi); }
 .pick-item.grouped { padding-left: 28px; }
 .pick-item .pname { font-size: var(--fs-sm); font-weight: 600; flex: 1; }
 /* Hidden profiles stay in the list (when "show hidden" is on) but read as
@@ -875,7 +982,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 /* Detail pane: graph on top, then a stages-left / text-right split, actions
    pinned to the bottom. */
 .pick-detail { flex: 1; min-width: 0; background: var(--card-bg); border-radius: var(--r-lg); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
-.pick-plot { flex: 1 1 38%; min-height: 110px; background: #12171d; border-radius: var(--r-md); padding: 12px; display: flex; }
+.pick-plot { flex: 1 1 38%; min-height: 110px; background: var(--well); border-radius: var(--r-md); padding: 12px; display: flex; }
 /* The rendered markup (from NSXCore.renderProfileSpark) is .profile-spark-wrap
    > svg. app.css is a plain global stylesheet, not a component's <style
    scoped> block — Vue's :deep() pseudo-class only means something there, so
@@ -944,12 +1051,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
      matched it exactly would vanish into its own container, so this one
      keeps the original lighter shade instead of the page-level button fix. */
   flex: 1; min-width: 0; height: 40px; border: none; border-radius: var(--r-sm);
-  background: #262e39; color: var(--text); font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
+  background: var(--line); color: var(--text); font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center;
 }
 .pe-frame-actions button svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pe-frame-actions button:disabled { opacity: 0.35; }
-.pe-frame-actions button.danger { background: rgba(232, 132, 111, 0.15); color: var(--alert); }
+.pe-frame-actions button.danger { background: var(--danger-wash); color: var(--alert); }
 
 /* Unlike the (read-only) picker's .pick-detail, the editor's detail pane has
    no background of its own — the four pe-group tiles inside are the only
@@ -1000,10 +1107,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 
 .pe-exit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .pe-exit-grid button {
-  height: 38px; border: none; border-radius: var(--r-sm); background: #242c37; color: var(--muted);
+  height: 38px; border: none; border-radius: var(--r-sm); background: var(--card-hi); color: var(--muted);
   font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
 }
-.pe-exit-grid button.on { background: var(--accent); color: #12161b; }
+.pe-exit-grid button.on { background: var(--accent); color: var(--on-accent); }
 
 /* Info tab: beverage-type picker — a label over a wrap of pill buttons, styled
    as one setting-row-like block. */
@@ -1011,9 +1118,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .pe-type-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .pe-type-grid button {
   flex: 1 1 auto; min-width: 92px; height: 40px; border: none; border-radius: var(--r-sm);
-  background: #242c37; color: var(--muted); font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
+  background: var(--card-hi); color: var(--muted); font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
 }
-.pe-type-grid button.on { background: var(--accent); color: #12161b; }
+.pe-type-grid button.on { background: var(--accent); color: var(--on-accent); }
 
 .ov-top { display: flex; align-items: center; gap: 14px; }
 .ov-back {
@@ -1029,14 +1136,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .list-row {
   display: flex; justify-content: space-between; align-items: center;
   min-height: 58px; padding: 0 22px;
-  background: none; border: none; border-bottom: 1px solid #262e39;
+  background: none; border: none; border-bottom: 1px solid var(--line);
   color: var(--text); font-family: inherit; font-size: var(--fs-base); font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase; text-align: left;
 }
 .list-row:last-child { border-bottom: none; }
 .load-more {
   flex: none; align-self: center; margin: 12px auto; padding: 10px 20px;
-  background: var(--card-bg-2, #242c37); border: none; border-radius: var(--r-sm);
+  background: var(--card-bg-2, var(--card-hi)); border: none; border-radius: var(--r-sm);
   color: var(--accent); font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
   letter-spacing: 0.1em; text-transform: uppercase;
 }
@@ -1131,7 +1238,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .rp-profile { margin-top: auto; }
 .rp-chip {
   align-self: flex-start;
-  background: #262e39; border-radius: var(--r-pill); padding: 6px 14px;
+  background: var(--line); border-radius: var(--r-pill); padding: 6px 14px;
   font-size: var(--fs-sm); font-weight: 600; color: var(--muted);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -1140,7 +1247,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
      lighter shade so the button stays visible against its own card. */
   position: absolute; bottom: 14px; right: 14px;
   width: 42px; height: 42px; border: none; border-radius: var(--r-md);
-  background: #262e39; color: var(--alert);
+  background: var(--line); color: var(--alert);
   display: flex; align-items: center; justify-content: center;
 }
 .rp-del svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -1156,10 +1263,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .wbar { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .wbar-label { font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
 .wbar-label b { color: var(--wflow-color); }
-.wbar-track { width: 340px; max-width: 46vw; height: 16px; border-radius: var(--r-pill); background: #12171d; overflow: hidden; }
+.wbar-track { width: 340px; max-width: 46vw; height: 16px; border-radius: var(--r-pill); background: var(--well); overflow: hidden; }
 .wbar-fill { height: 100%; width: 0; background: var(--wflow-color); border-radius: var(--r-pill); }
 
-.shot-graph { flex: 1; min-height: 0; background: #161c23; border-radius: var(--r-lg); padding: 14px; display: flex; }
+.shot-graph { flex: 1; min-height: 0; background: var(--modal-bg); border-radius: var(--r-lg); padding: 14px; display: flex; }
 .shot-graph-canvas { width: 100%; height: 100%; }
 /* Hold-to-scrub the history graph: stop the touch from scrolling the panel. */
 .shot-graph-canvas.scrubbable { touch-action: none; }
@@ -1175,7 +1282,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 /* Skip on the left, the (now larger) weight progress pinned bottom-right. */
 .live-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .skip-btn {
-  background: var(--accent); color: #12161b; border: none; border-radius: var(--r-lg);
+  background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r-lg);
   height: 66px; min-width: 220px; font-family: inherit; font-size: var(--fs-base); font-weight: 700;
   letter-spacing: 0.1em; text-transform: uppercase;
   touch-action: manipulation; /* mid-shot taps must land first time — see .kb-key */
@@ -1184,7 +1291,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .date-nav { display: inline-flex; align-items: center; gap: 6px; background: var(--card-bg); border-radius: var(--r-md); padding: 5px; }
 /* Sits inside .date-nav, which is itself var(--card-bg) — keep the original
    lighter shade so the prev/next buttons stay visible against their own pill. */
-.date-nav button { width: 40px; height: 40px; border: none; border-radius: var(--r-sm); background: #262e39; color: var(--text); font-size: var(--fs-md); font-family: inherit; }
+.date-nav button { width: 40px; height: 40px; border: none; border-radius: var(--r-sm); background: var(--line); color: var(--text); font-size: var(--fs-md); font-family: inherit; }
 .date-nav button:disabled { opacity: 0.35; }
 .date-nav .date {
   min-width: 108px; display: flex; flex-direction: column; align-items: center; gap: 1px;
@@ -1198,7 +1305,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .shot-delete {
   position: absolute; right: 0; top: 50%; transform: translateY(-50%);
   display: inline-flex; align-items: center; gap: 8px;
-  background: rgba(232, 132, 111, 0.15); color: var(--alert); border: none; border-radius: var(--r-sm);
+  background: var(--danger-wash); color: var(--alert); border: none; border-radius: var(--r-sm);
   padding: 8px 14px; font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
 }
@@ -1222,11 +1329,11 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .ov-bottom { display: flex; justify-content: center; }
 .rate-btn {
   display: inline-flex; align-items: center; gap: 12px;
-  background: var(--accent); color: #12161b; border: none; border-radius: var(--r-md);
+  background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r-md);
   padding: 0 30px; height: 60px; min-width: 260px; justify-content: center;
   font-family: inherit; font-size: var(--fs-base); font-weight: 700; letter-spacing: 0.06em;
 }
-.progress { width: min(440px, 70%); height: 12px; border-radius: var(--r-pill); background: #12171d; overflow: hidden; }
+.progress { width: min(440px, 70%); height: 12px; border-radius: var(--r-pill); background: var(--well); overflow: hidden; }
 .progress .bar { height: 100%; width: 0%; background: var(--accent); border-radius: var(--r-pill); transition: width 0.2s linear; }
 
 /* Flow as a vertical slider (Steam intensity, Rinse flow — top high, bottom
@@ -1293,8 +1400,8 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   height: 56px; padding: 0 22px; border: none; border-radius: var(--r-md);
   background: var(--card-bg); color: var(--text); font-family: inherit; font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.04em;
 }
-.act-btn.danger { color: #e8846f; }
-.act-btn.accent { background: var(--accent); color: #12161b; }
+.act-btn.danger { color: var(--alert); }
+.act-btn.accent { background: var(--accent); color: var(--on-accent); }
 
 /* ===== Settings: landing page (tile grid + brightness) ===== */
 /* The brightness column is deliberately narrow: it is a secondary control
@@ -1330,7 +1437,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    gradient stops just short of a full band. */
 .vslider-ticks {
   position: absolute; inset: 0; pointer-events: none;
-  background-image: linear-gradient(to top, rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-image: linear-gradient(to top, var(--tick) 1px, transparent 1px);
   background-position: bottom;
   background-repeat: repeat-y;
 }
@@ -1347,7 +1454,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .setting-row .sr-name { font-size: var(--fs-base); font-weight: 600; }
 .setting-row .sr-sub { font-size: var(--fs-xs); color: var(--muted); line-height: 1.35; }
 .setting-row.as-btn { border: none; cursor: pointer; font-family: inherit; color: var(--text); text-align: left; width: 100%; }
-.setting-row.as-btn.danger .sr-name { color: #e8846f; }
+.setting-row.as-btn.danger .sr-name { color: var(--alert); }
 .setting-row .sr-value { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
 .setting-row .sr-value.muted { color: var(--muted); font-weight: 500; }
 .setting-row .sr-chev { color: var(--muted); font-size: var(--fs-md); }
@@ -1364,7 +1471,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .setting-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .setting-group-head .setting-group-label { margin: 4px 2px; }
 .scan-btn {
-  background: var(--accent); color: #12161b; border: none; border-radius: var(--r-sm);
+  background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r-sm);
   padding: 8px 20px; font-family: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer;
 }
 
@@ -1382,7 +1489,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .slider-row .sr-name { flex: 0 0 auto; max-width: 40%; }
 .slider-row .hslider {
   flex: 1 1 auto; min-width: 60px; height: 30px; position: relative; border-radius: var(--r-pill);
-  background: #242c37; overflow: hidden; touch-action: none; cursor: pointer;
+  background: var(--card-hi); overflow: hidden; touch-action: none; cursor: pointer;
 }
 .slider-row .hslider-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: var(--r-pill); pointer-events: none; }
 .slider-row .sr-value.as-val { flex: 0 0 auto; border: none; background: none; font-family: inherit; color: var(--text); cursor: pointer; padding: 0; justify-content: flex-end; min-width: 64px; }
@@ -1434,10 +1541,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .day-chip {
   /* Sits inside a .setting-row, which is itself var(--card-bg) — keep the
      original lighter shade so the chip stays visible against its own row. */
-  width: 34px; height: 34px; border-radius: 50%; border: none; background: #262e39; color: var(--muted);
+  width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--line); color: var(--muted);
   font-family: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer;
 }
-.day-chip.on { background: var(--accent); color: #12161b; }
+.day-chip.on { background: var(--accent); color: var(--on-accent); }
 
 .toast {
   position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 40;
@@ -1475,7 +1582,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   letter-spacing: 0.1em; text-transform: uppercase;
 }
 .sort-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.sort-btn.accent { background: var(--accent); color: #12161b; }
+.sort-btn.accent { background: var(--accent); color: var(--on-accent); }
 .sort-btn.icon-only { padding: 8px; width: 38px; justify-content: center; }
 .sort-btn.icon-only svg { width: 18px; height: 18px; }
 /* Matches .ov-back's own size exactly — for headers where these sit right
@@ -1502,13 +1609,21 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   background: none; border: none; font-family: inherit;
   font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.04em; color: var(--muted);
 }
-.seg button.on { color: #12161b; }
+.seg button.on { color: var(--on-accent); }
+/* Sized to sit in a .setting-row's trailing column instead of spanning a page
+   footer: fixed width, no per-button min-width (the base 120px would make the
+   pair wider than the row's value column ever is), and it sits on --card-hi
+   rather than --card-bg — a settings row IS a card, and a control matching its
+   own container reads as a gap in it. */
+.seg.seg-setting { flex: none; width: 196px; padding: 3px; background: var(--card-hi); }
+.seg.seg-setting .seg-thumb { top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); }
+.seg.seg-setting button { min-width: 0; font-size: var(--fs-xs); padding: 9px 0; }
 @media (prefers-reduced-motion: reduce) { .seg .seg-thumb { transition: none; } }
 
 /* Active-search pill, centered in the diary's bottom bar; tapping it (or its ×) lifts the filter */
 .filter-chip {
   align-self: center; display: flex; align-items: center; gap: 10px;
-  background: var(--accent); color: #12161b; border: none; border-radius: var(--r-pill);
+  background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r-pill);
   padding: 0 16px; height: 40px; font-family: inherit;
   font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.04em;
   max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1524,7 +1639,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .bean-row .row-edit {
   flex: none; width: 56px; align-self: stretch;
-  background: none; border: none; border-left: 1px solid #262e39;
+  background: none; border: none; border-left: 1px solid var(--line);
   display: flex; align-items: center; justify-content: center; color: var(--muted);
 }
 .bean-row .row-edit svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -1558,7 +1673,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    the chevron left to expand the history. */
 .bean-row .load-recipe-btn {
   flex: none; align-self: center; margin: 0 14px 0 4px; padding: 9px 16px;
-  background: var(--accent); color: #12161b; border: none; border-radius: var(--r-sm);
+  background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r-sm);
   font-family: inherit; font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; cursor: pointer;
 }
@@ -1596,7 +1711,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .shot-row .stars svg.on { fill: var(--accent); stroke: var(--accent); }
 
 /* Expanded profile group's shot list — indented one step under its row. */
-.sublist { display: flex; flex-direction: column; background: #12171d; }
+.sublist { display: flex; flex-direction: column; background: var(--well); }
 .sublist .shot-row { padding-left: 34px; }
 
 .diary-bottom { display: flex; align-items: stretch; gap: 10px; height: 60px; margin-top: 10px; }
@@ -1606,7 +1721,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   display: flex; align-items: center; justify-content: center;
 }
 .rbtn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.rbtn.accent { background: var(--accent); color: #12161b; }
+.rbtn.accent { background: var(--accent); color: var(--on-accent); }
 
 
 /* ═══ Press feedback ════════════════════════════════════════════════════════
@@ -1659,7 +1774,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .star:active,
 .kb-key.is-pressed {
   transform: scale(0.96);
-  filter: brightness(1.14);
+  filter: var(--press-filter);
 }
 
 .tile,
@@ -1677,7 +1792,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .recipe-title:active,
 .rov-bubble:active {
   transform: scale(0.985);
-  filter: brightness(1.1);
+  filter: var(--press-filter);
 }
 /* List rows are deliberately absent from both groups above. A row is full-bleed
    inside its panel, so scaling it pulls both ends away from the edges the eye

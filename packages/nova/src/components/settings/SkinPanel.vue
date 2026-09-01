@@ -85,6 +85,18 @@ async function pickReviewAutoClose() {
         <span class="sr-name">{{ t('skinSettings.timeFormat') }}</span>
         <span class="sr-value">{{ optLabel(timeFormatOpts, skinSettings.timeFormat) }}<span class="sr-chev">›</span></span>
       </button>
+      <!-- A segmented control rather than a switch: "Skin theme" has two named
+           states, and a switch would force one of them to be the unlabelled
+           "off" — you'd have to know which. Same control the Diary uses for
+           Browse/History, in its compact size. -->
+      <div class="setting-row">
+        <span class="sr-name">{{ t('skinSettings.theme') }}</span>
+        <div class="seg seg-setting" :data-pos="skinSettings.lightMode ? 0 : 1">
+          <span class="seg-thumb"></span>
+          <button :class="{ on: skinSettings.lightMode }" @click="saveSkinSetting('lightMode', true)">{{ t('skinSettings.themeLight') }}</button>
+          <button :class="{ on: !skinSettings.lightMode }" @click="saveSkinSetting('lightMode', false)">{{ t('skinSettings.themeDark') }}</button>
+        </div>
+      </div>
       <!-- Off restores the original look: one blue everywhere, untinted greys.
            The rail's six tab colours stay either way — this is about whether
            the PAGE takes the colour of the tab you're on. -->

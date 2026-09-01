@@ -75,7 +75,7 @@ const dashOffset = computed(() => {
    unchanged page content. */
 .lring-scrim {
   position: fixed; inset: 0; z-index: 13;
-  background: rgba(12, 16, 22, 0.45);
+  background: var(--scrim-ring);
   -webkit-backdrop-filter: blur(7px);
   backdrop-filter: blur(7px);
   pointer-events: none;
@@ -98,7 +98,7 @@ const dashOffset = computed(() => {
 }
 .lring-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .lring-track, .lring-arc { fill: none; stroke-width: 6; stroke-linecap: round; }
-.lring-track { stroke: rgba(255, 255, 255, 0.07); }
+.lring-track { stroke: var(--ring-track); }
 .lring-arc { stroke: var(--accent); transition: stroke-dashoffset 0.12s linear; }
 .lring-val { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .lring-num {

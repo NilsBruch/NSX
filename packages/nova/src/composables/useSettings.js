@@ -212,6 +212,9 @@ export const skinSettings = reactive({
   //         six tab colours are unaffected either way — those were never the
   //         part in question.
   tabColors: true,
+  // false = the dark theme this skin was designed in; true = the light one.
+  // Both are the same rules with a different token block (app.css).
+  lightMode: false,
   shotReviewAutoCloseSec: 5, // 0 = stay open until dismissed
 });
 const SKIN_KEYS = {
@@ -223,6 +226,7 @@ const SKIN_KEYS = {
   tapToUnlock: 'nova_tap_to_unlock',
   waterUnit: 'nova_water_unit',
   tabColors: 'nova_tab_colors',
+  lightMode: 'nova_light_mode',
   shotReviewAutoCloseSec: 'nova_shot_review_autoclose',
 };
 export function loadSkinSettings() {
@@ -239,6 +243,7 @@ export function loadSkinSettings() {
   skinSettings.tapToUnlock = s.nova_tap_to_unlock === true; // default off
   skinSettings.waterUnit = s.nova_water_unit || 'ml';
   skinSettings.tabColors = s.nova_tab_colors !== false; // default on
+  skinSettings.lightMode = s.nova_light_mode === true;  // default dark
   // Default 5s; an explicit stored 0 (off) must survive, so don't `|| 5`.
   skinSettings.shotReviewAutoCloseSec = s.nova_shot_review_autoclose != null ? Number(s.nova_shot_review_autoclose) : 5;
 }

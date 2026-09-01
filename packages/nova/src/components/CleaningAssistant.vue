@@ -233,11 +233,11 @@ async function stop() {
 .flush-metric { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 140px; }
 .fm-value { font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
 .fm-value small { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
-.fm-gauge { width: 100%; height: 8px; border-radius: 99px; background: #12171d; overflow: hidden; }
+.fm-gauge { width: 100%; height: 8px; border-radius: 99px; background: var(--well); overflow: hidden; }
 .fm-fill { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width 0.2s linear; }
 .flush-warning { color: var(--alert); font-weight: 700; }
 
 .flush-buttons { gap: 16px; }
-.rate-btn.secondary { background: #262e39; color: var(--text); }
-.rate-btn.stop { background: var(--alert); color: #12161b; }
+.rate-btn.secondary { background: var(--line); color: var(--text); }
+.rate-btn.stop { background: var(--alert); color: var(--on-accent); }
 </style>

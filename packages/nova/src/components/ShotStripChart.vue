@@ -53,8 +53,21 @@ const COLORS = {
   weight: '#ad7648',
   pressure: '#5fb8a5',
   pressureGoal: 'rgba(95, 184, 165, 0.45)',
+  // Fallbacks only. These two are the ones that depend on the GROUND rather
+  // than on the series they draw, so they are read from the theme's tokens at
+  // draw time (themeColor below) — the series colours themselves are mid-tones
+  // that hold up on either.
   grid: 'rgba(233, 237, 242, 0.05)',
+  scrub: 'rgba(233, 237, 242, 0.5)',
 };
+
+/** A CSS custom property's current value, so the canvas follows the theme the
+ *  rest of the skin is painted in. Read per draw: cheap next to the drawing
+ *  itself, and it means a theme switch needs no invalidation plumbing. */
+function themeColor(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
 
 const wrap = ref(null);
 const cv = ref(null);
@@ -91,7 +104,7 @@ function draw() {
   // Grid: horizontal every 3 units; vertical ticks every 5s. Live: ticks
   // scroll WITH the data, making the constant motion readable even before
   // bars exist. Static: ticks sit at fixed 0, 5, 10... positions.
-  ctx.strokeStyle = COLORS.grid;
+  ctx.strokeStyle = themeColor('--chart-grid', COLORS.grid);
   ctx.lineWidth = 1;
   for (let v = 3; v < MAX_Y; v += 3) {
     ctx.beginPath(); ctx.moveTo(0, yFor(v)); ctx.lineTo(w, yFor(v)); ctx.stroke();
@@ -204,7 +217,7 @@ function draw() {
   if (!live && cursorIdx.value != null && cursorIdx.value < n) {
     const i = cursorIdx.value;
     const cx = xFor(ts[i]);
-    ctx.strokeStyle = 'rgba(233, 237, 242, 0.5)';
+    ctx.strokeStyle = themeColor('--chart-scrub', COLORS.scrub);
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
