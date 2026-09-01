@@ -1297,8 +1297,41 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .rp-empty { flex: 1; align-self: center; padding: 24px; text-align: center; color: var(--faint); font-size: var(--fs-md); }
 
 /* ===== Live shot + history (Espresso only; steam/hotwater get a simpler view) ===== */
-.live-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+/* Three columns rather than space-between: the phase ticker has to sit in the
+   MIDDLE of the screen, not in the middle of what's left over beside the
+   title, so it gets the centre cell and an empty cell balances the title. */
+.live-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; }
 .live-title { font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+
+/* Phase ticker (PhaseTicker.vue). A fixed window the chips slide through; the
+   mask fades a name in and out at its edges instead of clipping it against a
+   hard border. The chips themselves are sized by their text, so the offset
+   that centres the current one is measured in the component, not computed
+   from a slot width here. */
+.phase-ticker {
+  width: 620px; max-width: 48vw; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 22%, #000 78%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 22%, #000 78%, transparent);
+}
+.pt-track {
+  position: relative; /* the offsetParent recenter() measures against */
+  display: flex; align-items: center; gap: 10px; width: max-content;
+  transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+/* Same vocabulary as the recipe crumbs: outlined = not where you are, filled
+   with the accent border = where you are. The max-width is a last resort for a
+   frame name longer than the window itself. */
+.pt-chip {
+  flex: none; max-width: 420px; padding: 0 16px; line-height: 36px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: var(--fs-base); font-weight: 600; color: var(--muted); opacity: 0.5;
+  transition: color 420ms ease, opacity 420ms ease, background-color 420ms ease, border-color 420ms ease;
+}
+.pt-chip.on {
+  background: var(--card-bg); border-color: var(--accent);
+  font-weight: 700; color: var(--text); opacity: 1;
+}
 
 /* Weight progress: lives next to Skip now (.live-bottom), not the header —
    colored to match the weight-flow bars in the strip chart (--wflow-color),

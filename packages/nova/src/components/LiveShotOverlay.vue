@@ -1,13 +1,15 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { phase, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight } from '../composables/useLiveShot.js';
+import { phase, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, liveFrame } from '../composables/useLiveShot.js';
 import { recipe } from '../composables/useRecipe.js';
-import { machine } from '../composables/useCore.js';
+import { machine, currentWorkflow } from '../composables/useCore.js';
 import { openNumberPad, openConfirm } from '../composables/useModals.js';
 import { showToast } from '../composables/useToast.js';
 import { formatClock } from '../utils/clock.js';
 import ShotStripChart from './ShotStripChart.vue';
+import PhaseTicker from './PhaseTicker.vue';
+import { frames as profileFrames, frameName } from '../composables/useProfileDisplay.js';
 
 const { t } = useI18n();
 const { NSXCore } = window;
@@ -25,6 +27,20 @@ const liveElapsedLabel = computed(() => {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 });
 function last(arr, dec = 1) { return arr.length ? arr[arr.length - 1].toFixed(dec) : '0.0'; }
+// ── Phase ticker ──
+// The phases of the profile the machine is ACTUALLY running: the workflow
+// pushed to the gateway wins over the recipe's own copy, the same precedence
+// as the volume-count lookup in useLiveShot.js — those two must never
+// disagree about which frame number means what. `frames()` takes the wrapper
+// record, hence the {profile} envelope around the raw profile JSON.
+const phaseNames = computed(() => {
+  const p = currentWorkflow.value?.profile ?? recipe.profile;
+  return profileFrames({ profile: p }).map((f, i) => frameName(f, i, t));
+});
+// profileFrame is 0-based into that same list (core's normalizeShotData
+// indexes frames[profileFrame] directly); null until the first snapshot.
+const phaseIndex = computed(() => liveFrame.value ?? 0);
+
 // With no scale + volume stop, the weight readout is the machine-flow estimate
 // (liveVirtualWeight), not a real scale weight — see useLiveShot.js.
 const shownWeight = computed(() => (virtualScaleActive.value ? liveVirtualWeight.value : machine.weight));
@@ -156,6 +172,10 @@ async function editGrindSetting() {
   <div v-if="phase === 'live'" class="overlay-full">
     <div class="live-top">
       <span class="live-title">{{ t('liveShot.title') }}</span>
+      <PhaseTicker :names="phaseNames" :index="phaseIndex" />
+      <!-- Empty third cell: it balances the title so the ticker's centre cell
+           is the centre of the SCREEN. -->
+      <span aria-hidden="true"></span>
       <!-- No top-right timer here: the elapsed time already runs in the metrics
            row below (liveShot.mTime), so a second one would be redundant. -->
     </div>
