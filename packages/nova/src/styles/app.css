@@ -1613,7 +1613,6 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .seg button,
 .chooser-item,
 .pick-item,
-.list-row,
 .modal-actions button,
 .star,
 .kb-key {
@@ -1631,7 +1630,6 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .seg button:active,
 .chooser-item:active,
 .pick-item:active,
-.list-row:active,
 .modal-actions button:active,
 .star:active,
 .kb-key.is-pressed {
@@ -1656,6 +1654,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   transform: scale(0.985);
   filter: brightness(1.1);
 }
+/* List rows are deliberately absent from both groups above. A row is full-bleed
+   inside its panel, so scaling it pulls both ends away from the edges the eye
+   is using as a reference — down a Diary list of them it reads as the row
+   twitching, not as a press. The entries that DO take the cue are the ones
+   with air around them to shrink into (.rp-card). */
+
 /* .rov-bubble.plain is a label, not a control (single-grinder case) — it must
    not react to being touched. */
 .rov-bubble.plain:active { transform: none; filter: none; }
@@ -1674,7 +1678,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   .btn, .rbtn, .rate-btn, .sort-btn, .scan-btn, .filter-chip, .npad-key,
-  .tf-suggest, .tf-tag, .seg button, .chooser-item, .pick-item, .list-row,
+  .tf-suggest, .tf-tag, .seg button, .chooser-item, .pick-item,
   .modal-actions button, .star, .kb-key, .tile, .setting-row.as-btn,
   .metric.as-btn, .rp-card, .recipe-title, .rov-bubble {
     transition: filter 0.09s ease;
@@ -1682,7 +1686,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   .btn:active, .rbtn:active, .rate-btn:active, .sort-btn:active,
   .scan-btn:active, .filter-chip:active, .npad-key:active, .tf-suggest:active,
   .tf-tag:active, .seg button:active, .chooser-item:active, .pick-item:active,
-  .list-row:active, .modal-actions button:active, .star:active,
+  .modal-actions button:active, .star:active,
   .kb-key.is-pressed, .tile:active, .setting-row.as-btn:active,
   .metric.as-btn:active, .rp-card:active, .recipe-title:active,
   .rov-bubble:active {
