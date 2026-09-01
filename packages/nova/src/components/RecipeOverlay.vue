@@ -15,7 +15,7 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, recipes, refreshRecipes, selectRecipe } from '../composables/useRecipe.js';
+import { recipe, recipes, refreshRecipes, selectRecipe, beanForRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots, grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
 import { openTextField } from '../composables/useModals.js';
 import StarRating from './StarRating.vue';
@@ -62,10 +62,24 @@ const sortedRecipes = computed(() => {
   );
 });
 
+/**
+ * Archiving a bean in the Diary is how a coffee leaves the rotation without
+ * losing its history — so its recipes leave this list with it, otherwise the
+ * quick-switch browser keeps offering coffees that are finished.
+ *
+ * The loaded recipe is the one exception: it is what the machine is holding
+ * right now, and a browser that omits the thing you are actually brewing (badge
+ * and all) reads as a bug. Archiving is reversible and deliberately soft —
+ * unlike deletion, which takes the recipes outright.
+ */
+const listedRecipes = computed(() =>
+  sortedRecipes.value.filter((entry) => isCurrent(entry) || !beanForRecipe(entry)?.archived)
+);
+
 const visibleRecipes = computed(() => {
   const q = query.value.trim().toLowerCase();
-  if (!q) return sortedRecipes.value;
-  return sortedRecipes.value.filter((entry) =>
+  if (!q) return listedRecipes.value;
+  return listedRecipes.value.filter((entry) =>
     [entry.coffeeRoaster, entry.coffeeName, entry.profileTitle, entry.grinderModel]
       .some((v) => String(v || '').toLowerCase().includes(q))
   );
@@ -166,8 +180,12 @@ async function pick(entry) {
           </div>
         </div>
 
-        <div v-if="recipes.length && !visibleRecipes.length" class="rp-empty">{{ t('diary.noResults') }}</div>
-        <div v-if="!recipes.length" class="rp-empty">{{ t('recipePicker.noRecipesYet') }}</div>
+        <!-- Both read from listedRecipes, not the raw library: with every
+             recipe's bean archived, "no results" would blame a search nobody
+             ran. Nothing to offer is "no recipes yet"; a query that matched
+             none of what IS on offer is "no results". -->
+        <div v-if="listedRecipes.length && !visibleRecipes.length" class="rp-empty">{{ t('diary.noResults') }}</div>
+        <div v-if="!listedRecipes.length" class="rp-empty">{{ t('recipePicker.noRecipesYet') }}</div>
       </div>
 
       <div class="rp-bottom">
