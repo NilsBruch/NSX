@@ -1150,6 +1150,13 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .ov-back svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .ov-title { flex: 1; text-align: center; font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+/* A header whose title has nothing to its right: centring it in the space
+   LEFT OVER beside the back button puts it visibly right of the row's middle.
+   Three tracks with equal outer ones centre it on the row itself, and the
+   empty third track costs no markup. Not the default for .ov-top, which is
+   also used by headers carrying two or three controls after the title. */
+.ov-top.balanced { display: grid; grid-template-columns: 1fr auto 1fr; }
+.ov-top.balanced .ov-back { justify-self: start; }
 
 .list { flex: 1; min-height: 0; background: var(--card-bg); border-radius: var(--r-lg); padding: 4px 0; overflow-y: auto; display: flex; flex-direction: column; }
 .list-row {

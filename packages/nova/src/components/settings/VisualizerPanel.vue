@@ -40,7 +40,7 @@ async function editBackSyncInterval() {
 
 <template>
   <div class="overlay-full">
-    <div class="ov-top">
+    <div class="ov-top balanced">
       <button class="ov-back" @click="$emit('close')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('systemSettings.integrations') }}
       </button>
