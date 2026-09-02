@@ -807,17 +807,15 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .rov-identity, .rov-panel .rp-bottom { pointer-events: auto; }
 /* The strip is flex:1 — it fills the whole middle of the screen — while its
-   cards sit centred inside it with empty bands above and below. Opting the
-   STRIP back in therefore handed those bands to a container that does nothing
-   with a tap, which is why dismissing only worked near the very edges: the
-   scrim was reachable at the panel's margins and almost nowhere else in the
-   lower half. The opt-in belongs on the cards themselves, so the bands fall
-   through to the scrim like every other empty part of the panel.
-   The cost is that the strip can no longer be scrolled by dragging its empty
-   space, only by dragging a card — worth it for a dismiss gesture that works
-   where the user aims. */
-.rov-strip { pointer-events: none; }
-.rov-strip .rp-card, .rov-strip .rp-empty { pointer-events: auto; }
+   cards sit centred inside it with empty bands above and below. A tap on
+   those bands has to dismiss, like every other empty part of the panel.
+   It gets that from a @click.self handler in RecipeOverlay.vue, NOT from
+   pointer-events: none: the strip is a horizontal SCROLLER, and a
+   pointer-events: none scroller cannot be dragged by touch in the tablet's
+   Android WebView (the gesture's hit test never lands on a scrollable node).
+   Desktop hid it — a mouse wheel scrolls it regardless — so the strip was
+   simply unscrollable on the only device that matters. */
+.rov-strip { pointer-events: auto; }
 /* The bubbles the title splits into. Same full-width row and the same 54px
    min-height as the .recipe-title bar they replace, and the name carries that
    bar's exact type treatment — the two are meant to read as one control

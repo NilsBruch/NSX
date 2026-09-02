@@ -174,7 +174,14 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
         </button>
       </div>
 
-      <div class="rp-strip rov-strip">
+      <!-- .self: the strip fills the middle of the screen, so the empty bands
+           above and below the cards are the strip itself — a tap there
+           dismisses, exactly as it does on the panel's other empty space. The
+           strip cannot use the panel's pointer-events: none trick for that: it
+           is a scroller, and one that isn't hit-testable can't be dragged by
+           touch on the tablet. A drag that scrolls never produces a click, so
+           this doesn't fire at the end of a swipe. -->
+      <div class="rp-strip rov-strip" @click.self="emit('close')">
         <div
           v-for="entry in visibleRecipes"
           :key="entry.id"
