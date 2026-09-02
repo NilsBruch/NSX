@@ -6,9 +6,9 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { openChooser } from '../../composables/useModals.js';
+import { openChooser, openWheel } from '../../composables/useModals.js';
 import {
-  devices, loadDevices, scanForDevices, connectToDevice, disconnectDevice,
+  devices, loadDevices,
   appSettings, loadAppSettings, saveAppSetting,
   machineSettings, loadMachineSettings, saveMachineSetting,
   loadPlugins, visualizerPlugin,
@@ -25,12 +25,8 @@ onMounted(() => {
   loadPlugins();
 });
 
-function toggleDevice(d) {
-  if (d.connected) disconnectDevice(d.id);
-  else connectToDevice(d.id);
-}
-
-// DE1 first, scale after — the machine is the primary device.
+// DE1 first, scale after — the machine is the primary device. Only the
+// preferred-device pickers below read this now.
 const deviceRank = (type) => (type === 'machine' ? 0 : type === 'scale' ? 1 : 2);
 const orderedDevices = computed(() => [...devices.value].sort((a, b) => deviceRank(a.type) - deviceRank(b.type)));
 
@@ -71,6 +67,31 @@ async function pickChargingMode() {
   if (v != null) saveAppSetting('chargingMode', v);
 }
 
+// Night mode: moved here from the Schedule page, which the settings page's
+// Energy widget replaced. It always belonged in this group -- it pauses the
+// TABLET's charging overnight (nightMode* are appSettings keys), and never had
+// anything to do with the machine's power schedule it used to sit next to.
+// Stored as minutes-of-day, e.g. 1320 = 22:00.
+function pad2(n) { return String(n).padStart(2, '0'); }
+function timeValues() {
+  const out = [];
+  for (let h = 0; h < 24; h++) for (const m of [0, 15, 30, 45]) out.push(`${pad2(h)}:${pad2(m)}`);
+  return out;
+}
+function minutesToHHMM(mins) {
+  const m = ((Number(mins) || 0) % 1440 + 1440) % 1440;
+  return `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
+}
+function hhmmToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+async function editNightTime(key, label) {
+  const v = await openWheel({ title: label, values: timeValues(), current: minutesToHHMM(appSettings[key]) });
+  if (v == null) return;
+  saveAppSetting(key, hhmmToMinutes(v));
+}
+
 const gmOpts = [['disabled', t('systemSettings.gmDisabled')], ['tracking', t('systemSettings.gmTracking')], ['full', t('systemSettings.gmFull')]];
 const logOpts = ['INFO', 'WARNING', 'SEVERE', 'FINE', 'FINER', 'FINEST', 'ALL', 'OFF'].map((v) => [v, v]);
 const optLabelSimple = (opts, v) => opts.find(([value]) => value === v)?.[1] ?? '';
@@ -96,18 +117,12 @@ const showVisualizer = ref(false);
     </div>
 
     <div class="settings-scroll">
-      <div class="setting-group-head">
-        <span class="setting-group-label">{{ t('machineSettings.connectedDevices') }}</span>
-        <button class="scan-btn" @click="scanForDevices">{{ t('machineSettings.scan') }}</button>
-      </div>
-      <button v-for="d in orderedDevices" :key="d.id" class="setting-row device-row as-btn" @click="toggleDevice(d)">
-        <span class="dev-dot" :class="{ on: d.connected }"></span>
-        <span class="sr-main">
-          <span class="sr-name">{{ d.name }}</span>
-          <span class="sr-sub">{{ d.type === 'scale' ? t('machineSettings.scale') : t('machineSettings.machine') }}</span>
-        </span>
-        <span class="dev-status" :class="{ on: d.connected }">{{ d.connected ? t('settingsPage.connected') : t('settingsPage.disconnected') }}</span>
-      </button>
+      <!-- Connecting and disconnecting is the settings page's Connection
+           widget; what stays here is what you SET rather than what you do —
+           which device to reach for on startup, and what a sleeping machine
+           should do to the scale. The list is still loaded, because these
+           three pick from it. -->
+      <span class="setting-group-label">{{ t('machineSettings.connections') }}</span>
       <button class="setting-row as-btn" @click="pickPreferredMachine">
         <span class="sr-main"><span class="sr-name">{{ t('machineSettings.preferredMachine') }}</span><span class="sr-sub">{{ t('machineSettings.autoConnect') }}</span></span>
         <span class="sr-value">{{ optLabel(machineOpts, appSettings.preferredMachineId) }}<span class="sr-chev">›</span></span>
@@ -134,6 +149,20 @@ const showVisualizer = ref(false);
         <span class="sr-main"><span class="sr-name">{{ t('appSettings.lowBatteryBrightnessLimit') }}</span><span class="sr-sub">{{ t('appSettings.lowBatteryBrightnessLimitSub') }}</span></span>
         <button class="switch" :class="{ on: appSettings.lowBatteryBrightnessLimit }" role="switch" :aria-checked="!!appSettings.lowBatteryBrightnessLimit" @click="saveAppSetting('lowBatteryBrightnessLimit', !appSettings.lowBatteryBrightnessLimit)"></button>
       </div>
+      <div class="setting-row">
+        <span class="sr-main"><span class="sr-name">{{ t('scheduleSettings.nightModeEnabled') }}</span><span class="sr-sub">{{ t('scheduleSettings.nightModeSub') }}</span></span>
+        <button class="switch" :class="{ on: appSettings.nightModeEnabled }" role="switch" :aria-checked="!!appSettings.nightModeEnabled" @click="saveAppSetting('nightModeEnabled', !appSettings.nightModeEnabled)"></button>
+      </div>
+      <template v-if="appSettings.nightModeEnabled">
+        <button class="setting-row as-btn" @click="editNightTime('nightModeSleepTime', t('scheduleSettings.nightSleep'))">
+          <span class="sr-name">{{ t('scheduleSettings.nightSleep') }}</span>
+          <span class="sr-value">{{ minutesToHHMM(appSettings.nightModeSleepTime) }}<span class="sr-chev">›</span></span>
+        </button>
+        <button class="setting-row as-btn" @click="editNightTime('nightModeMorningTime', t('scheduleSettings.nightWake'))">
+          <span class="sr-name">{{ t('scheduleSettings.nightWake') }}</span>
+          <span class="sr-value">{{ minutesToHHMM(appSettings.nightModeMorningTime) }}<span class="sr-chev">›</span></span>
+        </button>
+      </template>
 
       <span class="setting-group-label">{{ t('systemSettings.advanced') }}</span>
       <button class="setting-row as-btn" @click="pickGatewayMode">

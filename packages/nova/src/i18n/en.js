@@ -346,6 +346,10 @@ export default {
     profiles: 'Profiles', grinders: 'Grinder', machine: 'Machine',
     skin: 'Skin & Display', schedule: 'Schedule', app: 'App',
     back: 'Settings', connected: 'Connected', disconnected: 'Disconnected',
+    energy: 'Energy', display: 'Display brightness',
+    connection: 'Connection', noDevices: 'No devices paired',
+    appTitle: 'App', checkUpdates: 'Check for updates', upToDate: 'Up to date',
+    updateAvailable: '{version} available',
   },
   toast: {
     scaleConnecting: 'Connecting to scale…', scaleTared: 'Scale tared',

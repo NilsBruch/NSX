@@ -15,7 +15,6 @@ import {
   machineSettings, loadMachineSettings, saveMachineSetting,
   advancedSettings, loadAdvancedSettings, saveAdvancedSetting,
   machineInfo, loadMachineInfo, pushRefillLevel,
-  presenceSettings, loadPresenceSettings, savePresenceSetting,
   skinSettings, saveSkinSetting,
 } from '../../composables/useSettings.js';
 
@@ -41,7 +40,6 @@ onMounted(() => {
   loadMachineSettings();
   loadAdvancedSettings();
   loadMachineInfo();
-  loadPresenceSettings();
 });
 
 async function editRefillLevel() {
@@ -66,13 +64,6 @@ async function editFanThreshold() {
   if (v != null) saveMachineSetting('fan', Number(v));
 }
 
-function saveSleepTimeout(v) {
-  savePresenceSetting('sleepTimeoutMinutes', Math.max(15, Math.min(120, Number(v))));
-}
-async function editSleepTimeout() {
-  const v = await openNumberPad({ title: t('machineSettings.autoSleepTimeout'), unit: 'min', value: presenceSettings.sleepTimeoutMinutes ?? 30 });
-  if (v != null) saveSleepTimeout(v);
-}
 async function editFlushTemp() {
   const v = await openNumberPad({ title: t('machineSettings.flushTemp'), unit: '°C', value: machineSettings.flushTemp ?? 80 });
   if (v != null) saveMachineSetting('flushTemp', Number(v));
@@ -124,19 +115,9 @@ const refillKitLabel = () => refillKitOpts.find(([value]) => value === (advanced
 
     <div class="settings-scroll machine-scroll">
       <template v-if="view === 'main'">
-        <span class="setting-group-label">{{ t('machineSettings.autoSleep') }}</span>
-        <div class="setting-row">
-          <span class="sr-main"><span class="sr-name">{{ t('machineSettings.autoSleepEnabled') }}</span><span class="sr-sub">{{ t('machineSettings.autoSleepSub') }}</span></span>
-          <button class="switch" :class="{ on: presenceSettings.userPresenceEnabled }" role="switch" :aria-checked="!!presenceSettings.userPresenceEnabled" @click="savePresenceSetting('userPresenceEnabled', !presenceSettings.userPresenceEnabled)"></button>
-        </div>
-        <SettingSlider
-          v-if="presenceSettings.userPresenceEnabled"
-          :label="t('machineSettings.autoSleepTimeout')"
-          :model-value="presenceSettings.sleepTimeoutMinutes ?? 30"
-          :min="15" :max="120" :step="15" unit=" min"
-          @change="saveSleepTimeout" @edit="editSleepTimeout"
-        />
-
+        <!-- Auto sleep (switch + cool-down time) is the settings page's Energy
+             widget now; a second copy here would be two controls for one
+             value, disagreeing whenever one of them is stale. -->
         <span class="setting-group-label">{{ t('machineSettings.scaleSafety') }}</span>
         <div class="setting-row">
           <span class="sr-main"><span class="sr-name">{{ t('machineSettings.blockOnNoScale') }}</span><span class="sr-sub">{{ t('machineSettings.blockOnNoScaleSub') }}</span></span>

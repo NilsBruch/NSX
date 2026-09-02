@@ -566,6 +566,31 @@ async function fetchMachineInfo() {
 }
 
 /**
+ * GET /api/v1/info
+ * The GATEWAY's own build, not the machine's — the version string the Decent
+ * app shows about itself.
+ * @returns {Promise<{version: string, buildNumber: string, fullVersion: string, commitShort: string, buildTime: string}>}
+ */
+async function fetchGatewayInfo() {
+  return request("/api/v1/info");
+}
+
+/**
+ * GET /api/v1/update
+ * Whether a newer gateway build exists. `phase` is an open set the gateway
+ * defines ("available" and "upToDate" are the two observed); treat anything
+ * else as "nothing to report" rather than mapping it.
+ *
+ * READ-ONLY on purpose: the bridge exposes no documented way to START an
+ * update, and guessing a write endpoint would risk kicking off a real
+ * download on someone's machine. Installing stays in the Decent app.
+ * @returns {Promise<{phase: string, currentVersion: string, latestVersion: string, releaseNotes: string}>}
+ */
+async function fetchAppUpdate() {
+  return request("/api/v1/update");
+}
+
+/**
  * PUT/POST /api/v1/scale/tare
  * Some bridge versions expose either PUT or POST.
  * @throws {Error} on non-OK HTTP response for both methods
@@ -933,6 +958,8 @@ window.NSXApi = {
   setMachineState,
   fetchCurrentWorkflow,
   fetchMachineInfo,
+  fetchGatewayInfo,
+  fetchAppUpdate,
   pushWorkflow,
   pushSteamSettings,
   pushHotwaterSettings,

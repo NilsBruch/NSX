@@ -286,6 +286,8 @@ function routeApi(req, res, url, body) {
     return json(state.machine);
   }
   if (path === "/api/v1/machine/info") return json(fx.machineInfo);
+  if (path === "/api/v1/info") return json(fx.gatewayInfo);
+  if (path === "/api/v1/update") return json(fx.appUpdate);
   if (path === "/api/v1/machine/waterLevels") return json(fx.waterLevels);
   if (path === "/api/v1/machine/settings") {
     if (method === "GET") return json(state.machineSettings);

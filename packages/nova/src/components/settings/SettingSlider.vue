@@ -31,8 +31,15 @@ const props = defineProps({
   // an inactive limit reads as off rather than as a real cap of zero. Left
   // null for sliders where 0 is a genuine value (e.g. frame index 0).
   offLabel: { type: String, default: null },
+  // Track only, no label and no value button — for a caller that has already
+  // put both in its own header row (see DisplayWidget) and just wants the
+  // full width for the track.
+  bare: { type: Boolean, default: false },
 });
-const emit = defineEmits(['change', 'edit']);
+// `preview` fires on every drag frame, `change` only on release. A bare
+// caller renders the number itself, so without it the readout would sit still
+// while the bar moves under the finger.
+const emit = defineEmits(['change', 'edit', 'preview']);
 
 const track = ref(null);
 const dragValue = ref(null); // non-null only while a drag is in flight
@@ -86,10 +93,12 @@ function valueFromEvent(evt) {
 function onPointerDown(evt) {
   track.value.setPointerCapture(evt.pointerId);
   dragValue.value = valueFromEvent(evt);
+  emit('preview', dragValue.value);
 }
 function onPointerMove(evt) {
   if (dragValue.value === null) return;
   dragValue.value = valueFromEvent(evt);
+  emit('preview', dragValue.value);
 }
 function onPointerUp(evt) {
   if (dragValue.value === null) return;
@@ -104,8 +113,8 @@ function showHint() {
 </script>
 
 <template>
-  <div class="setting-row slider-row">
-    <span class="sr-name">
+  <div class="setting-row slider-row" :class="{ bare }">
+    <span v-if="!bare" class="sr-name">
       {{ label }}
       <button v-if="hint" type="button" class="sr-info-btn" :aria-label="`${label} info`" @click="showHint">ⓘ</button>
     </span>
@@ -119,6 +128,6 @@ function showHint() {
     >
       <div class="hslider-fill" :style="{ width: pct + '%' }"></div>
     </div>
-    <button class="sr-value as-val" @click="emit('edit')">{{ display }}<span class="sr-chev">›</span></button>
+    <button v-if="!bare" class="sr-value as-val" @click="emit('edit')">{{ display }}<span class="sr-chev">›</span></button>
   </div>
 </template>

@@ -1515,21 +1515,94 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    sitting next to the six things this page is actually FOR, and at 76px of
    saturated accent it out-shouted all of them. 40px still reads as a slider
    and takes the emphasis back. */
-.settings-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 40px; gap: 16px; }
-.settings-tiles { grid-column: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 16px; min-height: 0; }
-.settings-brightness { grid-column: 2; }
+/* Two columns of widget cards. The page does NOT scroll (see SettingsView), so
+   the cards are sized to fit the panel; one card per column may grow into the
+   leftover height so both columns end level. */
+/* `flex: 0 1 auto`, not `flex: 1`: the row is as tall as its TALLEST column
+   rather than the whole page, so the grid's own stretch makes both columns
+   exactly that height and the shorter one has a known amount of slack. */
+.settings-body { flex: 0 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* That slack goes into the gaps rather than into one card, so both columns end
+   flush without a card carrying an empty region to pay for it. In the taller
+   column there is nothing to distribute and this is a no-op. */
+.sw-col { min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
 
-.tile-slot { position: relative; min-width: 0; min-height: 0; }
-.tile {
-  width: 100%; height: 100%;
-  background: var(--card-bg); border: none; border-radius: var(--r-lg); cursor: pointer; color: var(--text);
-  font-family: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+/* A widget card: the page's own unit, holding rows rather than being one.
+   Its rows are therefore transparent with a hairline between them -- a
+   .setting-row in here would be a card inside a card. */
+.swidget {
+  flex: none; background: var(--card-bg); border-radius: var(--r-lg); padding: 14px 18px;
+  display: flex; flex-direction: column;
 }
-.tile svg { width: 40px; height: 40px; stroke: var(--accent); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.tile .tl { font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.05em; }
-/* Machine state toggle overlaid on its tile, below the icon+label (which stay
-   centered on the tile itself, unaffected by this overlay). */
-.tile-switch { position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%); }
+.sw-title { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.sw-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sw-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 46px; padding: 4px 0; background: none; border: none;
+  color: var(--text); font-family: inherit; text-align: left; width: 100%;
+}
+/* Adjacent-sibling, not :first-of-type: these rows are a mix of <div> and
+   <button>, and :first-of-type would spare the first of EACH kind — which is
+   how the line between the first two settings went missing. */
+.sw-row + .sw-row { border-top: 1px solid var(--line); }
+.sw-name { font-size: var(--fs-base); font-weight: 600; }
+/* A switch's details rather than settings in their own right: quieter type and
+   no hairline, so they read as belonging to the row above them. */
+.sw-row.sw-sub { min-height: 40px; border-top: none; }
+.sw-subname, .sw-time { font-size: var(--fs-sm); font-weight: 500; color: var(--muted); }
+.sw-time {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  background: none; border: none; padding: 0; font-family: inherit; cursor: pointer;
+}
+.sw-time b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* .sr-main stacks its name over its sub-line only under .setting-row, so in a
+   widget row the device name and its type ran together on one line. */
+.swidget .sw-row .sr-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sw-accent { color: var(--accent); }
+/* SettingSlider's root is a .setting-row, which carries a card background of
+   its own — inside a widget that would be a card drawn on a card. Two classes
+   so this beats .setting-row, which is defined further down the file. */
+.swidget .sw-slider { background: none; padding: 6px 0; border-top: 1px solid var(--line); }
+/* Track only: with no label and no value beside it, the row is the bar. */
+.swidget .sw-slider.bare { border-top: none; padding: 10px 0 4px; }
+.swidget .sw-slider.bare .hslider { flex: 1; width: auto; }
+/* The value, moved up onto the title's line — same micro-label type as the
+   title so the two read as one header rather than a heading and a number. */
+.sw-readout { color: var(--text); font-variant-numeric: tabular-nums; }
+/* A tappable value inside a widget row. .sr-value.as-val is otherwise styled
+   only under .slider-row, so out here it fell back to the browser's default
+   button chrome — a white box with the number invisible inside it. Pushed
+   against the switch rather than centred: space-between would park it in the
+   middle of the row, away from both the name it belongs to and the control it
+   sits before. */
+.swidget .sw-row .sr-value.as-val {
+  margin-left: auto; padding: 0; border: none; background: none;
+  color: var(--text); font-family: inherit; cursor: pointer;
+}
+/* The update check reuses .tile: it is the same kind of target as the wide
+   Skin & Display button opposite it, and a press that fetches something should
+   not be a thinner control than one that opens a page. */
+.sw-update { margin-top: 10px; font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.05em; }
+.sw-update.sw-accent { color: var(--accent); }
+
+/* Navigation tiles: a row of equal-width buttons inside a TileCard. Much
+   smaller than the six that used to fill the page -- they are a way out of
+   this screen now, not the screen itself. */
+/* Two columns, so every tile is the same size whether its group has two or
+   three: three across made them narrow enough to read as a different, lesser
+   control than the pair beside them. An odd tile marked `wide` takes the whole
+   row instead of leaving a gap. */
+.sw-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.tile-wide { grid-column: span 2; }
+/* No title above them, so no gap to leave for one. */
+.swidget-tiles { padding: 12px; }
+.tile {
+  flex: 1 1 0; min-width: 0; min-height: 74px;
+  background: var(--well); border: none; border-radius: var(--r-md); cursor: pointer; color: var(--text);
+  font-family: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+}
+.tile svg { width: 24px; height: 24px; stroke: var(--accent); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tile .tl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.05em; text-align: center; }
 
 /* Vertical brightness slider */
 .vslider {

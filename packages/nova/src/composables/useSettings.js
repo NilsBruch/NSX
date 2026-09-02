@@ -176,6 +176,22 @@ export async function loadMachineInfo() {
   machineInfo.value = await NSXApi.fetchMachineInfo();
 }
 
+/**
+ * The GATEWAY's own build and whether a newer one exists — the two reads the
+ * settings page's App card is made of. Same shape as machineInfo above, with
+ * one difference: both routes are absent on older gateway builds, so a failure
+ * leaves the ref null and the card renders what it knows instead of throwing
+ * out of the caller's onMounted (which would take the whole page down with it).
+ */
+export const gatewayInfo = ref(null);
+export async function loadGatewayInfo() {
+  gatewayInfo.value = await NSXApi.fetchGatewayInfo().catch(() => null);
+}
+export const appUpdate = ref(null);
+export async function loadAppUpdate() {
+  appUpdate.value = await NSXApi.fetchAppUpdate().catch(() => null);
+}
+
 /** Auto Sleep — NSX's presence settings, not an app/machine settings key. */
 export const presenceSettings = reactive({ userPresenceEnabled: false, sleepTimeoutMinutes: 30 });
 export async function loadPresenceSettings() {

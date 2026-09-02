@@ -12,6 +12,26 @@ export const machineInfo = {
 
 export const waterLevels = { currentLevel: 780, refillLevel: 100 };
 
+// The GATEWAY's own build (GET /api/v1/info) and whether a newer one exists
+// (GET /api/v1/update) — what the settings page's App card reads. Seeded with
+// an update pending so the "available" branch is the one you see in dev; the
+// "up to date" branch is a phase edit away.
+export const gatewayInfo = {
+  version: "0.8.3",
+  buildNumber: "2506",
+  fullVersion: "0.8.3+2506",
+  commitShort: "3d6f7c5f",
+  buildTime: "2026-08-28T08:30:18Z",
+  appStore: false,
+};
+
+export const appUpdate = {
+  phase: "available",
+  currentVersion: "0.8.3",
+  latestVersion: "0.8.4",
+  releaseNotes: "## What's Changed\n* Mock release notes for the dev gateway.\n* Nothing here was really released.",
+};
+
 export const appSettings = {
   chargingMode: "balanced",
   nightModeEnabled: false,

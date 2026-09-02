@@ -213,6 +213,20 @@ step exactly.
   same response are deliberately not cached — read those from
   `NSXApi.fetchDisplayState()`.
 
+No domain of their own — two plain `NSXApi` reads a settings screen needs, with
+nothing worth caching:
+
+- **`NSXApi.fetchGatewayInfo()`** — `GET /api/v1/info`: the gateway's own build
+  (`version`, `buildNumber`, `fullVersion`, `commitShort`, `buildTime`). Not
+  the DE1's — that's `fetchMachineInfo()`.
+- **`NSXApi.fetchAppUpdate()`** — `GET /api/v1/update`: `{ phase,
+  currentVersion, latestVersion, releaseNotes }`. `phase` is an open set the
+  gateway defines (`available` and `upToDate` observed); anything else should
+  read as "nothing to report". **Read-only on purpose** — the bridge exposes no
+  documented way to start an update, so a skin shows the status and leaves
+  installing to the Decent app. Both routes are absent on older gateway builds,
+  so call them fail-soft.
+
 ### Profile rendering — `profile-render.js` (owns **no state at all**)
 
 - **`renderProfileSpark(profile, opts?)`** — pure SVG string for a profile's
