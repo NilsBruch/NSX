@@ -1,10 +1,10 @@
 <script setup>
 /**
- * Screen brightness — one value, so the card is its header and a full-width
- * track. The label is the card's own title and the percentage sits at the
- * other end of that line, which leaves the whole row below for the bar: the
- * usual label/track/value row spent about half its width on two words and a
- * number that the header already had room for.
+ * Screen brightness — one value: a title, a percentage and a full-width track.
+ * The label sits at one end of the header line and the percentage at the
+ * other, which leaves the whole row below for the bar: the usual
+ * label/track/value row spent about half its width on two words and a number
+ * that the header already had room for.
  *
  * Rendered only where the gateway's host can actually dim the screen (core's
  * display domain, from GET /api/v1/display's platformSupported) — the guard

@@ -6,12 +6,18 @@
   --app-bg: #12161b;
   --page-bg: #242b35;
   --tab-bg: #191f26;
-  /* Darker than it was (#1b222b). Against the page that sat at a 1.12
-     contrast ratio — and once useAccent tinted both with the same hue, a card
-     was barely a plane at all: the espresso orbs read as ghosted outlines
-     rather than controls. 1.20 keeps the skin calm and makes a card an
-     object. */
-  --card-bg: #161d26;
+  /* Darker than it was (#1b222b, then #161d26). Against the page the original
+     sat at a 1.12 contrast ratio — and once useAccent tinted both with the
+     same hue, a card was barely a plane at all: the espresso orbs read as
+     ghosted outlines rather than controls. Now 1.23.
+     There is a HARD CEILING on this, and it is not taste: --well lives INSIDE
+     cards (progress tracks, sublists, plot beds), so every step the card takes
+     towards the page's opposite it takes towards the well as well. At #111823
+     the card would reach 1.25 against the page and 1.01 against its own wells
+     — a progress track would vanish. The well below therefore moves down with
+     the card, keeping their 1.06 intact; that pair is what limits how far this
+     can ever go, not the page. */
+  --card-bg: #131a23;
   --text: #e9edf2;
   --muted: #8b96a3;
   --faint: #4d5866;
@@ -23,7 +29,8 @@
      sites. */
   --line: #262e39;        /* hairline dividers between rows */
   --card-hi: #242c37;     /* a step up from a card: selected rows, chips on it */
-  --well: #12171d;        /* recessed: progress tracks, sublists, plot beds */
+  --well: #0e131a;        /* recessed: progress tracks, sublists, plot beds.
+                             Moves in lockstep with --card-bg — see there. */
   --island-bg: #07090c;   /* the status island — its own token because it is
                              the one surface that reads as a display rather
                              than as a panel, and it goes the OTHER way between
@@ -163,8 +170,22 @@
      a shadow on either would show the seam that effect exists to hide. Kept in
      rgba() rather than color-mix() for the same reason the container-query
      note above gives — the tablet's WebView is Chromium ~96. */
-  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 6px 16px rgba(0, 0, 0, 0.22);
-  --elev-2: 0 2px 6px rgba(0, 0, 0, 0.34), 0 18px 40px rgba(0, 0, 0, 0.34);
+  /* Raised BOTH layers, but the tight contact shadow far more than the wide
+     ambient one (0.34 -> 0.46 against 0.34 -> 0.37 on --elev-2). Depth reads
+     from the contact shadow — the crisp dark line right under an edge; the
+     40px ambient one only says "something is above something". Push the wide
+     layer and you get a smudge under everything instead of a lift.
+
+     The offsets point UP AND LEFT, which is not a typo. The page gradient puts
+     the light at the bottom-right (dark top-left corner, lifting across the
+     screen), so that is where shadows have to fall away from — the same 45°
+     the gradient runs on, mirrored. Straight-down offsets were from before
+     there was a light at all, and next to a lit ground they read as a second,
+     contradictory light source overhead.
+     Magnitudes are unchanged, only rotated: 3px down becomes 2px up + 2px
+     left, which is the same 3px of travel. */
+  --elev-1: -1px -1px 3px rgba(0, 0, 0, 0.40), -4px -4px 16px rgba(0, 0, 0, 0.24);
+  --elev-2: -2px -2px 8px rgba(0, 0, 0, 0.46), -13px -13px 40px rgba(0, 0, 0, 0.37);
 
   /* Type scale — the ONLY font-sizes used anywhere in this skin. Every rule
      must reference one of these tokens; never write a raw font-size value.
@@ -258,8 +279,13 @@
 
   /* Shadows on light have to come from a much lower alpha or every card looks
      smudged; the two-layer structure is unchanged. */
-  --elev-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 6px 16px rgba(16, 24, 40, 0.08);
-  --elev-2: 0 2px 6px rgba(16, 24, 40, 0.08), 0 18px 40px rgba(16, 24, 40, 0.12);
+  /* The light theme gets the bigger share of this change, because it has no
+     other lever: its card is already #ffffff, so it CANNOT move further from
+     the page the way the dark theme's card can. All of its separation is the
+     shadow, and at 0.08 there was hardly any. Same split as the dark theme —
+     contact layer up hard, ambient layer barely. */
+  --elev-1: -1px -1px 3px rgba(16, 24, 40, 0.10), -4px -4px 16px rgba(16, 24, 40, 0.09);
+  --elev-2: -2px -2px 8px rgba(16, 24, 40, 0.16), -13px -13px 40px rgba(16, 24, 40, 0.14);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -696,7 +722,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .modal {
   background: var(--modal-bg); border-radius: var(--r-xl); padding: 22px;
   display: flex; flex-direction: column; gap: 18px; align-items: center;
-  min-width: 300px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  min-width: 300px; box-shadow: -14px -14px 60px rgba(0, 0, 0, 0.5);
 }
 .modal .m-title { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 .wheel-wrap { position: relative; height: 220px; width: 200px; }
@@ -1724,8 +1750,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .sw-accent { color: var(--accent); }
 /* SettingSlider's root is a .setting-row, which carries a card background of
    its own — inside a widget that would be a card drawn on a card. Two classes
-   so this beats .setting-row, which is defined further down the file. */
-.swidget .sw-slider { background: none; padding: 6px 0; border-top: 1px solid var(--line); }
+   so this beats .setting-row, which is defined further down the file.
+   box-shadow too, and that one was missed for a while: .setting-row is in the
+   Material block's raised list, so killing only the fill left the row casting
+   a shadow with nothing inside it — a box drawn around an invisible element,
+   right where the slider is. Invisible while the shadows were faint; a
+   distinct outline as soon as they were turned up. A surface that gives up its
+   fill has to give up its lift with it. */
+.swidget .sw-slider { background: none; box-shadow: none; padding: 6px 0; border-top: 1px solid var(--line); }
 /* Track only: with no label and no value beside it, the row is the bar. */
 .swidget .sw-slider.bare { border-top: none; padding: 10px 0 4px; }
 .swidget .sw-slider.bare .hslider { flex: 1; width: auto; }
@@ -1893,7 +1925,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 40;
   background: var(--card-bg); color: var(--text); border-radius: var(--r-md); padding: 12px 20px;
   font-size: var(--fs-sm); font-weight: 600; max-width: 80%; text-align: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: -6px -6px 24px rgba(0, 0, 0, 0.4);
 }
 
 /* ===== Diary: header row, segmented Browse/Full toggle, bean row split ===== */
@@ -2268,6 +2300,22 @@ body,
   transition: background-color 0.3s ease;
 }
 
+/* ── The exception: settings lists ──
+   A settings panel is 15-30 rows in one vertical run. Everything the shadow
+   buys on a card — "this is an object, it sits above the page" — turns against
+   it at that count: thirty lifted slabs stacked a few pixels apart read as
+   corrugation, not as depth, and the eye starts seeing the gaps instead of the
+   settings. The rows keep their fill, which is what actually separates them
+   from the page and from each other; they just stop pretending to float.
+   Scoped to .settings-scroll, so the same .setting-row keeps its lift wherever
+   it appears as a single card. .seg goes with them: it is a control sitting IN
+   one of these lists (the theme switch in Skin settings), and one floating
+   element in a flat list is more conspicuous than none. */
+.settings-scroll .setting-row,
+.settings-scroll .seg {
+  box-shadow: none;
+}
+
 /* ═══ Material ══════════════════════════════════════════════════════════════
    One block rather than a shadow scattered across thirty component rules is
    what makes "raised" auditable — the list of raised things IS this selector.
@@ -2331,5 +2379,5 @@ body,
    the rule stays only to state that the original lift is intentional and not
    an oversight of the material pass. */
 .modal {
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: -14px -14px 60px rgba(0, 0, 0, 0.5);
 }
