@@ -159,9 +159,16 @@ body[data-phone="true"] {
    Rows that only need a single tap (every other .phone-list-row in the app)
    are untouched — they stay a bare <button class="phone-list-row">. */
 .phone-row-main {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px;
   background: none; border: none; color: inherit; font: inherit; text-align: left; padding: 0;
 }
+/* The star rating sits at the row's top-right rather than centred against the
+   whole (now multi-line) identity block — flex-start above lines both boxes'
+   TOP edges up, so the stars land level with the roaster/bean line instead of
+   floating mid-height next to a stack of four. Small on purpose: this is a
+   glance-only readout in a dense list, not the interactive control it is on
+   RecipeDetail's own rating row. */
+.phone-row-main .star-rating { flex: none; margin-top: 2px; }
 .phone-row-edit {
   flex: none; display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: var(--r-sm);

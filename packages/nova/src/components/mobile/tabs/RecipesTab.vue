@@ -136,7 +136,7 @@ const press = useLongPress({ tap: loadRow, hold: openRowMenu });
             </span>
             <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
           </span>
-          <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="15" />
+          <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="10" />
         </button>
         <button class="phone-row-edit" :aria-label="t('common.edit')" @click="openDetail(row)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
