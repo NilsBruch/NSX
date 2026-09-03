@@ -10,15 +10,26 @@
  */
 import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { devices, loadDevices, scanForDevices, connectToDevice, disconnectDevice } from '../../composables/useSettings.js';
+import { devices, loadDevices, scanForDevices, connectToDevice, disconnectDevice, appSettings, loadAppSettings } from '../../composables/useSettings.js';
 
 const { t } = useI18n();
 
-onMounted(loadDevices);
+onMounted(() => { loadDevices(); loadAppSettings(); });
+
+// Every scale that was ever paired stays in the gateway's device list, so a
+// household that has tried three of them got a widget three rows too long.
+// Only one machine and one scale can be in use at a time, so show only one of
+// each: the connected one, else the preferred one (what we auto-connect to on
+// startup), else whatever the gateway lists first. The full list is still
+// reachable in App settings, where the preferred-device pickers live.
+function pickDevice(type) {
+  const list = devices.value.filter((d) => d.type === type);
+  const preferredId = type === 'machine' ? appSettings.preferredMachineId : appSettings.preferredScaleId;
+  return list.find((d) => d.connected) || list.find((d) => d.id === preferredId) || list[0] || null;
+}
 
 // DE1 first, scale after — the machine is the primary device.
-const deviceRank = (type) => (type === 'machine' ? 0 : type === 'scale' ? 1 : 2);
-const orderedDevices = computed(() => [...devices.value].sort((a, b) => deviceRank(a.type) - deviceRank(b.type)));
+const orderedDevices = computed(() => [pickDevice('machine'), pickDevice('scale')].filter(Boolean));
 
 function toggleDevice(d) {
   if (d.connected) disconnectDevice(d.id);
