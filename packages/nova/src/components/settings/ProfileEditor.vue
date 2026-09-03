@@ -19,6 +19,7 @@ import { useI18n } from 'vue-i18n';
 import { openTextField, openNumberPad, openConfirm } from '../../composables/useModals.js';
 import { frameName } from '../../composables/useProfileDisplay.js';
 import { showToast } from '../../composables/useToast.js';
+import { skinSettings } from '../../composables/useSettings.js';
 import SettingSlider from './SettingSlider.vue';
 
 const props = defineProps({
@@ -77,7 +78,9 @@ function selectFrame(idx) { selectedFrameIdx.value = idx; }
 
 function plotSvg() {
   return NSXCore.renderProfileSpark({ title: draft.title, steps: draft.frames }, {
-    theme: 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
+    // See ProfilePicker.plotSvg — pinned to 'dark', the preview came out as a
+    // dark slab on the light theme.
+    theme: skinSettings.lightMode ? 'light' : 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
     showTempLine: false, compactMargins: true, selectedFrameIdx: selectedFrameIdx.value, pressureMax: 12,
   });
 }

@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n';
 import { profiles, profilesAll, refreshProfiles, refreshProfilesAll } from '../composables/useCore.js';
 import { frames, frameDetailText, frameName } from '../composables/useProfileDisplay.js';
 import { openConfirm, openChooser } from '../composables/useModals.js';
+import { skinSettings } from '../composables/useSettings.js';
 import ProfileEditor from './settings/ProfileEditor.vue';
 
 const props = defineProps({
@@ -197,7 +198,12 @@ function stages(p) {
 // of its container instead of letterboxing to the native 680x274 aspect ratio.
 function plotSvg(p, frameIdx = -1) {
   return NSXCore.renderProfileSpark(p?.profile, {
-    theme: 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
+    // The renderer paints its own background, and its whole palette turns on
+    // this one option — it was pinned to 'dark', so on the light theme the
+    // plot arrived as a dark grey slab with dark-theme grid and tick colours
+    // on a white card. Reading skinSettings here also makes the SVG re-render
+    // when the theme is switched, since this runs from the template.
+    theme: skinSettings.lightMode ? 'light' : 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
     showTempLine: false, compactMargins: true, selectedFrameIdx: frameIdx, pressureMax: 12,
   });
 }

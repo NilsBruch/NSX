@@ -1216,7 +1216,15 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .pd-stage.sel { background: rgba(10, 132, 255, 0.22); }
 .pd-stage-idx {
-  width: 22px; height: 22px; flex: none; border-radius: 50%; background: rgba(122, 170, 255, 0.2); color: #b7dbff;
+  width: 22px; height: 22px; flex: none; border-radius: 50%; background: rgba(122, 170, 255, 0.2);
+  /* var(--text), not a fixed blue: #b7dbff was picked against the dark theme,
+     and on the light one it sat as pale blue on a pale blue disc — the numeral
+     was there but not readable. The disc's tint is translucent and works on
+     either ground; only the numeral needed to be a role rather than a shade.
+     This file keeps ALL theme knowledge in the :root blocks — there is not one
+     [data-theme] component rule in it — so the fix is the right token, not a
+     light-theme override. */
+  color: var(--text);
   display: flex; align-items: center; justify-content: center; font-size: var(--fs-xs); font-weight: 700;
 }
 .pd-stage-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
