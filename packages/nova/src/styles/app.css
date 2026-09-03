@@ -48,6 +48,57 @@
      an already-white surface does nothing at all. */
   --press-filter: brightness(1.14);
 
+  /* ── Page gradient (TRIAL) ──
+     The one place this skin stops being flat. Surface fills stay flat
+     everywhere else — that is still the character, and the note under
+     --elev-1 about a per-card gradient still stands. This is the opposite
+     move: not a gradient PER object, but one light source for the whole
+     screen, with the flat cards sitting in it. Dark at the top-left corner,
+     lifting to the bottom-right, as if the room's light came from the lower
+     right.
+     Written as a black-to-white wash OVER var(--page-bg) rather than as two
+     hex colours, so it survives both things that change that grey underneath
+     it: the theme switch, and useAccent's per-tab tint. Two numbers to tune,
+     and they are the two below.
+     The midpoint stop is `transparent` on purpose — it pins the neutral point
+     to the diagonal centre, so the corners move symmetrically around the flat
+     colour instead of the whole page drifting darker. */
+  --grad-dark: 0.24;   /* black at the top-left corner OF THE SCREEN */
+  --grad-light: 0.11;  /* white at the bottom-right corner OF THE SCREEN */
+  /* The two numbers above are the whole dial. They started at half these
+     values, where the light was only legible IN the two corners — which is
+     what a diagonal gradient does if you let it: 0% and 100% are single
+     POINTS (the top-left and bottom-right corners), while the whole
+     top-right/bottom-left diagonal band sits at the middle of the ramp, i.e.
+     at the flat colour. Nothing was wrong with the curve; there just wasn't
+     enough of it left by the time it crossed the middle of the screen.
+     The endpoints land at 10% and 90% rather than 0% and 100% for the same
+     reason: it puts the extremes inside the screen, where they can be seen,
+     instead of on two pixels nobody looks at. */
+  --page-grad: linear-gradient(135deg,
+      rgba(0, 0, 0, var(--grad-dark)) 10%,
+      rgba(0, 0, 0, 0) 50%,
+      rgba(255, 255, 255, var(--grad-light)) 90%);
+  /* ONE light for the whole screen, not one per surface. Every lit surface
+     paints the SAME 100vw x 100vh gradient and then slides it back by its own
+     position on screen (--grad-x / --grad-y below), so each one shows exactly
+     the slice of the light that falls where it sits. That is what makes the
+     rail islands and the page read as parts of one lit screen instead of
+     three separately-shaded objects — which is what a gradient per element
+     looks like, and why the tabs stood out.
+     This is `background-attachment: fixed` done by hand. The real property
+     would be one line, but Chrome for Android has a long history of quietly
+     downgrading it to `scroll`, and on this tablet's Chromium ~96 WebView the
+     failure would be invisible to us and obvious on the machine: every tab
+     back to its own private gradient. The arithmetic below always works.
+     Every offset is derived from the layout tokens, so moving a rail or
+     changing --rail-w keeps the light continuous with no second edit. */
+  --grad-size: 100vw 100vh;
+  /* .stage's own padding, needed by everything that measures from the top of
+     the screen. */
+  --stage-pad: 12px;
+  --rail-gap: 12px;
+
   /* Hairline border for the five controls that outline rather than fill (the
      espresso orbs, the power button, the text field, the SBW pill, the roast
      chip). White at low alpha, not a fixed grey: it has to hold up on a card,
@@ -190,6 +241,13 @@
   --chart-scrub: rgba(27, 32, 39, 0.45);
   --press-filter: brightness(0.95);
 
+  /* White over a near-white page does almost nothing (0.05 white on #e9ecf2 is
+     under two units), so the light theme's lift has to be far stronger to
+     travel the same visual distance — and its shadow far weaker, for the same
+     reason --elev-1 drops to a sixth of its alpha here. */
+  --grad-dark: 0.11;
+  --grad-light: 0.60;
+
   /* The status colours need real darkening: the dark theme's mint and amber sit
      at ~6:1 against a near-black page and ~2:1 against a light one, and these
      carry actual state (ready / heating / needs water), so they have to be
@@ -212,7 +270,10 @@ html, body {
      display viewed at arm's length, not a desktop window, so 1rem should be
      bigger than web-default. Every rem value in the scale above scales with it. */
   font-size: 18px;
-  background: var(--app-bg);
+  /* background-COLOR, not the shorthand: the lit-surfaces rule further down
+     puts the screen's light on top of it, and a shorthand here would reset
+     that image away. */
+  background-color: var(--app-bg);
   color: var(--text);
   font-family: "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   overscroll-behavior: none;
@@ -237,7 +298,7 @@ html, body {
      exactly the stage's own height so every column relies on ITS OWN
      internal overflow/scroll (`.list`) instead of inflating the shared track. */
   grid-template-rows: 1fr;
-  padding: 12px 0;
+  padding: var(--stage-pad) 0;
   overflow: hidden;
   /* NOTE: dial/slider sizes below use vw (the stage IS the full viewport, so vw
      == the container width anyway). We deliberately DON'T use container-query
@@ -262,10 +323,49 @@ html, body {
    text-overflow: ellipsis finally has a width to truncate against. */
 .pages { grid-column: 2; grid-row: 1; position: relative; min-height: 0; min-width: 0; }
 
+/* ── Lit surfaces ──
+   Everything that stands in the screen's light. The gradient rides ON each
+   surface's own flat colour rather than replacing it, so the fill underneath
+   is still what the theme and useAccent's per-tab tint control — a page and a
+   rail island stay two different planes, lit the same way.
+   --grad-x / --grad-y are the surface's own top-left corner in screen
+   coordinates, NEGATED: sliding the light back by where the element sits is
+   what lines its slice up with its neighbours'. Default 0 0 = an element
+   flush with the screen's top-left, which is what html/body and .overlay-full
+   are.
+
+   The FRAME (html/body, the ground the rails sit on) is in this list for a
+   reason worth keeping: it was the last flat surface, and leaving it out did
+   not merely look inconsistent — it made the tabs hard to see. At the
+   top-left the light pulls a light-theme tab island down to (198,202,208)
+   while an unlit frame stays at (199,206,218): the island sinks INTO the
+   ground it is supposed to sit on, and the separation goes to zero (briefly
+   negative on the blue channel). Lit, the frame moves with it and the ~20
+   levels between them come back. A surface that neighbours a lit one has to
+   be lit too, or the light eats the edge between them. */
+/* `body` alone, NOT `html, body`: html has a background-color, so it is html's
+   background that gets propagated to the canvas and body's is then painted
+   again on top of it inside body's own (viewport-sized) box. Listing both
+   would lay the same wash down twice and the frame would carry double the
+   light everything else gets. */
+body,
+.page,
+.overlay-full,
+.tab::before,
+.tab-liquid::before {
+  background-image: var(--page-grad);
+  background-size: var(--grad-size);
+  background-repeat: no-repeat;
+  background-position: var(--grad-x, 0px) var(--grad-y, 0px);
+}
+
 /* A page fills the centre column. The active register tab merges with it. */
 .page {
   height: 100%;
-  background: var(--page-bg);
+  background-color: var(--page-bg);
+  /* Sits one rail in from the left, one stage-padding down. */
+  --grad-x: calc(0px - var(--rail-w));
+  --grad-y: calc(0px - var(--stage-pad));
   border-radius: var(--radius);
   /* Top padding clears the status island (ends ~52px) with a real gap, so the
      title never sits right under it. */
@@ -307,7 +407,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    the viewport instead — .stage is 100vh with 12px top/bottom padding
    (box-sizing: border-box), so its content row is exactly 100vh - 24px. This
    avoids grid/percentage resolution entirely. */
-.rail { display: flex; flex-direction: column; gap: 12px; z-index: 2; height: calc(100vh - 24px); }
+.rail { display: flex; flex-direction: column; gap: var(--rail-gap); z-index: 2; height: calc(100vh - 24px); }
 .rail-left { grid-column: 1; grid-row: 1; min-height: 0; }
 .rail-right { grid-column: 3; grid-row: 1; align-items: flex-end; min-height: 0; }
 
@@ -336,6 +436,17 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
      THEN snap back. The snap paints nothing: island and icon are both
      anchored to the bezel side, independent of the box width. */
   transition: width 0s var(--tab-flow);
+  /* Where this tab sits down the screen, for the light. --tab-i is the tab's
+     index within its rail (0-2), set inline by RegisterRail.vue — it is the
+     one thing about a tab's position that CSS cannot work out for itself.
+     Step = the tab height above (33.333vh - 16px) plus one --rail-gap, i.e.
+     33.333vh - 4px. Written as two multiplications rather than
+     `var(--tab-i) * (33.333vh - 4px)` for the same reason the height above
+     avoids a division: old WebViews drop the whole declaration on calc syntax
+     they don't like, and here that would silently unstick the light.
+     Inherited by .tab::before and .tab-liquid::before, which both start at
+     this tab's own top edge. */
+  --grad-y: calc(0px - var(--stage-pad) - var(--tab-i) * 33.333vh + var(--tab-i) * 4px);
 }
 .rail-left .tab { margin-left: var(--tab-inset); }
 .rail-right .tab { margin-right: var(--tab-inset); }
@@ -345,11 +456,16 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   content: '';
   position: absolute; top: 0; bottom: 0; z-index: 0;
   width: calc(var(--rail-w) - var(--tab-inset) - var(--tab-gap));
-  background: var(--tab-bg);
+  background-color: var(--tab-bg);
   border-radius: var(--r-md);
 }
-.rail-left .tab::before { left: 0; }
-.rail-right .tab::before { right: 0; }
+/* The island is pinned to the bezel, so its screen x is fixed whether or not
+   the tab is active (only the BUTTON's box widens on select, and it widens
+   towards the page). Left rail: one --tab-inset in. Right rail: its left edge
+   is --tab-inset + the island's own width from the right bezel, which reduces
+   to --rail-w - --tab-gap. */
+.rail-left .tab::before { left: 0; --grad-x: calc(0px - var(--tab-inset)); }
+.rail-right .tab::before { right: 0; --grad-x: calc(var(--rail-w) - var(--tab-gap) - 100vw); }
 
 /* Icon: absolutely centred over the ISLAND (not the box), so the box's width
    snaps can never move it — it stays put through select and deselect. */
@@ -403,37 +519,77 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   content: '';
   position: absolute; left: 0; right: 0;
   top: var(--tab-fillet); bottom: var(--tab-fillet);
-  background: var(--page-bg);
+  background-color: var(--page-bg);
   border-radius: var(--r-md);
 }
+/* The liquid spans the BUTTON's box, which on the left rail starts at
+   --tab-inset and on the right rail is right-aligned — so its left edge is
+   --tab-inset + the active width from the right bezel, which reduces to
+   --rail-w + --tab-overlap. The active width is the one that matters: the
+   liquid is only ever visible on the active tab.
+   This is the offset that makes the merge work. The liquid's whole job is to
+   be the page reaching into the rail, and a slab of flat page colour next to a
+   lit page stopped being that the moment the page got a gradient. */
+.rail-left .tab-liquid::before { --grad-x: calc(0px - var(--tab-inset)); }
+.rail-right .tab-liquid::before { --grad-x: calc(var(--rail-w) + var(--tab-overlap) - 100vw); }
 
 /* Fillets: a fillet-wide strip at the page boundary whose top/bottom squares
    are page-colored with a quarter-circle carved out — the concave curves that
    make the tab "flow" into the page edge instead of meeting it at 90°.
    The rail's FIRST tab gets no top fillet and the LAST no bottom fillet: those
    edges are flush with the page's own top/bottom, so a fillet there would
-   bulge outside the page silhouette (verified in a screenshot). */
+   bulge outside the page silhouette (verified in a screenshot).
+
+   The quarter-circles used to be PAINTED as radial gradients whose outer stop
+   was var(--page-bg). That is a flat colour, and a flat colour cannot show a
+   slice of the screen's light — so once the page and the liquid were lit, the
+   two little squares stayed at the page's mid grey and stepped visibly out of
+   the corner. Glaring on the light theme, where the lift is 0.55 white.
+   So the same shapes now MASK instead of paint: the strip is filled with the
+   screen light like every other lit surface, and the mask cuts the two
+   quarter-circles out of it. A mask reads alpha only, which is why the stops
+   below can be any opaque colour — #000 says "keep this pixel". */
 .tab-liquid::after {
   content: '';
   position: absolute; top: 0; bottom: 0;
   width: var(--tab-fillet);
-  background-image: var(--fillet-top), var(--fillet-bottom);
-  background-position: top, bottom;
+  background-color: var(--page-bg);
+  background-image: var(--page-grad);
+  background-size: var(--grad-size);
   background-repeat: no-repeat;
-  background-size: var(--tab-fillet) var(--tab-fillet);
+  /* One --tab-fillet ABOVE the tab's own top edge: .tab-liquid is inset by
+     that much on both ends so the corners can curve outside the tab, and this
+     strip spans the liquid's full height. --grad-y is negated screen y, so
+     starting higher means adding. */
+  background-position: var(--grad-x) calc(var(--grad-y) + var(--tab-fillet));
+  mask-image: var(--fillet-top), var(--fillet-bottom);
+  mask-position: top, bottom;
+  mask-repeat: no-repeat;
+  mask-size: var(--tab-fillet) var(--tab-fillet);
+  /* Chromium ~96 on the tablet only has the prefixed longhands; last wins. */
+  -webkit-mask-image: var(--fillet-top), var(--fillet-bottom);
+  -webkit-mask-position: top, bottom;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: var(--tab-fillet) var(--tab-fillet);
 }
 .rail-left .tab-liquid {
-  --fillet-top:    radial-gradient(circle var(--tab-fillet) at 0 0,    transparent calc(100% - 1px), var(--page-bg) 100%);
-  --fillet-bottom: radial-gradient(circle var(--tab-fillet) at 0 100%, transparent calc(100% - 1px), var(--page-bg) 100%);
+  --fillet-top:    radial-gradient(circle var(--tab-fillet) at 0 0,    transparent calc(100% - 1px), #000 100%);
+  --fillet-bottom: radial-gradient(circle var(--tab-fillet) at 0 100%, transparent calc(100% - 1px), #000 100%);
 }
-.rail-left .tab-liquid::after { right: var(--tab-overlap); }
+/* The strip sits just OUTSIDE the page edge — its far side is --tab-overlap in
+   from the tab's page-side edge, which reduces to one fillet short of the rail
+   on the left, and exactly the rail on the right. */
+.rail-left .tab-liquid::after { right: var(--tab-overlap); --grad-x: calc(var(--tab-fillet) - var(--rail-w)); }
 .rail-right .tab-liquid {
-  --fillet-top:    radial-gradient(circle var(--tab-fillet) at 100% 0,    transparent calc(100% - 1px), var(--page-bg) 100%);
-  --fillet-bottom: radial-gradient(circle var(--tab-fillet) at 100% 100%, transparent calc(100% - 1px), var(--page-bg) 100%);
+  --fillet-top:    radial-gradient(circle var(--tab-fillet) at 100% 0,    transparent calc(100% - 1px), #000 100%);
+  --fillet-bottom: radial-gradient(circle var(--tab-fillet) at 100% 100%, transparent calc(100% - 1px), #000 100%);
 }
-.rail-right .tab-liquid::after { left: var(--tab-overlap); }
-.rail .tab:first-child .tab-liquid { --fillet-top: none; }
-.rail .tab:last-child .tab-liquid { --fillet-bottom: none; }
+.rail-right .tab-liquid::after { left: var(--tab-overlap); --grad-x: calc(var(--rail-w) - 100vw); }
+/* Fully transparent rather than `none`: as a mask layer these have to count as
+   "hide everything here", and an explicit transparent image says that in every
+   engine without relying on how `none` is treated in a multi-layer mask. */
+.rail .tab:first-child .tab-liquid { --fillet-top: linear-gradient(transparent, transparent); }
+.rail .tab:last-child .tab-liquid { --fillet-bottom: linear-gradient(transparent, transparent); }
 
 /* Weak/touch hardware (the machine's own Android tablet is touch: hover:none,
    pointer:coarse) swaps the clip-path liquid for a cheap opacity crossfade:
@@ -1208,7 +1364,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
      screen width. `.stage` already IS the full viewport (100vw/100vh), so
      fixed positioning reaches exactly as far as intended. */
   position: fixed; inset: 0; z-index: 20;
-  background: var(--page-bg);
+  /* Same light as the page it covers. A full-screen overlay landing as a flat
+     slab on top of a lit page is the one place the gradient would be MISSED.
+     `inset: 0` puts it at the screen's own origin, but it must SAY so: the
+     overlay is mounted inside a view inside .page, so without these it would
+     inherit the page's offset and shift the light by a rail's width. */
+  --grad-x: 0px;
+  --grad-y: 0px;
+  background-color: var(--page-bg);
   display: flex; flex-direction: column; gap: 14px;
   padding: 16px 22px 20px;
 }
