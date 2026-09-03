@@ -24,7 +24,7 @@
  * note gives: the DE1 tablet's WebView is Chromium ~96, and a dropped
  * color-mix() would silently take the whole declaration with it.
  */
-import { computed, watch } from 'vue';
+import { computed, unref, watch } from 'vue';
 import { TABS } from '../router/index.js';
 import { skinSettings } from './useSettings.js';
 
@@ -68,10 +68,17 @@ const DEFAULT_ACCENT = '#7fa8c9';
  */
 const LIGHT_DARKEN = 0.35;
 
-/** Call once, from App.vue, with the current route. */
-export function useAccent(route) {
+/**
+ * Call once, from App.vue, with a ref/computed resolving to the active TABLET
+ * tab's `name` (router/index.js's TABS). Not a route object: the phone shell
+ * never navigates the router at all (see usePhoneNav.js), so App.vue instead
+ * passes a computed that maps the active phone tab onto whichever tablet tab
+ * shares its colour — the accent decision stays single-sourced in TABS either
+ * way, this just widens what can select from it.
+ */
+export function useAccent(tabNameSource) {
   const tabAccent = computed(
-    () => TABS.find((t) => t.name === route.name)?.accent ?? DEFAULT_ACCENT
+    () => TABS.find((t) => t.name === unref(tabNameSource))?.accent ?? DEFAULT_ACCENT
   );
 
   // Watched as a set: both settings arrive AFTER this first runs

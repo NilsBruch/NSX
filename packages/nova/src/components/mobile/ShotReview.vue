@@ -1,7 +1,7 @@
 <script setup>
 /**
- * Phone shot review — tapping a shot in DiaryTab/ShotsTab calls
- * useLiveShot.js's openHistoryAt(), same as the tablet's Diary drill-down;
+ * Phone shot review — tapping a shot in DiaryTab calls useLiveShot.js's
+ * openHistoryAt(), same as the tablet's Diary drill-down;
  * this renders that SAME shared `phase === 'history'` state (chart, actual
  * dose/yield/ratio, star rating, delete) as LiveShotOverlay.vue's history
  * screen does on the tablet — same composable, same CSS classes (.overlay-full

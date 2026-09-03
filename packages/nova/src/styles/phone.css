@@ -6,7 +6,28 @@
    .overlay-full in app.css), so they fill the screen; the overrides below
    only fix the handful of internal rules in app.css that hardcode tablet
    widths (a 210px+ side-by-side list/detail split, 312px sliders) and would
-   otherwise overflow a ~375-430px phone screen. */
+   otherwise overflow a ~375-430px phone screen.
+
+   BASELINE: this file ships in the same bundle as the DE1 tablet's WebView
+   (Chromium ~96 — see app.css's own container-query note). Everything here
+   is scoped to body[data-phone="true"] or to a .phone-* class, neither of
+   which the tablet DOM ever matches, so rules ABOVE section 10 may freely use
+   anything a phone browser supports (100dvh, env(safe-area-inset-*), already
+   in use below). Section 10 is the one exception: it targets classes the
+   TABLET also renders (.overlay-full, .pick-list, .slider-row, …), so it must
+   stay inside the Chromium-96 baseline — no :has(), no CSS nesting, no
+   color-mix(), no container queries — and every selector there must keep the
+   body[data-phone="true"] prefix, which is what makes it inert on the tablet.
+
+   SECTIONS (source order = override order; new rules go in the section they
+   belong to, not appended at the end):
+     1 Shell + safe areas      2 Tab bar            3 Primitives (page/card/list)
+     4 Recipes                 5 Machine            6 Diary
+     7 Settings                8 Live overlays
+     9 Material + press feedback (existing controls)
+    10 Overrides for reused tablet overlays  ← must stay last            */
+
+/* ═══ 1. Shell + safe areas ══════════════════════════════════════════════ */
 
 body[data-phone="true"] {
   overflow: hidden;
@@ -34,7 +55,12 @@ body[data-phone="true"] {
   -webkit-overflow-scrolling: touch;
 }
 
-/* ===== Bottom tab bar ===== */
+/* ═══ 2. Tab bar ══════════════════════════════════════════════════════════
+   Each tab carries its OWN --accent inline (see PhoneTabBar.vue), the same
+   trick RegisterRail.vue uses on the tablet rails — that's what makes the
+   bar read as four destinations instead of four copies of whichever page is
+   current. .phone-tab.active then just points `color` at that per-button
+   custom property. */
 .phone-tabs {
   flex: none;
   display: flex;
@@ -58,7 +84,9 @@ body[data-phone="true"] {
 .phone-tab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .phone-tab.active { color: var(--accent); }
 
-/* ===== Generic phone page/list chrome ===== */
+/* ═══ 3. Primitives: page / header / card / list ═══════════════════════════
+   Shared building blocks every tab's own section (4 onward) composes with —
+   nothing here is specific to one screen. */
 .phone-page { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 20px; }
 .phone-title { font-size: var(--fs-md); font-weight: 700; }
 
@@ -70,6 +98,10 @@ body[data-phone="true"] {
   background: var(--card-bg); border: none; color: var(--text);
 }
 .phone-back svg, .phone-icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Same on/off pair as .sort-btn.accent and .rbtn.accent (app.css) — the
+   header's own "add" action (e.g. Diary's new-recipe button) needs the same
+   accent emphasis those already use elsewhere in the skin. */
+.phone-icon-btn.accent { background: var(--accent); color: var(--on-accent); }
 
 .phone-filter-chip {
   align-self: flex-start;
@@ -113,32 +145,7 @@ body[data-phone="true"] {
 .phone-empty { text-align: center; color: var(--muted); font-size: var(--fs-sm); padding: 24px 0; }
 .phone-load-more { background: var(--card-bg); border: none; border-radius: var(--r-md); padding: 12px; color: var(--accent); font-weight: 600; }
 
-/* ===== Reused tablet overlays: reflow the hardcoded-width offenders =====
-   MachinePanel's settings sliders have a fixed 300-312px track that would
-   overflow a phone's width — shrink it. Nothing else in these panels is
-   touched. (ProfilePicker/ProfileEditor aren't reachable from mobile at
-   all — see SettingsTab.vue — so no override is needed for their layout.) */
-body[data-phone="true"] .machine-scroll .slider-row .hslider,
-body[data-phone="true"] .pe-limits .slider-row .hslider { width: 100%; }
-body[data-phone="true"] .overlay-full { padding: 14px 16px 16px; }
-
-/* ShotReview.vue reuses the tablet's shot-history screen verbatim (.ov-top/
-   .date-nav/.shot-metrics/.glabel from app.css) — .date-nav's 108px date +
-   two 40px buttons plus .ov-back and .ov-title don't fit a phone's width on
-   one line, and 5 metric columns are too cramped, so both reflow here. */
-body[data-phone="true"] .ov-top { flex-wrap: wrap; row-gap: 8px; }
-body[data-phone="true"] .ov-title { flex-basis: 100%; order: 1; text-align: left; }
-body[data-phone="true"] .date-nav .date { min-width: 76px; }
-body[data-phone="true"] .date-nav button { width: 32px; height: 32px; }
-body[data-phone="true"] .shot-metrics { grid-template-columns: repeat(3, 1fr); }
-/* Tablet centers the star rating (delete is pinned absolute-right so it
-   doesn't skew the centering); on a narrow phone that leaves an odd gap on
-   the left. Left-align the stars instead — delete stays pinned right, so the
-   two now sit at opposite screen edges. */
-body[data-phone="true"] .shot-done { justify-content: flex-start; }
-body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }
-
-/* ═══ Material (phone) ══════════════════════════════════════════════════════
+/* ═══ 9. Material (phone) ══════════════════════════════════════════════════
    The phone shell has its own surface classes, so app.css's material block
    can't reach them — same tokens, same rule: only things that sit on the page
    background are raised. .phone-sublist is transparent, so the shot rows
@@ -182,3 +189,34 @@ body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }
   transform: scale(0.985);
   filter: brightness(1.1);
 }
+
+/* ═══ 10. Overrides for reused tablet overlays ══════════════════════════════
+   Must stay LAST: these target classes app.css also renders on the tablet
+   (.overlay-full, .slider-row, .ov-top, …), so every selector here is
+   prefixed body[data-phone="true"] and stays on the Chromium-96 baseline (see
+   the file header) — that combination is what keeps them inert there.
+
+   MachinePanel's settings sliders have a fixed 300-312px track that would
+   overflow a phone's width — shrink it. Nothing else in these panels is
+   touched. ProfilePicker/ProfileEditor get their own overrides once the
+   phone can reach them (mobile parity plan, phase 4) — SettingsTab.vue does
+   not open them yet. */
+body[data-phone="true"] .machine-scroll .slider-row .hslider,
+body[data-phone="true"] .pe-limits .slider-row .hslider { width: 100%; }
+body[data-phone="true"] .overlay-full { padding: 14px 16px 16px; }
+
+/* ShotReview.vue reuses the tablet's shot-history screen verbatim (.ov-top/
+   .date-nav/.shot-metrics/.glabel from app.css) — .date-nav's 108px date +
+   two 40px buttons plus .ov-back and .ov-title don't fit a phone's width on
+   one line, and 5 metric columns are too cramped, so both reflow here. */
+body[data-phone="true"] .ov-top { flex-wrap: wrap; row-gap: 8px; }
+body[data-phone="true"] .ov-title { flex-basis: 100%; order: 1; text-align: left; }
+body[data-phone="true"] .date-nav .date { min-width: 76px; }
+body[data-phone="true"] .date-nav button { width: 32px; height: 32px; }
+body[data-phone="true"] .shot-metrics { grid-template-columns: repeat(3, 1fr); }
+/* Tablet centers the star rating (delete is pinned absolute-right so it
+   doesn't skew the centering); on a narrow phone that leaves an odd gap on
+   the left. Left-align the stars instead — delete stays pinned right, so the
+   two now sit at opposite screen edges. */
+body[data-phone="true"] .shot-done { justify-content: flex-start; }
+body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }

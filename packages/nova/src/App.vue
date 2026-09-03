@@ -1,10 +1,11 @@
 <script setup>
-import { watch } from 'vue';
+import { computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAccent } from './composables/useAccent.js';
 import { locked } from './composables/useScreensaver.js';
 import { phase as liveShotPhase } from './composables/useLiveShot.js';
 import { isPhone } from './composables/useLayout.js';
+import { phoneTab } from './composables/usePhoneNav.js';
 import RegisterRail from './components/RegisterRail.vue';
 import StatusIsland from './components/StatusIsland.vue';
 import PowerButton from './components/PowerButton.vue';
@@ -22,9 +23,20 @@ import FlushCountdown from './components/FlushCountdown.vue';
 import MobileShell from './components/mobile/MobileShell.vue';
 import ShotReview from './components/mobile/ShotReview.vue';
 
+const route = useRoute();
+
+// A phone tab has no router entry of its own (usePhoneNav.js), so it maps
+// onto whichever tablet tab shares its concern purely to borrow that tab's
+// colour — see PHONE_TABS in usePhoneNav.js for the mapping. Without this the
+// whole phone UI stayed on whatever `route.name` last was, which is always
+// 'espresso': the phone never navigates the router, so whichever tab loaded
+// first painted every phone screen in its colour for the rest of the session.
+const PHONE_TAB_ACCENT_SOURCE = { recipes: 'espresso', machine: 'cleaning', diary: 'diary', settings: 'settings' };
+const accentTabName = computed(() => (isPhone.value ? PHONE_TAB_ACCENT_SOURCE[phoneTab.value] : route.name));
+
 // Paints the whole document in the active tab's colour — see useAccent.js for
 // why the palette never left the rail before this.
-useAccent(useRoute());
+useAccent(accentTabName);
 
 // phone.css targets this to scope its rules without leaking into the tablet
 // stylesheet's class names.
@@ -35,9 +47,10 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
   <template v-if="isPhone">
     <MobileShell />
     <!-- Shares useLiveShot.js's `phase` state with the tablet's LiveShotOverlay
-         (DiaryTab/ShotsTab call openHistoryAt() the same way DiaryView.vue
-         does) — only ever renders the read+rate 'history' screen, never
-         'live', matching the browse-only companion scope. -->
+         (DiaryTab calls openHistoryAt() the same way DiaryView.vue does) —
+         only ever renders the read+rate 'history' screen, never 'live',
+         matching the browse-only companion scope (see the mobile parity plan
+         for when that changes). -->
     <ShotReview />
   </template>
 

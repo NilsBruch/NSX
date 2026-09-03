@@ -1,22 +1,22 @@
 <script setup>
 /**
- * Phone "Home" — a glance at machine state plus a wake/sleep toggle (the one
- * piece of live control the phone companion keeps — see SettingsView.vue's
- * machine tile for the same on/off pattern), and the most recent shot.
+ * Phone "Machine" — the DE1's own state and, eventually (see the mobile
+ * parity plan), the steam / hot water / rinse parameters the tablet spreads
+ * across three separate rails. For now this is just the status card that used
+ * to be phone Home's: connected state, water level, and the one piece of live
+ * control this shell keeps — sleep. Sleep is not a dispense action (it can't
+ * heat, pour or move water), which is why it stays available here while the
+ * phone otherwise never starts anything on the machine remotely.
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { machine } from '../../../composables/useCore.js';
-import { fullHistoryShots, ensureDiaryLoaded } from '../../../composables/useDiary.js';
 import { skinSettings } from '../../../composables/useSettings.js';
 import { formatWaterLevel } from '../../../utils/water.js';
 import { showToast } from '../../../composables/useToast.js';
-import { openHistoryAt } from '../../../composables/useLiveShot.js';
 
 const { t } = useI18n();
 const { NSXApi } = window;
-
-onMounted(ensureDiaryLoaded);
 
 const statusLabel = computed(() => {
   if (!machine.connected) return t('status.noMachine');
@@ -38,20 +38,11 @@ async function toggleMachine() {
     machineBusy.value = false;
   }
 }
-
-const lastShot = computed(() => fullHistoryShots.value[0] || null);
-const lastShotFacts = computed(() => (lastShot.value ? window.NSXCore.mapShotToWorkflow(lastShot.value) : null));
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`;
-}
 </script>
 
 <template>
   <section class="phone-page">
-    <h1 class="phone-title">{{ t('phone.home') }}</h1>
+    <h1 class="phone-title">{{ t('phone.machine') }}</h1>
 
     <div class="phone-card">
       <div class="phone-status-row">
@@ -67,15 +58,6 @@ function fmtDate(iso) {
         ></button>
       </div>
       <div v-if="machine.water.currentLevel != null" class="phone-status-sub">{{ t('machineSettings.waterTank') }}: {{ waterLabel }}</div>
-    </div>
-
-    <div class="phone-card" v-if="lastShotFacts">
-      <div class="phone-card-title">{{ t('diary.shots') }}</div>
-      <button class="phone-list-item" @click="openHistoryAt([lastShot], lastShot)">
-        <span class="fact"><b>{{ fmtDate(lastShot.timestamp) }}</b></span>
-        <span class="fact">{{ lastShotFacts.coffeeRoaster }} — {{ lastShotFacts.coffeeName }}</span>
-        <span class="fact">{{ lastShotFacts.profileTitle }}</span>
-      </button>
     </div>
   </section>
 </template>

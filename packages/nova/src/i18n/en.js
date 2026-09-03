@@ -49,8 +49,9 @@ export default {
     settings: 'Settings',
   },
   phone: {
-    home: 'Home',
-    shots: 'Shots',
+    recipes: 'Recipes',
+    machine: 'Machine',
+    recipeLoaded: '{name} loaded',
   },
   status: {
     ready: 'Ready',
