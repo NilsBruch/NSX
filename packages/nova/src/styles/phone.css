@@ -145,6 +145,38 @@ body[data-phone="true"] {
 .phone-empty { text-align: center; color: var(--muted); font-size: var(--fs-sm); padding: 24px 0; }
 .phone-load-more { background: var(--card-bg); border: none; border-radius: var(--r-md); padding: 12px; color: var(--accent); font-weight: 600; }
 
+/* ═══ 4. Recipes (+ RecipeDetail) ═══════════════════════════════════════════
+   A row that needs a SEPARATE pencil action (RecipesTab) can't be one plain
+   button — a <button> can't contain a <button> — so .phone-list-row there is
+   the outer container (unchanged, still gets its background/radius/shadow
+   from section 3/9) and splits into .phone-row-main (the press-and-hold
+   target, sized to fill the row) plus .phone-row-edit (the pencil), the same
+   two-button split the tablet's .row-main/.row-edit give a bean/profile row.
+   Rows that only need a single tap (every other .phone-list-row in the app)
+   are untouched — they stay a bare <button class="phone-list-row">. */
+.phone-row-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  background: none; border: none; color: inherit; font: inherit; text-align: left; padding: 0;
+}
+.phone-row-edit {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: var(--r-sm);
+  background: none; border: none; color: var(--muted);
+}
+.phone-row-edit svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* RecipeDetail's value rows: label left (.rmeta, already flex:1 from section
+   3), current value + chevron right — the settings-row idiom (.sr-value/
+   .sr-chev in app.css), rebuilt here because that pair is sized for the
+   tablet's wider settings rows. */
+.phone-row-value { flex: none; display: flex; align-items: center; gap: 2px; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+.phone-row-value .chev { font-size: var(--fs-md); }
+
+.phone-badge { flex: none; background: var(--accent); color: var(--on-accent); border-radius: var(--r-pill); padding: 3px 10px; font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.phone-detail-footer { display: flex; gap: 10px; padding-top: 4px; }
+.phone-detail-footer .btn { flex: 1; height: 52px; justify-content: center; white-space: nowrap; }
+
 /* ═══ 9. Material (phone) ══════════════════════════════════════════════════
    The phone shell has its own surface classes, so app.css's material block
    can't reach them — same tokens, same rule: only things that sit on the page
@@ -164,6 +196,10 @@ body[data-phone="true"] {
 /* ═══ Press feedback (phone) ════════════════════════════════════════════════
    The phone shell has its own control classes, so app.css's press block can't
    reach them — same two groups, same values. */
+/* .phone-row-edit is deliberately NOT here, matching the tablet's own
+   .row-edit (app.css): it sits inside a .phone-list-row that already gets
+   :active feedback below, and adding a second transform on the nested button
+   would compound with the row's own scale instead of reading as one press. */
 .phone-back,
 .phone-icon-btn,
 .phone-filter-chip,

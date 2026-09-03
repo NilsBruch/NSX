@@ -52,6 +52,7 @@ export default {
     recipes: 'Recipes',
     machine: 'Machine',
     recipeLoaded: '{name} loaded',
+    loaded: 'Loaded',
   },
   status: {
     ready: 'Ready',

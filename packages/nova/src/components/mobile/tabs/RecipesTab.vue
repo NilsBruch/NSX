@@ -9,16 +9,16 @@
  * Tap loads the recipe onto the machine immediately (selectRecipe) — the
  * phone's decision that a recipe row IS the load action, not a preview of
  * one. Press-and-hold offers Load / Pin / Delete, same as the tablet's
- * openGroupMenu. Editing a recipe's own values (dose/grind/yield/temp/bean/
- * profile) is a later phase's pencil-button screen; this tab is read-and-load
- * only.
+ * openGroupMenu. The pencil button opens RecipeDetail.vue, which can edit
+ * dose/grind/yield/temp/grinder/rating (and roast date/bean once this entry
+ * IS the loaded one) without loading it first.
  *
  * MobileShell.vue keeps diaryState.view in sync with the active phone tab
  * (this tab wants 'recipes', so recipeRows/cycleSort resolve against the
  * RIGHT vocabulary) — see the comment there for why that lives at the shell
  * level rather than here.
  */
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   diaryState, recipeRows, ensureDiaryLoaded, cycleSort,
@@ -28,6 +28,8 @@ import { recipeIdentityParts } from '../../../composables/useCore.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
 import { showToast } from '../../../composables/useToast.js';
+import RecipeDetail from '../RecipeDetail.vue';
+import RecipePicker from '../../RecipePicker.vue';
 import StarRating from '../../StarRating.vue';
 
 const { t } = useI18n();
@@ -36,6 +38,13 @@ const { t } = useI18n();
 // activations reuse the same module-level `recipes`/`shots` state (see
 // useDiary.js/useCore.js), same pattern as DiaryTab.
 onMounted(ensureDiaryLoaded);
+
+const detailEntry = ref(null);
+function openDetail(row) { detailEntry.value = row.recipe; }
+
+// Same entry point the tablet's Diary "+" opens (RecipePicker) — no preset
+// bean/roaster here, since this tab isn't browsing inside either.
+const showRecipeCreator = ref(false);
 
 const sortLabel = computed(() => t(`diary.sort${diaryState.sort[0].toUpperCase()}${diaryState.sort.slice(1)}`));
 
@@ -99,6 +108,9 @@ const press = useLongPress({ tap: loadRow, hold: openRowMenu });
       <button class="phone-icon-btn" :aria-label="t('diary.search')" @click="openSearch">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
       </button>
+      <button class="phone-icon-btn accent" :aria-label="t('diary.addRecipe')" @click="showRecipeCreator = true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+      </button>
     </div>
 
     <button v-if="diaryState.query" class="phone-filter-chip" @click="diaryState.query = ''">
@@ -106,27 +118,33 @@ const press = useLongPress({ tap: loadRow, hold: openRowMenu });
     </button>
 
     <div class="phone-list">
-      <button
-        v-for="row in recipeRows"
-        :key="row.recipe.id"
-        class="phone-list-row"
-        @pointerdown="press.down($event, row)"
-        @pointermove="press.move"
-        @pointerup="press.up(row)"
-        @pointercancel="press.cancel"
-        @pointerleave="press.cancel"
-      >
-        <span class="rmeta">
-          <span class="recipe-row-id">
-            <template v-for="(part, i) in recipeIdentityParts(row.recipe)" :key="i">
-              <span v-if="i > 0" class="dot">•</span>{{ part }}
-            </template>
+      <div v-for="row in recipeRows" :key="row.recipe.id" class="phone-list-row">
+        <button
+          class="phone-row-main"
+          @pointerdown="press.down($event, row)"
+          @pointermove="press.move"
+          @pointerup="press.up(row)"
+          @pointercancel="press.cancel"
+          @pointerleave="press.cancel"
+        >
+          <span class="rmeta">
+            <span class="recipe-row-id">
+              <template v-for="(part, i) in recipeIdentityParts(row.recipe)" :key="i">
+                <span v-if="i > 0" class="dot">•</span>{{ part }}
+              </template>
+            </span>
+            <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
           </span>
-          <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
-        </span>
-        <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="15" />
-      </button>
+          <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="15" />
+        </button>
+        <button class="phone-row-edit" :aria-label="t('common.edit')" @click="openDetail(row)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+        </button>
+      </div>
       <div v-if="!recipeRows.length" class="phone-empty">{{ t('diary.noRecipesYet') }}</div>
     </div>
+
+    <RecipeDetail v-if="detailEntry" :entry="detailEntry" @close="detailEntry = null" />
+    <RecipePicker v-if="showRecipeCreator" @back="showRecipeCreator = false" @created="showRecipeCreator = false" />
   </section>
 </template>

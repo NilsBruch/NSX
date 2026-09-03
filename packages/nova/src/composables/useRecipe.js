@@ -783,6 +783,32 @@ export function beanForRecipe(entry) {
 }
 
 /**
+ * Merge `patch` into the library entry `id`, persist it (saveRecipes' 3-way
+ * merge), and mirror the change onto `recipe` if that entry happens to be the
+ * one currently loaded — so a screen editing an ARBITRARY library entry (the
+ * phone's recipe detail screen, which can open any recipe, not just the
+ * loaded one) never has to ask which case it's in.
+ *
+ * Deliberately narrow: only for the fields that are plain persisted state
+ * with no side effect beyond themselves (dose/grind/yield/temp/stopAtWeight/
+ * rating/grinder/pinned). Roast date and bean are NOT safe to route through
+ * this — they resolve a real batch record via ensureRecipeBatch, which only
+ * runs inside pushRecipe on the LOADED recipe, and selectRecipe ignores a raw
+ * `entry.roastDate` entirely (it re-derives the date from beanBatchId on
+ * load) — a patch here would look like it worked and then silently vanish
+ * the next time this recipe is loaded. Those two stay behind the existing
+ * setRoastDate/setRecipeBean, loaded-recipe-only.
+ */
+export async function patchRecipeEntry(id, patch) {
+  const idx = recipes.value.findIndex((r) => r.id === id);
+  if (idx < 0) return;
+  recipes.value = await NSXCore.saveRecipes(
+    recipes.value.map((r, i) => (i === idx ? { ...r, ...patch } : r))
+  );
+  if (recipe.id === id) Object.assign(recipe, patch);
+}
+
+/**
  * Pin/unpin a saved recipe. Pinned recipes sort to the top of the Coffee page's
  * recipe browser (RecipeOverlay), ahead of last-used and rating — "one I keep
  * coming back to", stated by hand rather than inferred from history.
@@ -795,10 +821,7 @@ export function beanForRecipe(entry) {
 export async function togglePinRecipe(entry) {
   if (!entry?.id) return false;
   const pinned = !entry.pinned;
-  recipes.value = await NSXCore.saveRecipes(
-    recipes.value.map((r) => (r.id === entry.id ? { ...r, pinned } : r))
-  );
-  if (recipe.id === entry.id) recipe.pinned = pinned;
+  await patchRecipeEntry(entry.id, { pinned });
   return pinned;
 }
 
