@@ -220,6 +220,7 @@ export default {
     presets: 'Presets',
     holdToSave: 'Hold to save',
     timer: 'Timer',
+    duration: 'Duration',
     enabled: 'Steam enabled',
   },
   hotwater: {

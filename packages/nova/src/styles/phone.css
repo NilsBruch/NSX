@@ -218,6 +218,20 @@ body[data-phone="true"] {
    practice that this only ever has to bite on the roaster. */
 .phone-identity-stack > :first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ═══ 5. Machine (steam / hot water / rinse) ════════════════════════════════
+   MachineTab.vue's preset row: three tap-or-hold buttons on one line, sized
+   for a thumb rather than the tablet's tall .preset-stack (that shape exists
+   because the tablet has vertical dial space to spare; this page is plain
+   settings rows, and a 3-up row fits that). Sits as the trailing control of
+   an ordinary .setting-row, next to .sr-main's name+hint pair — no card of
+   its own, matching every other row on this page. */
+.phone-preset-row { display: flex; gap: 8px; flex: none; }
+.phone-preset {
+  width: 44px; height: 44px; border-radius: var(--r-md); border: none;
+  background: var(--card-hi); color: var(--text); font-family: inherit; font-size: var(--fs-base); font-weight: 700;
+}
+.phone-preset.selected { background: var(--accent); color: var(--on-accent); }
+
 /* ═══ 9. Material (phone) ══════════════════════════════════════════════════
    The phone shell has its own surface classes, so app.css's material block
    can't reach them — same tokens, same rule: only things that sit on the page
