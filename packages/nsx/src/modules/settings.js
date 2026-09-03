@@ -91,11 +91,6 @@
     if (!r.ok) throw new Error(`${r.status} ${path}`);
     return r.json().catch(() => null);
   }
-  async function del(path) {
-    const r = await fetch(`${API}${path}`, { method: 'DELETE' });
-    if (!r.ok) throw new Error(`${r.status} ${path}`);
-    return r.json().catch(() => null);
-  }
 
   // ── Cached settings data ──────────────────────────────────────────────────────
   let _rea = null, _de1 = null, _de1Adv = null, _workflow = null;
@@ -382,7 +377,7 @@
           items.forEach(d => {
             const connectBtn = d.connected
               ? btn('Disconnect', 'stg-btn-danger stg-btn-sm', safe(async () => {
-                  await del(`/devices/${encodeURIComponent(d.id)}`);
+                  await put(`/devices/disconnect?deviceId=${encodeURIComponent(d.id)}`, {});
                   selectCategory('connections');
                 }))
               : btn('Connect', 'stg-btn-primary stg-btn-sm', safe(async () => {
