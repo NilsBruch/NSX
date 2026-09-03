@@ -268,9 +268,14 @@ watch(
            the .ov-back <button> became the header's first button). -->
       <div class="diary-head-actions">
         <!-- Archived is a bean concept, so the toggle only applies while browsing
-             roasters/beans (not the flat shot history or a bean's shot list). -->
+             roasters/beans (not the flat shot history or a bean's shot list).
+             The glyph is a box with a horizontal handle — an archive box, not
+             a trash can (two vertical shred-lines) — a distinction that only
+             matters once the phone shows this icon with no label next to it
+             (DiaryTab.vue): here the text carries the meaning regardless, but
+             the two components share one icon rather than drifting. -->
         <button v-if="diaryState.view === 'browse' && diaryState.level < 2" class="sort-btn" :class="{ accent: diaryState.showArchived }" @click="toggleArchived">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M5 5v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5M9 9v8M15 9v8" /></svg>{{ diaryState.showArchived ? t('diary.hideArchived') : t('diary.showAll') }}
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v4H3z" /><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>{{ diaryState.showArchived ? t('diary.hideArchived') : t('diary.showAll') }}
         </button>
         <!-- Deleting a recipe is behind an explicit mode, like the profile
              library's: these rows are tapped constantly to expand/load, so a

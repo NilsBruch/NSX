@@ -170,8 +170,11 @@ async function onRecipeCreated() {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       </button>
       <span class="phone-crumb">{{ crumb }}</span>
+      <!-- Same archive-box glyph as DiaryView.vue's toggle (see its comment) —
+           it matters more here: with no room in the header for the tablet's
+           text label, an icon-only trash can would have read as "delete". -->
       <button v-if="diaryState.view === 'browse' && diaryState.level < 2" class="sort-btn icon-only" :class="{ accent: diaryState.showArchived }" :aria-label="diaryState.showArchived ? t('diary.hideArchived') : t('diary.showAll')" @click="toggleArchived">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M5 5v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5M9 9v8M15 9v8" /></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v4H3z" /><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>
       </button>
       <button class="sort-btn icon-only" :aria-label="sortLabel" @click="cycleSort">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>

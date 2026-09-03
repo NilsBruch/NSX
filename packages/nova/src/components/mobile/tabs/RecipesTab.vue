@@ -118,7 +118,7 @@ const press = useLongPress({ tap: loadRow, hold: openRowMenu });
     </button>
 
     <div class="phone-list">
-      <div v-for="row in recipeRows" :key="row.recipe.id" class="phone-list-row">
+      <div v-for="row in recipeRows" :key="row.recipe.id" class="phone-list-row phone-list-row-split">
         <button
           class="phone-row-main"
           @pointerdown="press.down($event, row)"

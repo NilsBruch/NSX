@@ -182,6 +182,14 @@ body[data-phone="true"] {
   width: 44px; height: 44px; border-radius: var(--r-sm);
   background: none; border: none; color: var(--muted);
 }
+/* RecipesTab's rows are the one .phone-list-row that splits into
+   .phone-row-main + .phone-row-edit — and now that the identity stack can
+   run to four lines, .phone-list-row's own align-items: center (the right
+   default for every single-line row elsewhere) left the pencil floating at
+   the middle of a tall card instead of level with the first line, the way
+   the star badge already sits (.phone-row-main itself is flex-start — see
+   above). This mirrors that at the row level. */
+.phone-list-row-split { align-items: flex-start; }
 .phone-row-edit svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* RecipeDetail's value rows: label left (.rmeta, already flex:1 from section
