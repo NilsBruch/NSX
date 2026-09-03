@@ -125,7 +125,12 @@ body[data-phone="true"] {
   background: var(--card-bg); border: none; border-radius: var(--r-md);
   padding: 12px 14px; text-align: left; color: var(--text);
 }
-.phone-list-row .rmeta { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-base); font-weight: 600; }
+/* min-width: 0 overrides a flex item's default min-width:auto (= its
+   content's intrinsic width) — without it, .rmeta refuses to shrink past its
+   longest unbroken run of text and the roaster-line ellipsis below (which
+   needs .rmeta to actually be narrower than that text) never gets the
+   chance to fire. */
+.phone-list-row .rmeta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-base); font-weight: 600; }
 /* .phone-identity-stack included: RecipeDetail's header carries this class
    directly under .phone-head, not under a .phone-list-row, so the sub-lines
    there need the same rule reachable from a second ancestor. */
@@ -206,6 +211,12 @@ body[data-phone="true"] {
    .phone-crumb 700 it would otherwise pick up in the header. */
 .phone-identity-stack { display: flex; flex-direction: column; gap: 1px; }
 .phone-identity-line { font-size: var(--fs-md); font-weight: 700; }
+/* The roaster name — always the FIRST span, in both contexts — stays on one
+   line and ellipsises rather than wrapping. Bean/grinder/profile below it
+   still wrap normally: a long roaster wrapping pushed the rest of the card
+   down and read as broken, but the bean/profile lines are short enough in
+   practice that this only ever has to bite on the roaster. */
+.phone-identity-stack > :first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ═══ 9. Material (phone) ══════════════════════════════════════════════════
    The phone shell has its own surface classes, so app.css's material block
