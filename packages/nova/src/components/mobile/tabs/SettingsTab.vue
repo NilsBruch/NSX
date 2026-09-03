@@ -3,15 +3,27 @@
  * Phone "Settings" — same tile set and same panel components as
  * SettingsView.vue (which are already `position:fixed inset:0` full-screen
  * overlays, see app.css), just triggered from a single-column tile list
- * instead of the tablet's two columns of widget cards.
+ * instead of the tablet's two columns of widget cards. The widgets above the
+ * tile list are SettingsView's own left column, in the same order, minus
+ * MachineWidget — its whole content (state word + sleep switch) is already
+ * the first thing MachineTab.vue shows, and a second copy of the same
+ * switch here would just be the same control twice.
+ * All four widgets are already `.swidget`-shaped, the same card EnergyWidget
+ * below has always used on this page — no phone-specific width fix was
+ * needed for any of them (unlike the settings PANELS, which do carry a few
+ * hardcoded tablet widths — see phone.css section 10).
  */
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { displaySupport } from '../../../composables/useSettings.js';
 import ProfilePicker from '../../ProfilePicker.vue';
 import GrinderPanel from '../../settings/GrinderPanel.vue';
 import MachinePanel from '../../settings/MachinePanel.vue';
 import SkinPanel from '../../settings/SkinPanel.vue';
 import AppPanel from '../../settings/AppPanel.vue';
+import UpdateWidget from '../../settings/UpdateWidget.vue';
+import DisplayWidget from '../../settings/DisplayWidget.vue';
+import ConnectionWidget from '../../settings/ConnectionWidget.vue';
 import EnergyWidget from '../../settings/EnergyWidget.vue';
 
 const { t } = useI18n();
@@ -33,6 +45,12 @@ const active = ref(null);
   <section class="phone-page">
     <h1 class="phone-title">{{ t('tab.settings') }}</h1>
 
+    <UpdateWidget />
+    <!-- Nothing to drive where the host has no backlight control (core's
+         display domain, from GET /api/v1/display's platformSupported) —
+         same guard SettingsView.vue uses. -->
+    <DisplayWidget v-if="displaySupport.brightness" />
+    <ConnectionWidget />
     <!-- The Schedule tile is gone with SchedulePanel; the same Energy card the
          tablet grew carries the weekly plan here, so it stays reachable from
          the phone rather than becoming tablet-only. It is a single column of
