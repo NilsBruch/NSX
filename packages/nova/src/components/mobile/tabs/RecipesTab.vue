@@ -95,6 +95,14 @@ function recipeFacts(r) {
   ].join(' · ');
 }
 
+// recipeIdentityParts is [roaster, bean, (grinder), profile] — one dot-joined
+// line of that ran out of room at phone width and ellipsised whichever part
+// came last (usually the profile, the one thing that tells two rows for the
+// same bean apart). Split into two grouped lines instead: the coffee, then
+// how it's brewed.
+function identityLine1(r) { return recipeIdentityParts(r).slice(0, 2).join(' • '); }
+function identityLine2(r) { return recipeIdentityParts(r).slice(2).join(' • '); }
+
 const press = useLongPress({ tap: loadRow, hold: openRowMenu });
 </script>
 
@@ -128,10 +136,9 @@ const press = useLongPress({ tap: loadRow, hold: openRowMenu });
           @pointerleave="press.cancel"
         >
           <span class="rmeta">
-            <span class="recipe-row-id">
-              <template v-for="(part, i) in recipeIdentityParts(row.recipe)" :key="i">
-                <span v-if="i > 0" class="dot">•</span>{{ part }}
-              </template>
+            <span class="phone-identity-2line">
+              <span class="line1">{{ identityLine1(row.recipe) }}</span>
+              <span v-if="identityLine2(row.recipe)" class="rsub">{{ identityLine2(row.recipe) }}</span>
             </span>
             <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
           </span>

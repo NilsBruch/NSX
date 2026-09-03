@@ -159,10 +159,13 @@ async function removeThis() {
       <button class="phone-back" @click="emit('close')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       </button>
-      <span class="phone-crumb recipe-row-id">
-        <template v-for="(part, i) in titleParts" :key="i">
-          <span v-if="i > 0" class="dot">•</span>{{ part }}
-        </template>
+      <!-- Stacked, not dot-joined on one line: a 4-part identity (roaster /
+           bean / grinder / profile) ran out of room on a phone-width header
+           and ellipsised the very part — the profile — that tells two rows
+           for the same bean apart. Full room here, so each part gets its own
+           line instead. -->
+      <span class="phone-crumb phone-identity-stack">
+        <span v-for="(part, i) in titleParts" :key="i" :class="i === 0 ? 'phone-identity-line' : 'rsub'">{{ part }}</span>
       </span>
       <span v-if="isLoaded" class="phone-badge">{{ t('phone.loaded') }}</span>
     </div>

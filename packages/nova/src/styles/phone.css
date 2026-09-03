@@ -177,6 +177,22 @@ body[data-phone="true"] {
 .phone-detail-footer { display: flex; gap: 10px; padding-top: 4px; }
 .phone-detail-footer .btn { flex: 1; height: 52px; justify-content: center; white-space: nowrap; }
 
+/* A recipe's identity (roaster/bean/[grinder]/profile) dot-joined on one
+   NOWRAP line — .recipe-row-id's tablet behaviour — ellipsised on a phone
+   row before reaching the part that actually distinguishes two rows for the
+   same bean (usually the profile). Two phone-only layouts instead, both
+   wrapping normally rather than truncating:
+     .phone-identity-stack   — RecipeDetail's header: every part its own
+                                line, full width to work with.
+     .phone-identity-2line   — RecipesTab's rows: grouped in two, the coffee
+                                (roaster + bean) then how it's brewed
+                                ([grinder +] profile) — see identityLine1/2
+                                in RecipesTab.vue. */
+.phone-identity-stack { display: flex; flex-direction: column; gap: 1px; font-weight: 400; }
+.phone-identity-line { font-size: var(--fs-md); font-weight: 700; }
+.phone-identity-2line { display: flex; flex-direction: column; gap: 1px; }
+.phone-identity-2line .line1 { white-space: normal; overflow-wrap: break-word; }
+
 /* ═══ 9. Material (phone) ══════════════════════════════════════════════════
    The phone shell has its own surface classes, so app.css's material block
    can't reach them — same tokens, same rule: only things that sit on the page
