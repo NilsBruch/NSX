@@ -126,7 +126,11 @@ body[data-phone="true"] {
   padding: 12px 14px; text-align: left; color: var(--text);
 }
 .phone-list-row .rmeta { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-base); font-weight: 600; }
-.phone-list-row .rsub { font-size: var(--fs-xs); color: var(--muted); font-weight: 400; }
+/* .phone-identity-stack included: RecipeDetail's header carries this class
+   directly under .phone-head, not under a .phone-list-row, so the sub-lines
+   there need the same rule reachable from a second ancestor. */
+.phone-list-row .rsub,
+.phone-identity-stack .rsub { font-size: var(--fs-xs); color: var(--muted); font-weight: 400; }
 .phone-list-row .chev { color: var(--muted); font-size: var(--fs-lg); }
 .phone-list-row .chev.open { transform: rotate(90deg); }
 .phone-tile-icon svg { width: 22px; height: 22px; stroke: var(--accent); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -177,21 +181,24 @@ body[data-phone="true"] {
 .phone-detail-footer { display: flex; gap: 10px; padding-top: 4px; }
 .phone-detail-footer .btn { flex: 1; height: 52px; justify-content: center; white-space: nowrap; }
 
-/* A recipe's identity (roaster/bean/[grinder]/profile) dot-joined on one
+/* A recipe's identity (roaster, bean, [grinder,] profile) dot-joined on one
    NOWRAP line — .recipe-row-id's tablet behaviour — ellipsised on a phone
    row before reaching the part that actually distinguishes two rows for the
-   same bean (usually the profile). Two phone-only layouts instead, both
-   wrapping normally rather than truncating:
-     .phone-identity-stack   — RecipeDetail's header: every part its own
-                                line, full width to work with.
-     .phone-identity-2line   — RecipesTab's rows: grouped in two, the coffee
-                                (roaster + bean) then how it's brewed
-                                ([grinder +] profile) — see identityLine1/2
-                                in RecipesTab.vue. */
-.phone-identity-stack { display: flex; flex-direction: column; gap: 1px; font-weight: 400; }
+   same bean (usually the profile). Stacked instead, one part per line, in
+   both RecipeDetail's header and RecipesTab's rows. The header wraps the
+   first part in .phone-identity-line for a bigger, title-weight opener; in a
+   list row that would read as too heavy against the rest of the row, so
+   there the first part is left with no extra class and just inherits its
+   size/weight from .rmeta, same as every other list row's main line. */
+/* No font-weight of its own: RecipesTab's plain first line (no override
+   class) has to inherit .rmeta's 600 for the row, and setting a weight HERE
+   would win over that inheritance before it ever reaches the span. The
+   header's first line gets its own explicit weight via .phone-identity-line
+   below instead, and every other span in both contexts is .rsub, which sets
+   its own weight explicitly too — nothing here is ever left inheriting the
+   .phone-crumb 700 it would otherwise pick up in the header. */
+.phone-identity-stack { display: flex; flex-direction: column; gap: 1px; }
 .phone-identity-line { font-size: var(--fs-md); font-weight: 700; }
-.phone-identity-2line { display: flex; flex-direction: column; gap: 1px; }
-.phone-identity-2line .line1 { white-space: normal; overflow-wrap: break-word; }
 
 /* ═══ 9. Material (phone) ══════════════════════════════════════════════════
    The phone shell has its own surface classes, so app.css's material block
