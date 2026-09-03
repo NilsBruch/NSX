@@ -20,6 +20,7 @@ import { openTextField, openNumberPad, openConfirm } from '../../composables/use
 import { frameName } from '../../composables/useProfileDisplay.js';
 import { showToast } from '../../composables/useToast.js';
 import { skinSettings } from '../../composables/useSettings.js';
+import { isPhone } from '../../composables/useLayout.js';
 import SettingSlider from './SettingSlider.vue';
 
 const props = defineProps({
@@ -74,7 +75,22 @@ function setBeverageType(ty) { draft.beverageType = ty; }
 const selectedFrameIdx = ref(0);
 const selectedFrame = computed(() => draft.frames[selectedFrameIdx.value] ?? null);
 
-function selectFrame(idx) { selectedFrameIdx.value = idx; }
+// Phone-only: which pane of the Steps tab is showing. Unlike ProfilePicker,
+// there's no "nothing selected" state to key off here — a profile always has
+// at least one frame, so selectedFrameIdx is never null. This ref is the
+// substitute: false = the step list (+ its add/duplicate/move/delete row +
+// the whole-profile plot), true = the selected step's own editable groups.
+// Both panes always show on the tablet regardless (see showStepList/
+// showStepDetail below) — isPhone gates every write to this ref, so it can
+// never even become true there.
+const phoneShowingStepDetail = ref(false);
+const showStepList = computed(() => !isPhone.value || !phoneShowingStepDetail.value);
+const showStepDetail = computed(() => !isPhone.value || phoneShowingStepDetail.value);
+
+function selectFrame(idx) {
+  selectedFrameIdx.value = idx;
+  if (isPhone.value) phoneShowingStepDetail.value = true;
+}
 
 function plotSvg() {
   return NSXCore.renderProfileSpark({ title: draft.title, steps: draft.frames }, {
@@ -90,12 +106,14 @@ function plotSvg() {
 function addFrame() {
   draft.frames.push(NSXCore.makeDefaultFrame(draft.frames[draft.frames.length - 1] ?? null));
   selectedFrameIdx.value = draft.frames.length - 1;
+  if (isPhone.value) phoneShowingStepDetail.value = true;
 }
 function duplicateFrame() {
   if (!selectedFrame.value) return;
   const copy = JSON.parse(JSON.stringify(selectedFrame.value));
   draft.frames.splice(selectedFrameIdx.value + 1, 0, copy);
   selectedFrameIdx.value += 1;
+  if (isPhone.value) phoneShowingStepDetail.value = true;
 }
 function moveFrame(delta) {
   const i = selectedFrameIdx.value;
@@ -258,7 +276,7 @@ function save() {
     </div>
 
     <div v-if="activeTab === 'steps'" class="pick-body pe-body">
-      <div class="pick-list">
+      <div class="pick-list" v-show="showStepList">
         <div class="pick-items">
           <button
             v-for="(f, i) in draft.frames"
@@ -294,7 +312,35 @@ function save() {
         <div class="pick-plot" v-html="plotSvg()"></div>
       </div>
 
-      <div v-if="selectedFrame" class="pick-detail pe-detail">
+      <div v-if="selectedFrame" class="pick-detail pe-detail" v-show="showStepDetail">
+        <!-- Phone only: the tablet always shows the step list beside this, so
+             it never needs a way back to it. The actions row is repeated here
+             too — on the tablet it lives once, in .pick-list, but on the
+             phone that pane is hidden while a step's detail is open, and
+             duplicate/reorder/delete act on THIS step, not on whichever the
+             list happens to be scrolled to. -->
+        <div v-if="isPhone" class="pe-phone-detail-head">
+          <button class="phone-back" @click="phoneShowingStepDetail = false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <div class="pe-frame-actions">
+            <button :aria-label="t('profileEditor.add')" :title="t('profileEditor.add')" @click="addFrame">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            </button>
+            <button :aria-label="t('profileEditor.duplicate')" :title="t('profileEditor.duplicate')" :disabled="!selectedFrame" @click="duplicateFrame">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+            </button>
+            <button :aria-label="t('profileEditor.moveUp')" :title="t('profileEditor.moveUp')" :disabled="selectedFrameIdx === 0" @click="moveFrame(-1)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+            </button>
+            <button :aria-label="t('profileEditor.moveDown')" :title="t('profileEditor.moveDown')" :disabled="selectedFrameIdx >= draft.frames.length - 1" @click="moveFrame(1)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7" /></svg>
+            </button>
+            <button class="danger" :aria-label="t('common.delete')" :title="t('common.delete')" :disabled="draft.frames.length <= 1" @click="deleteFrame">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13" /></svg>
+            </button>
+          </div>
+        </div>
         <button class="pe-step-title" @click="editStepName">
           {{ selectedFrame.name || t('profileEditor.stepName') }}<span class="sr-chev">›</span>
         </button>

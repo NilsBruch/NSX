@@ -13,6 +13,7 @@ import { profiles, profilesAll, refreshProfiles, refreshProfilesAll } from '../c
 import { frames, frameDetailText, frameName } from '../composables/useProfileDisplay.js';
 import { openConfirm, openChooser } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
+import { isPhone } from '../composables/useLayout.js';
 import ProfileEditor from './settings/ProfileEditor.vue';
 
 const props = defineProps({
@@ -50,6 +51,27 @@ const selectedId = ref(
   profiles.value.find((p) => (p.profile?.title || '') === props.currentTitle)?.id ?? null
 );
 const selected = computed(() => sourceList.value.find((p) => p.id === selectedId.value) ?? null);
+
+// The tablet shows list and detail side by side (.pick-body); a phone screen
+// has room for exactly one. Rather than a phone-only fork of this 468-line
+// component (frame math, four save branches, hidden/visibility handling —
+// all of it would have to be duplicated and would drift the first time the
+// tablet version changed), this is the one boolean that turns the same
+// markup into "list → tap → detail → back". Resolves true on the tablet
+// (isPhone false) regardless of selection, so the list pane there is never
+// hidden — the v-show below only actually does anything on the phone. The
+// detail pane needs no equivalent flag: it's already `v-if="selected"`,
+// which is exactly the phone's other state (selectedId set = show detail).
+const showList = computed(() => !isPhone.value || selectedId.value == null);
+// The header's own Back normally leaves the picker entirely (emit('back')).
+// On the phone, while a detail is open, it should step back to the list
+// first — the same one-level-at-a-time back every other drill-down screen in
+// this skin uses (DiaryTab's goBack, RecipeDetail's close). Only once the
+// list itself is what's showing does it fall through to actually leaving.
+function onBackTap() {
+  if (isPhone.value && selectedId.value != null) selectedId.value = null;
+  else emit('back');
+}
 
 // Which group is on screen — always opens on Decent's factory profiles,
 // regardless of which group the current profile lives in.
@@ -323,7 +345,7 @@ async function onEditorSaved({ profile: built, originalProfile }) {
 <template>
   <div class="overlay-full">
     <div class="ov-top">
-      <button class="ov-back" @click="emit('back')">
+      <button class="ov-back" @click="onBackTap">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('common.back') }}
       </button>
       <!-- `selected` is passed to the slot so a wizard's progress trail can fill
@@ -347,7 +369,7 @@ async function onEditorSaved({ profile: built, originalProfile }) {
     </div>
 
     <div class="pick-body">
-      <div class="pick-list">
+      <div class="pick-list" v-show="showList">
         <div v-if="pickingSource" class="picking-banner">
           <span>{{ t('profilePicker.pickingSourceHint') }}</span>
           <button class="btn" @click="pickingSource = false">{{ t('common.cancel') }}</button>

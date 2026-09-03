@@ -275,12 +275,64 @@ body[data-phone="true"] {
 
    MachinePanel's settings sliders have a fixed 300-312px track that would
    overflow a phone's width — shrink it. Nothing else in these panels is
-   touched. ProfilePicker/ProfileEditor get their own overrides once the
-   phone can reach them (mobile parity plan, phase 4) — SettingsTab.vue does
-   not open them yet. */
+   touched. */
 body[data-phone="true"] .machine-scroll .slider-row .hslider,
 body[data-phone="true"] .pe-limits .slider-row .hslider { width: 100%; }
 body[data-phone="true"] .overlay-full { padding: 14px 16px 16px; }
+
+/* ProfilePicker.vue / ProfileEditor.vue — both a list pane next to a detail
+   pane (.pick-body > .pick-list + .pick-detail), which the component itself
+   collapses into "list → tap → detail → back" on the phone via v-show
+   (ProfilePicker's showList; ProfileEditor's showStepList/showStepDetail —
+   see their own comments for why each needed a different condition). What's
+   left here is purely geometry: whichever pane the component just made the
+   ONLY visible one still carries its tablet-percentage width, and needs to
+   actually fill the space the other pane gave up.
+   .pick-detail needs no such rule — it's already `flex: 1` (grow), so once
+   .pick-list is display:none it fills the row on its own. */
+body[data-phone="true"] .pick-list,
+body[data-phone="true"] .pe-body .pick-list { width: 100%; min-width: 0; }
+
+/* The Steps/Limits/Info switcher sits above .pick-body, so it's on screen in
+   both of the editor's phone panes and never collapses on its own — 340px is
+   close enough to a small phone's own width that it was one bezel case away
+   from actually overflowing. */
+body[data-phone="true"] .seg.pe-tabseg { width: 100%; }
+
+/* A step's own two columns (Temperature+Max, Goal+Exit) — side by side they
+   assumed the tablet's ~25%-of-1009px detail pane; on the phone this pane can
+   now be the FULL screen width (the list pane is hidden while it's showing),
+   but two columns of that would still squeeze .pe-exit-grid's four buttons
+   and the sliders' 62px label column onto ~170px each. Stack instead: full
+   width, one column, in the order the tablet reads top-to-bottom-then-
+   top-to-bottom-again (Temperature, Max, Goal, Exit). */
+body[data-phone="true"] .pe-groups { flex-direction: column; }
+
+/* The Limits tab's [name | track | readout] grid assumes a label short enough
+   to sit on one line (.pe-limits .slider-row .sr-name forces nowrap, to undo
+   .pe-group's 62px WRAPPING column) — "Track volume starting with" at phone
+   width has nowhere to put that line. Letting it wrap again is enough on its
+   own: the track's own width:100% is already phone-safe from phase 1, and a
+   wrapped label lets the grid's 1fr columns actually shrink to fit instead of
+   being held open by one unbreakable line of text. */
+body[data-phone="true"] .pe-limits .slider-row .sr-name { white-space: normal; }
+
+/* ProfileEditor's phone-only detail header: the back-to-steps button and the
+   add/duplicate/move/delete row (a second copy of .pick-list's own — see the
+   template comment by .pe-phone-detail-head for why it has to be duplicated
+   rather than shared) side by side above the step's own title. */
+body[data-phone="true"] .pe-phone-detail-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+body[data-phone="true"] .pe-phone-detail-head .pe-frame-actions { flex: 1; }
+
+/* ProfilePicker's read-only detail pane also splits in two internally
+   (.pd-split: the stage list, then the title/notes text) — same reasoning as
+   .pe-groups above, stacked instead of squeezed to ~40% width each.
+   .pd-stages keeps its existing `flex: 0 0 40%` unchanged on purpose: a
+   flex-basis follows whichever axis is current the MAIN one, so the same
+   already-tuned 40% that gave it a sensible width in a row gives it a
+   sensible height in this column instead, with .pd-text's `flex: 1` still
+   claiming the rest for the description. */
+body[data-phone="true"] .pd-split { flex-direction: column; }
 
 /* LiveShotOverlay.vue's `history` phase reuses the tablet's shot-history
    screen verbatim (.ov-top/.date-nav/.shot-metrics/.glabel from app.css) —
