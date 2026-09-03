@@ -30,6 +30,7 @@ import './core/domains/mapping.js';
 import './core/domains/settings.js';
 import './core/domains/devices.js';
 import './core/domains/plugins.js';
+import './core/domains/profile-simulate.js';
 import './core/domains/profile-render.js';
 import './core/domains/display.js';
 
