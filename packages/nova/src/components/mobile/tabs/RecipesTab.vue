@@ -129,7 +129,10 @@ const press = useLongPress({ tap: loadRow, hold: openRowMenu });
         >
           <span class="rmeta">
             <span class="phone-identity-stack">
-              <span v-for="(part, i) in recipeIdentityParts(row.recipe)" :key="i" :class="{ rsub: i > 0 }">{{ part }}</span>
+              <!-- Roaster and bean are one identity (the coffee) and share
+                   this line's weight; only grinder/profile beyond them step
+                   down to .rsub. -->
+              <span v-for="(part, i) in recipeIdentityParts(row.recipe)" :key="i" :class="{ rsub: i > 1 }">{{ part }}</span>
             </span>
             <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
           </span>

@@ -165,7 +165,10 @@ async function removeThis() {
            for the same bean apart. Full room here, so each part gets its own
            line instead. -->
       <span class="phone-crumb phone-identity-stack">
-        <span v-for="(part, i) in titleParts" :key="i" :class="i === 0 ? 'phone-identity-line' : 'rsub'">{{ part }}</span>
+        <!-- Roaster and bean are one identity (the coffee) and share this
+             line's weight; only grinder/profile beyond them step down to
+             .rsub. -->
+        <span v-for="(part, i) in titleParts" :key="i" :class="i < 2 ? 'phone-identity-line' : 'rsub'">{{ part }}</span>
       </span>
       <span v-if="isLoaded" class="phone-badge">{{ t('phone.loaded') }}</span>
     </div>
