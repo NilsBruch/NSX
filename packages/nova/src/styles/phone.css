@@ -282,14 +282,21 @@ body[data-phone="true"] .machine-scroll .slider-row .hslider,
 body[data-phone="true"] .pe-limits .slider-row .hslider { width: 100%; }
 body[data-phone="true"] .overlay-full { padding: 14px 16px 16px; }
 
-/* ShotReview.vue reuses the tablet's shot-history screen verbatim (.ov-top/
-   .date-nav/.shot-metrics/.glabel from app.css) — .date-nav's 108px date +
-   two 40px buttons plus .ov-back and .ov-title don't fit a phone's width on
-   one line, and 5 metric columns are too cramped, so both reflow here. */
+/* LiveShotOverlay.vue's `history` phase reuses the tablet's shot-history
+   screen verbatim (.ov-top/.date-nav/.shot-metrics/.glabel from app.css) —
+   .date-nav's 108px date + two 40px buttons plus .ov-back and .ov-title don't
+   fit a phone's width on one line, and 5 metric columns are too cramped, so
+   both reflow here. (These rules predate the phone being allowed to show
+   `live` at all — they were written for ShotReview.vue, a now-deleted fork of
+   exactly this markup; the markup they target hasn't changed.) */
 body[data-phone="true"] .ov-top { flex-wrap: wrap; row-gap: 8px; }
 body[data-phone="true"] .ov-title { flex-basis: 100%; order: 1; text-align: left; }
 body[data-phone="true"] .date-nav .date { min-width: 76px; }
 body[data-phone="true"] .date-nav button { width: 32px; height: 32px; }
+/* .live-metrics shares this rule with .shot-metrics in app.css (both 5
+   columns there) — reflow both the same way; 5 tiles into 3 columns wraps to
+   a 3-then-2 grid rather than cramming five onto one phone-width row. */
+body[data-phone="true"] .live-metrics,
 body[data-phone="true"] .shot-metrics { grid-template-columns: repeat(3, 1fr); }
 /* Tablet centers the star rating (delete is pinned absolute-right so it
    doesn't skew the centering); on a narrow phone that leaves an odd gap on
@@ -297,3 +304,15 @@ body[data-phone="true"] .shot-metrics { grid-template-columns: repeat(3, 1fr); }
    two now sit at opposite screen edges. */
 body[data-phone="true"] .shot-done { justify-content: flex-start; }
 body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }
+
+/* LiveShotOverlay's `live` phase — new territory for the phone as of this
+   phase of the mobile parity plan. .live-bottom holds .live-actions (skip,
+   and here, stop) plus .wbar (the weight bar) side by side on the tablet;
+   .skip-btn alone is already 220px wide, and adding .stop-btn next to it
+   would need ~375px before the weight bar even starts. Stack the two rows
+   instead of trying to shrink four things onto one line. */
+body[data-phone="true"] .live-bottom { flex-direction: column; align-items: stretch; gap: 14px; }
+body[data-phone="true"] .live-actions { gap: 10px; }
+body[data-phone="true"] .skip-btn,
+body[data-phone="true"] .stop-btn { flex: 1; min-width: 0; height: 56px; font-size: var(--fs-sm); }
+body[data-phone="true"] .wbar-track { width: 100%; max-width: none; }

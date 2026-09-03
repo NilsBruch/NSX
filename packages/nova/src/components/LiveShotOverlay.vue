@@ -8,12 +8,13 @@ import { machine, currentWorkflow } from '../composables/useCore.js';
 import { openNumberPad, openConfirm } from '../composables/useModals.js';
 import { showToast } from '../composables/useToast.js';
 import { formatClock } from '../utils/clock.js';
+import { isPhone } from '../composables/useLayout.js';
 import ShotStripChart from './ShotStripChart.vue';
 import PhaseTicker from './PhaseTicker.vue';
 import { frames as profileFrames, frameName } from '../composables/useProfileDisplay.js';
 
 const { t } = useI18n();
-const { NSXCore } = window;
+const { NSXCore, NSXApi } = window;
 
 // Shared between the live and history strip charts so a series never changes
 // color between the two views. Must match ShotStripChart's internal COLORS:
@@ -137,6 +138,22 @@ async function onSkipStep() {
   }
 }
 
+/**
+ * Phone-only. The tablet's own comment on .skip-btn explains why THIS
+ * component never offered a stop before now: "that's what the machine's own
+ * stop is for, same as starting a shot" — true when you're standing in front
+ * of it. On the phone that reasoning runs the other way: you are, by
+ * definition, not at the machine, and stopping remotely is the one control
+ * this shell keeps (see App.vue's live-overlay comment for the full
+ * invariant). Same guard and shape as CleaningAssistant.vue's stop() — no
+ * try/catch there either; every stop button in this skin is fire-and-forget
+ * once the guard passes.
+ */
+async function onStop() {
+  if (!NSXCore.canExecuteOperation('stopShot', machine.state)) return;
+  await NSXApi.setMachineState('idle');
+}
+
 async function editActualDose() {
   const v = await openNumberPad({ title: t('liveShot.mIn'), unit: 'g', value: fmtWeight(actualDose.value) === '—' ? '' : fmtWeight(actualDose.value) });
   if (v != null) setActualDose(parseFloat(v));
@@ -201,11 +218,17 @@ async function editGrindSetting() {
       <div class="metric"><div class="ml">{{ t('liveShot.mTime') }}</div><div class="mv">{{ liveElapsedLabel }}</div></div>
     </div>
     <div class="live-bottom">
-      <!-- Skip step only: it advances the profile to its next frame. Stopping
-           is deliberately NOT offered here — that's what the machine's own
-           stop is for, same as starting a shot. This button used to be
-           labelled "Skip" but actually stopped the shot. -->
-      <button class="skip-btn" @click="onSkipStep">{{ t('liveShot.skipStep') }}</button>
+      <div class="live-actions">
+        <!-- Skip step only: it advances the profile to its next frame. On the
+             tablet, stopping is deliberately NOT offered here — that's what
+             the machine's own stop is for, same as starting a shot. This
+             button used to be labelled "Skip" but actually stopped the shot. -->
+        <button class="skip-btn" @click="onSkipStep">{{ t('liveShot.skipStep') }}</button>
+        <!-- Phone only — see onStop's own comment for why this is the one
+             place the tablet's "the machine is right there" reasoning
+             doesn't hold. -->
+        <button v-if="isPhone" class="stop-btn" @click="onStop">{{ t('common.stop') }}</button>
+      </div>
       <div class="wbar">
         <span class="wbar-label"><b>{{ shownWeight.toFixed(0) }}</b> / {{ recipe.targetYield.toFixed(0) }} g<small v-if="virtualScaleActive" style="color: var(--muted)"> *</small></span>
         <div class="wbar-track">

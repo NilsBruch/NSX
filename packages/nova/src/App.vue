@@ -21,7 +21,6 @@ import LiveShotOverlay from './components/LiveShotOverlay.vue';
 import SimpleLiveOverlay from './components/SimpleLiveOverlay.vue';
 import FlushCountdown from './components/FlushCountdown.vue';
 import MobileShell from './components/mobile/MobileShell.vue';
-import ShotReview from './components/mobile/ShotReview.vue';
 
 const route = useRoute();
 
@@ -46,12 +45,6 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
 <template>
   <template v-if="isPhone">
     <MobileShell />
-    <!-- Shares useLiveShot.js's `phase` state with the tablet's LiveShotOverlay
-         (DiaryTab calls openHistoryAt() the same way DiaryView.vue does) —
-         only ever renders the read+rate 'history' screen, never 'live',
-         matching the browse-only companion scope (see the mobile parity plan
-         for when that changes). -->
-    <ShotReview />
   </template>
 
   <div v-else class="stage">
@@ -63,23 +56,33 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
     </main>
     <RegisterRail side="right" />
 
-    <!-- Global: a hardware-triggered shot/steam/hot-water can start while the
-         user is on any tab, not just its own page — see the design log. -->
-    <LiveShotOverlay v-if="liveShotPhase !== 'hidden'" />
-    <SimpleLiveOverlay />
-    <!-- A flush is housekeeping, not a beverage — a centred countdown rather
-         than one of the two full-screen live overlays above. -->
-    <FlushCountdown />
-
     <!-- Locked is NOT the same as "machine asleep" — see useScreensaver.js. Sleep
-         always locks, but unlocking doesn't always wake the machine back up. -->
+         always locks, but unlocking doesn't always wake the machine back up.
+         Tablet-only kiosk chrome, along with RegisterRail/StatusIsland/
+         PowerButton above: meaningless on a phone, which has no lock screen
+         of its own to show. -->
     <Screensaver v-if="locked" />
   </div>
 
+  <!-- Global, BOTH layouts: a hardware-triggered shot/steam/hot-water/flush
+       can start while the user is on any tab (tablet) or any phone tab, and
+       these three are what let it be seen no matter where that is.
+       The phone's own invariant — display and stop, never start — is
+       enforced by what these three components DO, not by hiding controls
+       here: LiveShotOverlay's only writes are skipStep() and shot
+       annotations, plus (isPhone-only) a stop button guarded by
+       NSXCore.canExecuteOperation('stopShot', ...); SimpleLiveOverlay and
+       FlushCountdown each write exactly one thing, setMachineState('idle').
+       None of the three can START a dispense — the one component that can
+       (CleaningAssistant.vue) is simply never mounted on the phone. -->
+  <LiveShotOverlay v-if="liveShotPhase !== 'hidden'" />
+  <SimpleLiveOverlay />
+  <!-- A flush is housekeeping, not a beverage — a centred countdown rather
+       than one of the two full-screen live overlays above. -->
+  <FlushCountdown />
+
   <!-- Single shared instances for BOTH layouts; any view/tab opens these via
-       useModals.js. Nova's phone shell is a browse-only remote companion (no
-       live shot control), so LiveShotOverlay/SimpleLiveOverlay/Screensaver
-       stay tablet-only above. -->
+       useModals.js. -->
   <WheelPicker />
   <TextFieldModal />
   <NumberPad />

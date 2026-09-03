@@ -1578,13 +1578,27 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .metric .mv { font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 3px; }
 .metric .mv small { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
 
-/* Skip on the left, the (now larger) weight progress pinned bottom-right. */
+/* Skip on the left, the (now larger) weight progress pinned bottom-right.
+   .live-actions wraps skip (and, phone-only, stop) as one group: on the
+   tablet it holds a single button and changes nothing, but it gives phone.css
+   one flex container to reflow instead of having to juggle .live-bottom's own
+   two-slot layout once a second button exists in one of those slots. */
 .live-bottom { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.live-actions { display: flex; align-items: center; gap: 14px; }
 .skip-btn {
   background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r-lg);
   height: 66px; min-width: 220px; font-family: inherit; font-size: var(--fs-base); font-weight: 700;
   letter-spacing: 0.1em; text-transform: uppercase;
   touch-action: manipulation; /* mid-shot taps must land first time — see .kb-key */
+}
+/* Phone-only (LiveShotOverlay.vue's isPhone guard) — same box as .skip-btn,
+   alert-toned rather than accent so the two are never mistaken for each
+   other under a thumb mid-shot. */
+.stop-btn {
+  background: var(--danger-wash); color: var(--alert); border: none; border-radius: var(--r-lg);
+  height: 66px; min-width: 140px; font-family: inherit; font-size: var(--fs-base); font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  touch-action: manipulation;
 }
 
 .date-nav { display: inline-flex; align-items: center; gap: 6px; background: var(--card-bg); border-radius: var(--r-md); padding: 5px; }
