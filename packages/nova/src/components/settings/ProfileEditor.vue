@@ -320,7 +320,7 @@ function save() {
              duplicate/reorder/delete act on THIS step, not on whichever the
              list happens to be scrolled to. -->
         <div v-if="isPhone" class="pe-phone-detail-head">
-          <button class="phone-back" @click="phoneShowingStepDetail = false">
+          <button class="phone-back" :aria-label="t('profileEditor.tabSteps')" @click="phoneShowingStepDetail = false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
           </button>
           <div class="pe-frame-actions">

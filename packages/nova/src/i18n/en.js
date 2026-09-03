@@ -282,7 +282,6 @@ export default {
   diary: {
     roasters: 'Roasters',
     beans: 'Beans',
-    shots: 'Shots',
     sortOldest: 'oldest first',
     sortNewest: 'newest first',
     sortAlpha: 'A–Z',

@@ -182,7 +182,7 @@ async function removeThis() {
 <template>
   <div class="overlay-full">
     <div class="phone-head">
-      <button class="phone-back" @click="emit('close')">
+      <button class="phone-back" :aria-label="t('common.back')" @click="emit('close')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       </button>
       <!-- Stacked, not dot-joined on one line: a 4-part identity (roaster /

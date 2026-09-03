@@ -15,13 +15,18 @@ import { useI18n } from 'vue-i18n';
 import {
   diaryState, roasterGroups, beansInRoaster, fullHistoryShots,
   enterRoaster, enterBean, goBack, cycleSort, setView, toggleArchived, ensureDiaryLoaded,
-  profileGroupsInBean, toggleProfileExpanded,
+  profileGroupsInBean, toggleProfileExpanded, openRecipeForBeanProfile,
   shotMetrics, ensureShotMetrics, hasMoreShots, loadMoreFullHistory,
 } from '../../../composables/useDiary.js';
-import { openTextField } from '../../../composables/useModals.js';
+import { findRecipeForBeanProfile, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
+import { toggleArchiveBean, confirmAndDeleteBean } from '../../../composables/useBeanActions.js';
+import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { openHistoryAt } from '../../../composables/useLiveShot.js';
 import { singleGrinder } from '../../../composables/useCore.js';
+import { useLongPress } from '../../../composables/useLongPress.js';
+import { goPhoneTab } from '../../../composables/usePhoneNav.js';
 import RecipePicker from '../../RecipePicker.vue';
+import BeanEditor from '../../BeanEditor.vue';
 
 const { t } = useI18n();
 
@@ -59,6 +64,74 @@ function fmtDate(iso) {
 function onEnterBean(bean) {
   enterBean(bean);
 }
+
+// Bean row: tap opens it (unchanged), hold offers what used to need a pencil
+// button — same menu and same three actions as the tablet's openBeanMenu.
+const showBeanEditor = ref(false);
+const editingBean = ref(null);
+function openEditBean(bean) {
+  editingBean.value = bean;
+  showBeanEditor.value = true;
+}
+function closeBeanEditor() { showBeanEditor.value = false; }
+async function openBeanMenu(bean) {
+  const choice = await openChooser({
+    title: bean.name || '—',
+    options: [
+      ['edit', t('diary.editBean')],
+      ['archive', bean.archived ? t('diary.unarchive') : t('diary.archive')],
+      ['delete', t('common.delete')],
+    ],
+  });
+  if (choice === 'edit') openEditBean(bean);
+  else if (choice === 'archive') await toggleArchiveBean(bean);
+  else if (choice === 'delete') await confirmAndDeleteBean(bean);
+}
+const beanPress = useLongPress({ tap: onEnterBean, hold: openBeanMenu });
+
+// Profile-group row: tap keeps expanding the shot history below it (unchanged
+// — that's already this row's job here, unlike the tablet's browse row, which
+// taps straight to loading the recipe since RecipesTab didn't exist there).
+// Hold adds the same Load / Pin / Delete the tablet's openGroupMenu offers.
+// Load routes to the phone's Recipes tab rather than router.push({name:
+// 'espresso'}) — the phone has no router navigation of its own (usePhoneNav.js).
+function savedRecipeForGroup(group) {
+  return findRecipeForBeanProfile(diaryState.bean, group.title);
+}
+async function loadGroupRecipe(group) {
+  try {
+    await openRecipeForBeanProfile(diaryState.bean, group.title, group.profile, group.context);
+    goPhoneTab('recipes');
+  } catch (err) {
+    window.NSXCore.emit('toast', t('diary.recipeCreateFailed') + ': ' + err.message);
+  }
+}
+async function removeGroupRecipe(recipe) {
+  const ok = await openConfirm({
+    title: t('diary.deleteRecipeConfirm'),
+    message: `${recipe.coffeeRoaster} – ${recipe.coffeeName}`,
+    danger: true,
+    confirmLabel: t('common.delete'),
+  });
+  if (ok) await deleteRecipe(recipe.id);
+}
+async function openGroupMenu(group) {
+  const saved = savedRecipeForGroup(group);
+  const options = [['load', t('diary.loadRecipe')]];
+  // Pin and Delete need something saved to act on — a pairing that was
+  // brewed but never saved as a recipe has only Load, which is what creates
+  // one (same rule as the tablet).
+  if (saved) {
+    options.push(['pin', saved.pinned ? t('diary.unpin') : t('diary.pin')]);
+    options.push(['delete', t('common.delete')]);
+  }
+  const choice = await openChooser({ title: group.title, options });
+  if (choice === 'load') await loadGroupRecipe(group);
+  else if (choice === 'pin') await togglePinRecipe(saved);
+  else if (choice === 'delete') await removeGroupRecipe(saved);
+}
+const groupPress = useLongPress({ tap: (group) => toggleProfileExpanded(group.title), hold: openGroupMenu });
+
 // Metrics for whatever's expanded once a bean is drilled into, or for the
 // flat full-history list once that's the active view.
 watch(
@@ -93,7 +166,7 @@ async function onRecipeCreated() {
 <template>
   <section class="phone-page">
     <div class="phone-head">
-      <button v-if="diaryState.view === 'browse' && diaryState.level > 0" class="phone-back" @click="goBack">
+      <button v-if="diaryState.view === 'browse' && diaryState.level > 0" class="phone-back" :aria-label="t('diary.back')" @click="goBack">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       </button>
       <span class="phone-crumb">{{ crumb }}</span>
@@ -166,7 +239,15 @@ async function onRecipeCreated() {
 
     <!-- Beans in a roaster -->
     <div v-else-if="diaryState.level === 1" class="phone-list">
-      <button v-for="bean in beansInRoaster" :key="bean.id" class="phone-list-row" @click="onEnterBean(bean)">
+      <button
+        v-for="bean in beansInRoaster" :key="bean.id"
+        class="phone-list-row"
+        @pointerdown="beanPress.down($event, bean)"
+        @pointermove="beanPress.move"
+        @pointerup="beanPress.up(bean)"
+        @pointercancel="beanPress.cancel"
+        @pointerleave="beanPress.cancel"
+      >
         <span class="rmeta">{{ bean.name }}</span>
         <span class="chev">›</span>
       </button>
@@ -176,7 +257,14 @@ async function onRecipeCreated() {
     <!-- Profiles used with this bean -->
     <div v-else class="phone-list">
       <template v-for="group in profileGroupsInBean" :key="group.title">
-        <button class="phone-list-row" @click="toggleProfileExpanded(group.title)">
+        <button
+          class="phone-list-row"
+          @pointerdown="groupPress.down($event, group)"
+          @pointermove="groupPress.move"
+          @pointerup="groupPress.up(group)"
+          @pointercancel="groupPress.cancel"
+          @pointerleave="groupPress.cancel"
+        >
           <span class="rmeta">{{ group.title }}</span>
           <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
         </button>
@@ -208,6 +296,14 @@ async function onRecipeCreated() {
       :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
       @back="closeRecipeCreator"
       @created="onRecipeCreated"
+    />
+    <BeanEditor
+      v-if="showBeanEditor"
+      :bean="editingBean"
+      :preset-roaster="diaryState.level === 1 ? diaryState.roasterName : ''"
+      @close="closeBeanEditor"
+      @saved="closeBeanEditor"
+      @deleted="closeBeanEditor"
     />
   </section>
 </template>

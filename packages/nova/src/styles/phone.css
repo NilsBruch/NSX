@@ -94,7 +94,9 @@ body[data-phone="true"] {
 .phone-crumb { flex: 1; font-size: var(--fs-md); font-weight: 700; }
 .phone-back, .phone-icon-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: var(--r-sm);
+  /* 44px, not the icon's own visual size (18px) — the touch-target minimum a
+     thumb needs, not what looks right as a glyph. */
+  width: 44px; height: 44px; border-radius: var(--r-sm);
   background: var(--card-bg); border: none; color: var(--text);
 }
 .phone-back svg, .phone-icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -176,7 +178,8 @@ body[data-phone="true"] {
 .phone-row-main .star-rating { flex: none; margin-top: 2px; }
 .phone-row-edit {
   flex: none; display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: var(--r-sm);
+  /* 44px touch target, same reasoning as .phone-icon-btn above. */
+  width: 44px; height: 44px; border-radius: var(--r-sm);
   background: none; border: none; color: var(--muted);
 }
 .phone-row-edit svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -292,7 +295,20 @@ body[data-phone="true"] {
    touched. */
 body[data-phone="true"] .machine-scroll .slider-row .hslider,
 body[data-phone="true"] .pe-limits .slider-row .hslider { width: 100%; }
-body[data-phone="true"] .overlay-full { padding: 14px 16px 16px; }
+/* Every full-screen phone overlay (RecipeDetail, ProfilePicker,
+   ProfileEditor, the settings panels, BeanEditor/BeanChooser, …) is
+   `position: fixed; inset: 0` — reaching past `.phone-shell`, the only thing
+   that carries safe-area padding today (section 1). Without this, a back
+   button or a title sits under a notch/status bar, and a footer row (see
+   .phone-detail-footer) sits under a home-indicator gesture bar. max() keeps
+   the existing 14/16px on a phone with no notch, where the env() value is 0,
+   and only grows past it where there's real inset to clear — env()/max() are
+   safe here regardless of the Chromium-96 baseline note elsewhere in this
+   file: that note is about a SELECTOR matching tablet DOM, and .overlay-full
+   under body[data-phone="true"] never runs anywhere but a real phone browser. */
+body[data-phone="true"] .overlay-full {
+  padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
 
 /* ProfilePicker.vue / ProfileEditor.vue — both a list pane next to a detail
    pane (.pick-body > .pick-list + .pick-detail), which the component itself
@@ -312,6 +328,14 @@ body[data-phone="true"] .pe-body .pick-list { width: 100%; min-width: 0; }
    close enough to a small phone's own width that it was one bezel case away
    from actually overflowing. */
 body[data-phone="true"] .seg.pe-tabseg { width: 100%; }
+
+/* .sort-btn.icon-only (Diary/Recipes header buttons) is 38px on the tablet,
+   where a stylus-precision touch and a bigger screen make that fine — on a
+   phone it's under the 44px touch-target minimum every .phone-* icon button
+   in this file already meets. Scoped rather than raising the shared 38px
+   base, which is also used in plenty of tablet-only contexts this plan never
+   touched. */
+body[data-phone="true"] .sort-btn.icon-only { width: 44px; height: 44px; }
 
 /* A step's own two columns (Temperature+Max, Goal+Exit) — side by side they
    assumed the tablet's ~25%-of-1009px detail pane; on the phone this pane can
