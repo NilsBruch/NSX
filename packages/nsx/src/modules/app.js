@@ -103,7 +103,7 @@ const {
 } = window.NSXUI || {};
 
 /* ── Translations ─────────────────────────────────────── */
-const { t, setLang, getLang } = window.NSXI18n || {};
+const { t, setLang, getLang, getLocale } = window.NSXI18n || {};
 
 // Apply the current language to this skin's data-i18n DOM (core's NSXI18n is
 // DOM-free and only provides t()/setLang()/getLang()).
@@ -535,7 +535,7 @@ function formatShotDateShort(timestamp) {
   if (!timestamp) return "--.--.----";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "--.--.----";
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(getLocale(), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -1599,7 +1599,7 @@ async function loadApiData() {
 function tick() {
   const clockEl = document.getElementById("clock");
   if (clockEl) {
-    clockEl.textContent = new Date().toLocaleTimeString("de-DE", {
+    clockEl.textContent = new Date().toLocaleTimeString(getLocale(), {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -5011,9 +5011,9 @@ function _renderReviewMeta() {
   const d = _reviewDraft || {};
   const date = _reviewMetaDate;
   const valid = date instanceof Date && !Number.isNaN(date.getTime());
-  const day  = valid ? new Intl.DateTimeFormat('de-DE', { weekday: 'short' }).format(date) : '--';
-  const dstr = valid ? new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(date) : '--.--.';
-  const time = valid ? new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(date) : '--:--';
+  const day  = valid ? new Intl.DateTimeFormat(getLocale(), { weekday: 'short' }).format(date) : '--';
+  const dstr = valid ? new Intl.DateTimeFormat(getLocale(), { day: '2-digit', month: '2-digit' }).format(date) : '--.--.';
+  const time = valid ? new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(date) : '--:--';
   const durTxt = Number.isFinite(d.durationSec) ? `${d.durationSec.toFixed(1)}s` : '--.-s';
   if (mainEl) mainEl.textContent = `${day} ${dstr} | ${time} | ${durTxt}`;
 
@@ -5251,7 +5251,7 @@ function openShotReview(shotId, navList = null) {
         if (rd) {
           const d = new Date(rd);
           const dateStr = isNaN(d.getTime()) ? rd
-            : d.toLocaleDateString(getLang?.() === 'en' ? 'en-US' : 'de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            : d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
           _reviewDraft.dispRoastDate = `${dateStr} · ${formatBatchAge(rd)}`;
         } else {
           _reviewDraft.dispRoastDate = '—';
@@ -9176,7 +9176,7 @@ function _refreshEditBeanRoastDate() {
   if (!_editPickedBatchRoastDate) { el.textContent = '—'; return; }
   const d = new Date(_editPickedBatchRoastDate);
   if (Number.isNaN(d.getTime())) { el.textContent = '—'; return; }
-  const locale = getLang?.() === 'en' ? 'en-US' : 'de-DE';
+  const locale = getLocale();
   const dateStr = d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
   el.textContent = `${dateStr} (${formatBatchAge(_editPickedBatchRoastDate)})`;
 }
@@ -9353,7 +9353,7 @@ document.getElementById('btn-edit-pick-grinder')?.addEventListener('click', open
 const batchAddModalEl = document.getElementById('batch-add-modal');
 const batchDatePickerModalEl = document.getElementById('batch-date-picker-modal');
 const _getMonthName = (month1Based) =>
-  new Intl.DateTimeFormat(getLang?.() === 'en' ? 'en-US' : 'de-DE', { month: 'long' })
+  new Intl.DateTimeFormat(getLocale(), { month: 'long' })
     .format(new Date(2000, month1Based - 1));
 let _editingBean = null;
 let _editingBatch = null;
@@ -9970,7 +9970,7 @@ function formatBatchDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(getLang?.() === 'en' ? 'en-US' : 'de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+  return new Intl.DateTimeFormat(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
 }
 
 function _parseBatchDateValue(value) {
@@ -10099,7 +10099,7 @@ function formatBatchDateBadge(iso) {
   if (!iso) return { day: '—', month: '', age: '' };
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return { day: '—', month: '', age: '' };
-  const locale = getLang?.() === 'en' ? 'en-US' : 'de-DE';
+  const locale = getLocale();
   return {
     day: String(d.getUTCDate()).padStart(2, '0'),
     month: new Intl.DateTimeFormat(locale, { month: 'short' }).format(d).replace('.', ''),

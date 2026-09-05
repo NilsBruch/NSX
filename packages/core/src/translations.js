@@ -470,6 +470,7 @@ const TRANSLATIONS = {
     'datePicker.clear':    'Datum entfernen',
     'datePicker.month':    'Monat',
     'datePicker.year':     'Jahr',
+    'datePicker.calendarAria': 'Kalender',
 
     // Grinder list
     'grinderList.title':   'Mühlen',
@@ -1150,6 +1151,7 @@ const TRANSLATIONS = {
     'datePicker.clear':    'Remove date',
     'datePicker.month':    'Month',
     'datePicker.year':     'Year',
+    'datePicker.calendarAria': 'Calendar',
 
     // Grinder list
     'grinderList.title':   'Grinders',
@@ -1377,8 +1379,16 @@ function getLang() {
   return _lang;
 }
 
+// BCP 47 tag for the active language, for Intl.* (dates, weekday names,
+// localeCompare). Skins used to inline `getLang() === 'en' ? 'en-US' : 'de-DE'`
+// at every call site, so any site that forgot printed German weekdays in
+// English. One mapping, one place to extend when a language is added.
+function getLocale() {
+  return _lang === 'en' ? 'en-US' : 'de-DE';
+}
+
 // NSXI18n is DOM-free: it provides the dictionary + lookup only. Applying
 // translations to `data-i18n` DOM elements is a skin concern (each skin walks
 // its own DOM / template and calls t()). NSX does this in app.js.
-window.NSXI18n = { t, setLang, getLang };
+window.NSXI18n = { t, setLang, getLang, getLocale };
 })();
