@@ -102,6 +102,24 @@ const {
   setWorkflowSyncState,
 } = window.NSXUI || {};
 
+/* ── Crash visibility ─────────────────────────────────── */
+// The skin had no error handler at all, so an exception thrown inside any event
+// handler was swallowed by the browser: the button simply "did nothing", with
+// no clue on a tablet that has no reachable console. Surface it instead — the
+// message is deliberately raw, since its audience is whoever is diagnosing.
+let _lastErrorMsg = '';
+function _reportRuntimeError(where, err) {
+  const msg = `${where}: ${err?.message || err}`;
+  console.error('[NSX]', msg, err);
+  // Don't let a repeating error (e.g. one fired from an interval) bury the UI.
+  if (msg === _lastErrorMsg) return;
+  _lastErrorMsg = msg;
+  setTimeout(() => { _lastErrorMsg = ''; }, 10000);
+  try { showToast(msg, 8000); } catch { /* toast itself is broken — console has it */ }
+}
+window.addEventListener('error', (e) => _reportRuntimeError('Error', e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => _reportRuntimeError('Promise', e.reason));
+
 /* ── Translations ─────────────────────────────────────── */
 const { t, setLang, getLang, getLocale } = window.NSXI18n || {};
 
@@ -9515,9 +9533,10 @@ function _renderFieldPickerList(filter) {
   const list = document.getElementById('field-picker-list');
   const pickerInput = document.getElementById('field-picker-input');
   if (!list) return;
-  const q = filter.toLowerCase().trim();
+  const q = String(filter ?? '').toLowerCase().trim();
   const current = pickerInput?.value ?? '';
-  const filtered = q ? _fieldPickerAllOptions.filter(o => o.toLowerCase().includes(q)) : _fieldPickerAllOptions;
+  const all = Array.isArray(_fieldPickerAllOptions) ? _fieldPickerAllOptions : [];
+  const filtered = q ? all.filter(o => o.toLowerCase().includes(q)) : all;
   list.innerHTML = filtered.map(o =>
     `<button type="button" class="field-picker-option${o === current ? ' is-selected' : ''}" data-value="${o.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">${o.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</button>`
   ).join('');
@@ -9533,7 +9552,6 @@ function _renderFieldPickerList(filter) {
 
 /* ── Shared Keyboard Logic ───────────────────────────── */
 let _fpKbShift = false;
-let _fpKbActiveTarget = null;
 let _fpKbBsTimer = null;
 let _fpKbBsInterval = null;
 
@@ -9548,8 +9566,7 @@ function _fpKbSetShift(on) {
   });
 }
 
-function _fpKbInsert(char) {
-  const input = _fpKbActiveTarget;
+function _fpKbInsert(char, input) {
   if (!input) return;
   const start = input.selectionStart ?? input.value.length;
   const end   = input.selectionEnd   ?? input.value.length;
@@ -9562,8 +9579,7 @@ function _fpKbInsert(char) {
   if (_fpKbShift && isLetter) _fpKbSetShift(false);
 }
 
-function _fpKbBackspace() {
-  const input = _fpKbActiveTarget;
+function _fpKbBackspace(input) {
   if (!input) return;
   const start = input.selectionStart ?? input.value.length;
   const end   = input.selectionEnd   ?? input.value.length;
@@ -9584,29 +9600,36 @@ function _fpKbStopBackspace() {
   _fpKbBsInterval = null;
 }
 
-function _setupKeyboard(keyboardId, shiftBtnId, bsBtnId) {
+// Each keyboard resolves ITS OWN field when a key is pressed. This used to be
+// one shared `_fpKbActiveTarget`, set when a modal opened and cleared when one
+// closed — so closing either modal while the other was open left the visible
+// keyboard writing into null, and every key press silently did nothing.
+function _setupKeyboard(keyboardId, shiftBtnId, bsBtnId, targetInputId) {
   const kb = document.getElementById(keyboardId);
   if (!kb) return;
+  const target = () => document.getElementById(targetInputId);
   kb.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const key = e.target.closest('.fp-key');
     if (!key) return;
     if (key.id === shiftBtnId) { _fpKbSetShift(!_fpKbShift); return; }
     if (key.id === bsBtnId || key.classList.contains('fp-key--bs')) {
-      _fpKbBackspace();
-      _fpKbBsTimer = setTimeout(() => { _fpKbBsInterval = setInterval(_fpKbBackspace, 80); }, 400);
+      _fpKbBackspace(target());
+      _fpKbBsTimer = setTimeout(() => {
+        _fpKbBsInterval = setInterval(() => _fpKbBackspace(target()), 80);
+      }, 400);
       return;
     }
     const char = key.dataset.key;
-    if (char !== undefined) _fpKbInsert(char);
+    if (char !== undefined) _fpKbInsert(char, target());
   });
   kb.addEventListener('pointerup',     _fpKbStopBackspace);
   kb.addEventListener('pointercancel', _fpKbStopBackspace);
   kb.addEventListener('pointerleave',  _fpKbStopBackspace);
 }
 
-_setupKeyboard('field-picker-keyboard', 'fp-kb-shift', 'fp-kb-backspace');
-_setupKeyboard('text-editor-keyboard',  'te-kb-shift', 'te-kb-backspace');
+_setupKeyboard('field-picker-keyboard', 'fp-kb-shift', 'fp-kb-backspace', 'field-picker-input');
+_setupKeyboard('text-editor-keyboard',  'te-kb-shift', 'te-kb-backspace', 'text-editor-textarea');
 
 /* ── Text Editor Modal (multiline notes) ─────────────── */
 let _textEditorOnConfirm = null;
@@ -9617,7 +9640,6 @@ function openTextEditorModal(currentValue, onConfirm) {
   const ta    = document.getElementById('text-editor-textarea');
   if (!modal || !ta) return;
   ta.value = currentValue ?? '';
-  _fpKbActiveTarget = ta;
   _fpKbSetShift(false);
   modal.hidden = false;
   setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 60);
@@ -9629,7 +9651,6 @@ function closeTextEditorModal(confirm) {
   if (confirm && _textEditorOnConfirm && ta) _textEditorOnConfirm(ta.value);
   if (modal) modal.hidden = true;
   _textEditorOnConfirm = null;
-  _fpKbActiveTarget = null;
 }
 
 document.getElementById('btn-text-editor-cancel')?.addEventListener('click',  () => closeTextEditorModal(false));
@@ -9642,21 +9663,36 @@ document.getElementById('shot-review-notes')?.addEventListener('click', () => {
 });
 
 function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = null, initialValue = null } = {}) {
-  _fieldPickerTarget = inputEl;
-  _fieldPickerOnConfirm = onConfirm;
-  _fieldPickerAllOptions = options;
   const modal = document.getElementById('field-picker-modal');
   const pickerInput = document.getElementById('field-picker-input');
-  if (!modal || !pickerInput) return;
+  if (!modal || !pickerInput) {
+    _reportRuntimeError('openFieldPicker', new Error('field picker markup missing'));
+    return;
+  }
+  _fieldPickerTarget = inputEl;
+  _fieldPickerOnConfirm = onConfirm;
+  // Options come from many callers (bean/grinder/tag/frame lists). Coerce here
+  // so one non-string cannot throw inside the list render.
+  _fieldPickerAllOptions = (Array.isArray(options) ? options : [])
+    .filter(o => o != null).map(String);
+
   // Numeric fields (inputMode 'numeric') swap the QWERTY layout for the numpad.
   document.getElementById('field-picker-keyboard')
     ?.classList.toggle('fp-keyboard--numeric', inputMode === 'numeric');
   pickerInput.value = initialValue !== null ? String(initialValue) : (inputEl?.value || '');
-  _renderFieldPickerList(pickerInput.value);
-  _fpKbActiveTarget = pickerInput;
-  _fpKbSetShift(pickerInput.value.length === 0);
+
+  // Show FIRST, then fill. This used to run the list render and shift setup
+  // before revealing the modal, so anything that threw in between left the
+  // picker permanently closed — and since every keyboard field routes through
+  // here, the whole skin looked like it had lost its keyboard until reload.
   modal.hidden = false;
   setTimeout(() => { pickerInput.focus(); pickerInput.select(); }, 60);
+  try {
+    _renderFieldPickerList(pickerInput.value);
+    _fpKbSetShift(pickerInput.value.length === 0);
+  } catch (err) {
+    _reportRuntimeError('field picker list', err);
+  }
 }
 
 function closeFieldPicker(confirm) {
