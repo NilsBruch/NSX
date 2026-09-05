@@ -27,10 +27,10 @@ when assembling the ZIP.
 
 ```
 espresso-skins/                     # repo root (npm workspaces)
-├── package.json                    # workspaces + scripts: sync-core, test, dev:mock
+├── package.json                    # workspaces + scripts: sync-core, test, dev:nsx
 ├── scripts/sync-core.mjs           # copies packages/core/src -> packages/nsx/src/core
 ├── tests/
-│   └── mock-gateway/               # dependency-light gateway stand-in (npm run dev:mock)
+│   └── mock-gateway/               # dependency-light gateway stand-in (npm run dev:nsx)
 ├── packages/
 │   ├── core/                       # shared, DOM-FREE package (SOURCE OF TRUTH)
 │   │   ├── README.md               # ← full NSXCore API docs (read this for core)
@@ -165,7 +165,7 @@ skin wiring (the shared logic moved to NSXCore, above):
   `harness.mjs` stubs `window`/`WebSocket` and evaluates them; a test loads
   `core.js` + the domain under test and mocks `window.NSXApi`. Prefer adding a
   test here for any new pure core logic.
-- **`npm run dev:mock`** — serves `packages/nsx/src` and a mock gateway (REST +
+- **`npm run dev:nsx`** — serves `packages/nsx/src` and a mock gateway (REST +
   WebSocket, faithful ETag semantics) so the skin runs without a machine. See
   `tests/mock-gateway/README.md`. Note: `config.js` hardcodes port 8080; on any
   other port open with `?gateway=http://localhost:<port>`.

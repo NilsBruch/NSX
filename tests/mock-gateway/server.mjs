@@ -11,7 +11,7 @@
  *   - GET /store/<ns>?full=1 sends an ETag
  *   - GET /store/<ns>/<key> does NOT  ← the quirk behind issue #3
  *
- * Run: npm run dev:mock   (runs sync-core first, then this)
+ * Run: npm run dev:nsx   (runs sync-core first, then this)
  */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";

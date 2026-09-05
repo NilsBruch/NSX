@@ -7,8 +7,8 @@ It serves `packages/nsx/src` as the web root — exactly what the Decent app doe
 — and mocks the REST + WebSocket API on the same port.
 
 ```bash
-npm run dev:mock          # sync-core, then serve on http://localhost:8080
-PORT=8090 npm run dev:mock  # if the real Decent app already owns 8080
+npm run dev:nsx          # sync-core, then serve on http://localhost:8080
+PORT=8090 npm run dev:nsx  # if the real Decent app already owns 8080
 ```
 
 > **Port caveat.** `packages/core/src/config.js` derives the gateway host from
