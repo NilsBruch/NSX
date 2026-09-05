@@ -3515,7 +3515,7 @@ document.getElementById('calib-steam-time')?.addEventListener('input', e => {
 
 document.getElementById('calib-steam-time')?.addEventListener('pointerdown', e => {
   e.preventDefault();
-  openFieldPicker(e.currentTarget, [], { inputMode: 'numeric' });
+  openFieldPicker(e.currentTarget, [], { inputMode: 'numeric', unit: 's' });
 });
 
 /* ── Pitcher Presets ─────────────────────────────────── */
@@ -5093,7 +5093,7 @@ async function _navigateReview(delta) {
   if (nextShot?.id) openShotReview(nextShot.id, list);
 }
 
-function _srTile(field, label, value, { editable = true, inputMode = 'text' } = {}) {
+function _srTile(field, label, value, { editable = true, inputMode = 'text', unit = '' } = {}) {
   const isEmpty = value === '' || value === null || value === undefined;
   const display = isEmpty
     ? `<span class="bean-manager-prop-empty">—</span>`
@@ -5103,7 +5103,7 @@ function _srTile(field, label, value, { editable = true, inputMode = 'text' } = 
   if (!editable) {
     return `<div class="bean-manager-prop-tile bean-manager-prop-tile--static">${inner}</div>`;
   }
-  return `<button type="button" class="bean-manager-prop-tile" data-sr-field="${field}" data-sr-value="${_escapeHtml(String(value ?? ''))}" data-sr-inputmode="${inputMode}">${inner}</button>`;
+  return `<button type="button" class="bean-manager-prop-tile" data-sr-field="${field}" data-sr-value="${_escapeHtml(String(value ?? ''))}" data-sr-inputmode="${inputMode}" data-sr-unit="${_escapeHtml(unit)}">${inner}</button>`;
 }
 
 function _renderShotReviewFields() {
@@ -5116,7 +5116,7 @@ function _renderShotReviewFields() {
         _srTile('coffeeRoaster',    t('shotReview.roaster'),   d.coffeeRoaster) +
         _srTile('coffeeName',       t('shotReview.bean'),      d.coffeeName) +
         _srTile('roastDate',        t('shotReview.roastDate'), d.dispRoastDate, { editable: false }) +
-        _srTile('actualDoseWeight', t('shotReview.dose'),      d.actualDoseWeight, { inputMode: 'numeric' })
+        _srTile('actualDoseWeight', t('shotReview.dose'),      d.actualDoseWeight, { inputMode: 'numeric', unit: 'g' })
       ) +
       sub(
         _srTile('grinderModel',   t('shotReview.grinder'),   d.grinderModel) +
@@ -5125,7 +5125,7 @@ function _renderShotReviewFields() {
       sub(
         _srTile('profile',     t('shotReview.profile'),      d.dispProfile, { editable: false }) +
         _srTile('temperature', t('shotReview.temperature'),  d.dispTemp, { editable: false }) +
-        _srTile('targetYield', t('shotReview.targetWeight'), d.targetYield, { inputMode: 'numeric' })
+        _srTile('targetYield', t('shotReview.targetWeight'), d.targetYield, { inputMode: 'numeric', unit: 'g' })
       );
   }
   if (shotReviewResultsGridEl) {
@@ -5144,8 +5144,8 @@ function _renderShotReviewFields() {
     let html =
       _srTile('time',     t('shotReview.time'),  d.dispDuration, { editable: false }) +
       _srTile('yield',    t('shotReview.yield'), yieldDisp, { editable: false }) +
-      _srTile('drinkTds', 'TDS %', d.drinkTds, { inputMode: 'numeric' }) +
-      _srTile('drinkEy',  'EY %',  d.drinkEy,  { inputMode: 'numeric' });
+      _srTile('drinkTds', 'TDS %', d.drinkTds, { inputMode: 'numeric', unit: '%' }) +
+      _srTile('drinkEy',  'EY %',  d.drinkEy,  { inputMode: 'numeric', unit: '%' });
     for (const r of _reviewAnalysisRows) {
       html += _srTile(null, r.label, r.value, { editable: false });
     }
@@ -5382,6 +5382,7 @@ shotReviewFavBtn?.addEventListener('click', () => {
     const current   = tile.dataset.srValue || '';
     openFieldPicker(null, [], {
       inputMode,
+      unit: tile.dataset.srUnit || '',
       initialValue: current,
       onConfirm: (val) => {
         const trimmed = (val ?? '').trim();
@@ -9668,7 +9669,7 @@ document.getElementById('shot-review-notes')?.addEventListener('click', () => {
   });
 });
 
-function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = null, initialValue = null } = {}) {
+function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = null, initialValue = null, unit = '' } = {}) {
   const modal = document.getElementById('field-picker-modal');
   const pickerInput = document.getElementById('field-picker-input');
   if (!modal || !pickerInput) {
@@ -9682,9 +9683,18 @@ function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = nul
   _fieldPickerAllOptions = (Array.isArray(options) ? options : [])
     .filter(o => o != null).map(String);
 
-  // Numeric fields (inputMode 'numeric') swap the QWERTY layout for the numpad.
+  // Numeric fields swap the QWERTY layout for the numpad. 'decimal' counts as
+  // numeric: it was declared on the batch weight/price/score fields but never
+  // matched here, so those opened the full keyboard. The numpad has a decimal
+  // point, so both modes share it.
   document.getElementById('field-picker-keyboard')
-    ?.classList.toggle('fp-keyboard--numeric', inputMode === 'numeric');
+    ?.classList.toggle('fp-keyboard--numeric', inputMode === 'numeric' || inputMode === 'decimal');
+
+  const unitEl = document.getElementById('field-picker-unit');
+  if (unitEl) {
+    unitEl.textContent = unit;
+    unitEl.hidden = !unit;
+  }
   // Decided once per open, never while typing: the sheet's height must not
   // change as the suggestion list filters down, or the keyboard moves.
   modal.querySelector('.field-picker-sheet')
@@ -10272,16 +10282,19 @@ document.getElementById('batch-roast-date')?.addEventListener('click', () => ope
 const _batchTextFields = [
   { id: 'batch-roast-level',    inputMode: 'text' },
   { id: 'batch-quality-score',  inputMode: 'decimal' },
-  { id: 'batch-weight',         inputMode: 'decimal' },
-  { id: 'batch-price',          inputMode: 'decimal' },
+  { id: 'batch-weight',         inputMode: 'decimal', unit: 'g' },
+  // The bag's currency is its own field next to this one, so read it rather
+  // than hardcoding a symbol.
+  { id: 'batch-price',          inputMode: 'decimal', unit: () => document.getElementById('batch-currency')?.value?.trim() || '' },
   { id: 'batch-currency',       inputMode: 'text' },
   { id: 'batch-notes',          inputMode: 'text' },
 ];
-_batchTextFields.forEach(({ id, inputMode }) => {
+_batchTextFields.forEach(({ id, inputMode, unit }) => {
   document.getElementById(id)?.addEventListener('click', () => {
     const el = document.getElementById(id);
     openFieldPicker(null, [], {
       inputMode,
+      unit: typeof unit === 'function' ? unit() : (unit || ''),
       initialValue: el?.value ?? '',
       onConfirm: (val) => { if (el) el.value = val.trim(); },
     });
@@ -10649,12 +10662,12 @@ function _beanManagerRenderDetail(bean) {
       <div class="bean-manager-prop-tile bean-manager-prop-tile--split">
         <span class="bean-manager-prop-label">${_esc(t('beanEditor.altitude'))}</span>
         <div class="bean-manager-prop-split-row">
-          <button type="button" class="bean-manager-prop-split-half" data-bm-field="altMin" data-bm-value="${_esc(String(altMin))}" data-bm-inputmode="numeric">
+          <button type="button" class="bean-manager-prop-split-half" data-bm-field="altMin" data-bm-value="${_esc(String(altMin))}" data-bm-inputmode="numeric" data-bm-unit="m">
             <span class="bean-manager-prop-split-label">${_esc(t('beanEditor.altFrom'))}</span>
             <span class="bean-manager-prop-value">${val(altMin)}</span>
           </button>
           <div class="bean-manager-prop-split-divider"></div>
-          <button type="button" class="bean-manager-prop-split-half" data-bm-field="altMax" data-bm-value="${_esc(String(altMax))}" data-bm-inputmode="numeric">
+          <button type="button" class="bean-manager-prop-split-half" data-bm-field="altMax" data-bm-value="${_esc(String(altMax))}" data-bm-inputmode="numeric" data-bm-unit="m">
             <span class="bean-manager-prop-split-label">${_esc(t('beanEditor.altTo'))}</span>
             <span class="bean-manager-prop-value">${val(altMax)}</span>
           </button>
@@ -10890,6 +10903,7 @@ document.getElementById('bean-manager-detail')?.addEventListener('pointerdown', 
   const inputMode = target.dataset.bmInputmode || 'text';
   openFieldPicker(null, _beanManagerSuggestions(field), {
     inputMode,
+    unit: target.dataset.bmUnit || '',
     initialValue: value,
     onConfirm: (newValue) => _beanManagerSaveField(field, newValue.trim()),
   });

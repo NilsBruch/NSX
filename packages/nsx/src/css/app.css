@@ -10494,6 +10494,20 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 .field-picker-input-wrap {
   padding: 10px 14px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Unit next to the value, so a numeric field says what it wants (grams,
+   seconds) instead of leaving the user to guess from the label behind the
+   sheet. Sized to sit level with the input's own text. */
+.field-picker-unit {
+  flex: none;
+  font-size: var(--fs-input);
+  color: var(--c-label-secondary, rgba(255, 255, 255, 0.55));
+  white-space: nowrap;
 }
 
 .field-picker-input {
