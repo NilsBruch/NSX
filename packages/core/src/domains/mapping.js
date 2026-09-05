@@ -18,7 +18,10 @@
  *   normalizeShotData(shot), getShotDurationSeconds(fullShot),
  *   buildShotDiffData(currentShot, latestShot, currentDurationSec, latestDurationSec),
  *   buildWorkflowItemsFromShots(shotItems, ratingCache),
- *   findShotsForWorkflow(workflow, source)
+ *   findShotsForWorkflow(workflow, source),
+ *   resolveActualDose(shot), resolveActualYield(fullShot),
+ *   resolveShotVolumeAndWeight(fullShot), updateVolumeCalibration(existingCal, fullShot),
+ *   getBatchAge(iso)
  */
 (function () {
   const NSXCore = window.NSXCore;
@@ -36,6 +39,29 @@
 
   function calcRatio(dose, yield_) {
     return dose > 0 ? `1:${(yield_ / dose).toFixed(1)}` : "—";
+  }
+
+  // A shot's `annotations.enjoyment` is 0-100 in the real API, NOT 1-5 — NSX
+  // renders it as five stars at 20 points each (see ui.js's _starRatingHtml).
+  // A skin that treats it as a 1-5 value both renders garbage AND writes back a
+  // rating other skins read as near-zero, so the conversion lives here rather
+  // than being re-derived (or re-forgotten) per skin.
+  const ENJOYMENT_PER_STAR = 20;
+  const MAX_STARS = 5;
+
+  /** 0-100 enjoyment -> a whole number of stars (0-5), clamped. */
+  function enjoymentToStars(enjoyment) {
+    const value = Number(enjoyment);
+    if (!Number.isFinite(value)) return 0;
+    const stars = Math.round(value / ENJOYMENT_PER_STAR);
+    return Math.max(0, Math.min(MAX_STARS, stars));
+  }
+
+  /** Stars (0-5) -> the 0-100 enjoyment value the API actually stores. */
+  function starsToEnjoyment(stars) {
+    const value = Number(stars);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(MAX_STARS, Math.round(value))) * ENJOYMENT_PER_STAR;
   }
 
   function resolveProfileTemp(prof) {
@@ -258,6 +284,162 @@
     return Number.isFinite(last) ? Math.max(0, last) : null;
   }
 
+  /**
+   * The last real scale-weight sample and the last machine-reported volume
+   * sample from a FULL shot's measurements — the two raw ingredients the
+   * virtual-scale calibration feedback loop needs. Falls back to the
+   * machine's own volume snapshot if no per-sample volume was recorded.
+   * Mirrors NSX's real post-shot calibration read exactly (app.js's
+   * _runPostShotActions).
+   */
+  function resolveShotVolumeAndWeight(fullShot) {
+    let volume = null;
+    let weight = null;
+    const measurements = fullShot?.measurements;
+    if (Array.isArray(measurements)) {
+      for (let i = measurements.length - 1; i >= 0; i--) {
+        const w = measurements[i]?.scale?.weight ?? measurements[i]?.scale?.weight_grams ?? null;
+        if (weight === null && Number.isFinite(w) && w > 0) weight = w;
+        const v = measurements[i]?.machine?.volume ?? measurements[i]?.volume ?? null;
+        if (volume === null && Number.isFinite(v) && v > 0) volume = v;
+        if (weight !== null && volume !== null) break;
+      }
+    }
+    if (volume === null) {
+      const snapVol = Number(fullShot?.snapshot?.volume);
+      if (Number.isFinite(snapVol) && snapVol > 0) volume = snapVol;
+    }
+    return { volume, weight };
+  }
+
+  const VOLUME_SAMPLE_MIN_VOLUME = 5;
+  const VOLUME_SAMPLE_RATIO_MIN = 0.5;
+  const VOLUME_SAMPLE_RATIO_MAX = 1.5;
+  const VOLUME_SAMPLE_WINDOW = 4;
+
+  /**
+   * Learns (or refines) the ml-per-gram factor a recipe uses to estimate
+   * weight from the machine's own volume tracking when no physical scale is
+   * connected. Runs after EVERY shot, not just scale-less ones — it needs a
+   * real scale-weight sample to learn from, so a shot brewed WITH a scale is
+   * exactly what teaches the factor that later gets used WITHOUT one.
+   * Rejects an implausible sample (too little volume, or a ratio outside
+   * 0.5-1.5 ml/g) rather than letting one bad reading corrupt the average —
+   * same bounds and 4-sample rolling window as NSX's real calibration.
+   */
+  function updateVolumeCalibration(existingCal, fullShot) {
+    const cal = existingCal && typeof existingCal === "object" ? existingCal : { factor: 1.0, samples: [] };
+    const { volume, weight } = resolveShotVolumeAndWeight(fullShot);
+    if (!Number.isFinite(volume) || !Number.isFinite(weight) || weight <= 0) return cal;
+
+    const sample = volume / weight;
+    const valid = volume >= VOLUME_SAMPLE_MIN_VOLUME && sample >= VOLUME_SAMPLE_RATIO_MIN && sample <= VOLUME_SAMPLE_RATIO_MAX;
+    if (!valid) return cal;
+
+    const samples = [...(cal.samples || []), sample].slice(-VOLUME_SAMPLE_WINDOW);
+    const factor = samples.reduce((a, b) => a + b, 0) / samples.length;
+    return { factor, samples };
+  }
+
+  /**
+   * The dose the ratio/review screen should show: an editable actualDoseWeight
+   * annotation the user recorded for this specific shot, falling back to the
+   * recipe's planned targetDoseWeight if nothing was recorded (the DE1/scale
+   * never measures dose-in itself, only output — this is the same ceiling
+   * NSX's shot review has always had, not a gap to fix further).
+   */
+  function resolveActualDose(shot) {
+    const measuredDose = Number(shot?.annotations?.actualDoseWeight);
+    if (Number.isFinite(measuredDose) && measuredDose > 0) return measuredDose;
+    const target = Number(shot?.workflow?.context?.targetDoseWeight || 0);
+    return target > 0 ? target : null;
+  }
+
+  /**
+   * The actual measured output for a FULL shot record (must include
+   * `measurements`/`snapshot` — the lightweight list-endpoint shot has
+   * neither, so this always returns nulls for one of those; fetch via
+   * NSXCore.getShotDetails(id) first). Resolution order mirrors NSX's shot
+   * review exactly: a manually-entered actualYield annotation, then the
+   * machine's own volume snapshot (ml, no scale needed), then the last
+   * nonzero scale-weight sample, then a virtual-scale-estimated yield.
+   */
+  function resolveActualYield(fullShot) {
+    const ann = fullShot?.annotations ?? {};
+    const extras = ann.extras ?? {};
+    // NSX marks a resolved yield "estimated" only when the virtualScale flag is
+    // set, checked up front here rather than as a separate final-fallback
+    // branch — nested the way NSX's own annotations shape it (extras.
+    // actualYield), that branch never actually runs, since the top-level
+    // fallback below already consumes extras.actualYield first.
+    const isVirtualEstimate = extras.virtualScale === true;
+
+    const annYield = Number(ann.actualYield ?? extras.actualYield);
+    if (Number.isFinite(annYield) && annYield > 0) {
+      return { value: annYield, unit: "g", estimated: isVirtualEstimate };
+    }
+
+    const snapVol = Number(fullShot?.snapshot?.volume);
+    if (Number.isFinite(snapVol) && snapVol > 0) return { value: snapVol, unit: "ml", estimated: false };
+
+    const measurements = fullShot?.measurements;
+    if (Array.isArray(measurements)) {
+      for (let i = measurements.length - 1; i >= 0; i--) {
+        const w = measurements[i]?.scale?.weight ?? measurements[i]?.scale?.weight_grams ?? null;
+        if (Number.isFinite(w) && w > 0) return { value: w, unit: "g", estimated: false };
+      }
+    }
+
+    return { value: null, unit: "g", estimated: false };
+  }
+
+  // Why a persisted shot ended, as decided by the app's shot sequencer. This is
+  // an OPEN SET: newer gateway/app builds may add values, so callers MUST
+  // tolerate a string not in KNOWN_STOP_REASONS. Returns null for legacy shots
+  // and shots the app didn't sequence (e.g. full gateway mode while
+  // backgrounded). Aborted shots (no scale, or a stop before the pour began)
+  // and mid-shot disconnects are NOT persisted at all — their reasons live only
+  // on the /ws/v1/machine/shotState feed, which this does not read.
+  const KNOWN_STOP_REASONS = ["targetWeight", "targetVolume", "apiStop", "appStop", "machineEnded", "error"];
+  function getShotStopReason(shot) {
+    const raw = shot?.stopReason;
+    return typeof raw === "string" && raw ? raw : null;
+  }
+  function isKnownStopReason(reason) {
+    return KNOWN_STOP_REASONS.includes(reason);
+  }
+
+  /**
+   * Roast-date age, e.g. "2 weeks". A recipe's roast date lives on the batch, not
+   * the bean (see the workflow domain) — this just formats a duration. Reads
+   * window.NSXI18n?.t for the day/week/month/year unit, same optional-chaining
+   * pattern as buildShotDiffData below: translations.js is always loaded (core
+   * bootstrap order), but a skin without it still gets an English fallback rather
+   * than a crash.
+   */
+  function getBatchAge(iso) {
+    const t = window.NSXI18n?.t || ((k) => k.split(".").pop());
+    if (!iso) return "—";
+    const roastDate = new Date(iso);
+    if (Number.isNaN(roastDate.getTime())) return "—";
+
+    const diffMs = Date.now() - roastDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return "—";
+
+    if (diffDays < 7) return `${diffDays} ${t(diffDays === 1 ? "time.day" : "time.days")}`;
+    if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7);
+      return `${weeks} ${t(weeks === 1 ? "time.week" : "time.weeks")}`;
+    }
+    if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30);
+      return `${months} ${t(months === 1 ? "time.month" : "time.months")}`;
+    }
+    const years = Math.floor(diffDays / 365);
+    return `${years} ${t(years === 1 ? "time.year" : "time.years")}`;
+  }
+
   function buildShotDiffData(currentShot, latestShot, currentDurationSec, latestDurationSec) {
     const t = window.NSXI18n?.t || ((k) => k);
     const current = mapShotToWorkflow(currentShot);
@@ -403,9 +585,41 @@
       });
   }
 
+  // When each workflow key was last brewed: key -> newest shot timestamp (ms).
+  // Built once per sort instead of scanning the shot list per recipe.
+  function buildLastUsedIndex(shots) {
+    const index = new Map();
+    for (const shot of shots || []) {
+      const ts = Date.parse(shot?.timestamp || 0);
+      if (!Number.isFinite(ts)) continue;
+      const key = getWorkflowKey(mapShotToWorkflow(shot));
+      if (!index.has(key) || ts > index.get(key)) index.set(key, ts);
+    }
+    return index;
+  }
+
+  // Most recently brewed recipe first. A recipe that was never brewed has no
+  // shot to date it, so it keeps its original relative order at the end of the
+  // list rather than being dated 0 and interleaved with genuinely old ones.
+  function sortRecipesByLastUsed(recipes, shots) {
+    const index = buildLastUsedIndex(shots);
+    const list = (recipes || []).map((recipe, i) => ({ recipe, i, at: index.get(getWorkflowKey(recipe)) ?? null }));
+    list.sort((a, b) => {
+      if (a.at === b.at) return a.i - b.i;
+      if (a.at === null) return 1;
+      if (b.at === null) return -1;
+      return b.at - a.at;
+    });
+    return list.map((entry) => entry.recipe);
+  }
+
   NSXCore.register({
+    buildLastUsedIndex,
+    sortRecipesByLastUsed,
     formatMmSs,
     calcRatio,
+    enjoymentToStars,
+    starsToEnjoyment,
     resolveProfileTemp,
     mapApiWorkflowToDisplay,
     mapShotToWorkflow,
@@ -417,5 +631,12 @@
     buildWorkflowItemsFromShots,
     computeMaxRating,
     findShotsForWorkflow,
+    resolveActualDose,
+    resolveActualYield,
+    resolveShotVolumeAndWeight,
+    getShotStopReason,
+    isKnownStopReason,
+    updateVolumeCalibration,
+    getBatchAge,
   });
 })();

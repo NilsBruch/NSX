@@ -8,10 +8,12 @@
  * change; presentations subscribe and render (all DOM stays in the skin).
  *
  * Registered on NSXCore:
- *   Selectors: getFlushFlow(), getFlushDuration(), getFlushPresets(), getActiveFlushPreset()
+ *   Selectors: getFlushFlow(), getFlushDuration(), getFlushPresets(),
+ *              getActiveFlushPreset(), isFlushTimerEnabled()
  *   Commands:  selectFlushPreset(name), setFlushFlow(v), setFlushDuration(v),
+ *              setFlushTimerEnabled(enabled),
  *              deactivateFlushPreset(), setFlushPresets(presets), hydrateFlush()
- *   Event:     'flushChanged' -> { flow, duration, active, presets }
+ *   Event:     'flushChanged' -> { flow, duration, active, presets, timerEnabled }
  */
 (function () {
   const NSXCore = window.NSXCore;
@@ -30,23 +32,30 @@
   let active = "normal";
   let flow = presets[active].flow;
   let duration = presets[active].duration;
+  // The auto-stop timer. Off pushes duration 0 (rinse until manually stopped)
+  // without losing the dialed seconds — mirrors the steam domain's timer.
+  let timerEnabled = true;
 
   const clampFlow = (v) => Math.min(10, Math.max(1, v));
   const clampDuration = (v) => Math.min(60, Math.max(1, v));
 
   function emitChanged() {
-    NSXCore.emit("flushChanged", { flow, duration, active, presets });
+    NSXCore.emit("flushChanged", { flow, duration, active, presets, timerEnabled });
   }
+
+  // Duration actually sent: 0 (indefinite) when the timer is off, the dialed
+  // value otherwise. `duration` itself is never zeroed.
+  const effectiveDuration = () => (timerEnabled ? parseFloat(duration) : 0);
 
   // Flush-domain-specific machine writes (debounced), built on the core push helper.
   function pushFlow() {
     NSXCore.debounced("flushFlow", () => NSXCore.push({ rinseData: { flow: parseFloat(flow) } }));
   }
   function pushDuration() {
-    NSXCore.debounced("flushDur", () => NSXCore.push({ rinseData: { duration: parseFloat(duration) } }));
+    NSXCore.debounced("flushDur", () => NSXCore.push({ rinseData: { duration: effectiveDuration() } }));
   }
   function pushBoth() {
-    NSXCore.debounced("flush", () => NSXCore.push({ rinseData: { flow: parseFloat(flow), duration: parseFloat(duration) } }));
+    NSXCore.debounced("flush", () => NSXCore.push({ rinseData: { flow: parseFloat(flow), duration: effectiveDuration() } }));
   }
 
   function selectFlushPreset(name) {
@@ -81,6 +90,13 @@
     pushDuration();
   }
 
+  function setFlushTimerEnabled(en) {
+    timerEnabled = Boolean(en);
+    NSXCore.patchStore({ nsx_flush_timer_enabled: timerEnabled });
+    emitChanged();
+    pushDuration();
+  }
+
   function setFlushPresets(next) {
     if (!next || typeof next !== "object") return;
     presets = next;
@@ -108,6 +124,7 @@
       if (presets[s.nsx_flush_active_preset]) active = s.nsx_flush_active_preset;
       else if (s.nsx_flush_active_preset === "") active = null;
     }
+    if (typeof s.nsx_flush_timer_enabled === "boolean") timerEnabled = s.nsx_flush_timer_enabled;
     const state = presets[active] ?? presets.normal;
     flow = state.flow;
     duration = state.duration;
@@ -118,9 +135,11 @@
     getFlushDuration: () => duration,
     getFlushPresets: () => presets,
     getActiveFlushPreset: () => active,
+    isFlushTimerEnabled: () => timerEnabled,
     selectFlushPreset,
     setFlushFlow,
     setFlushDuration,
+    setFlushTimerEnabled,
     deactivateFlushPreset,
     setFlushPresets,
     hydrateFlush,

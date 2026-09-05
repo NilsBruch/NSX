@@ -43,7 +43,7 @@
     sleeping: ["setState"],
     heating: ["setState"],
     preheating: ["setState"],
-    espresso: ["stopShot"],
+    espresso: ["stopShot", "skipStep"],
     hotWater: ["setState"],
     flush: ["setState"],
     steam: ["setState"],

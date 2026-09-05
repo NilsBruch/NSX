@@ -43,3 +43,32 @@ test("getWithEtag sends If-None-Match on revalidation and returns the same ref o
   assert.equal(profileReqs[0].headers["If-None-Match"], undefined, "no conditional header on first request");
   assert.equal(profileReqs[1].headers["If-None-Match"], ETAG, "conditional header sent on revalidation");
 });
+
+test("getWithEtag sets cache: 'no-store' so the browser's own HTTP cache can't intervene", async () => {
+  const opts = [];
+  globalThis.fetch = async (url, o = {}) => { opts.push(o); return { ok: true, status: 200, headers: { get: () => null }, json: async () => [] }; };
+  await NSXApi.fetchProfiles();
+  assert.equal(opts.at(-1).cache, "no-store");
+});
+
+test("getWithEtag recovers from an unusable 304 (no cached payload) by retrying cache-busted", async () => {
+  // The real bug, seen against an actual DE1 gateway: something upstream (the
+  // browser's own cache / the Decent app's serving layer) answered 304 to a
+  // request we never sent an If-None-Match for. Its body is empty by spec, so
+  // there was nothing to return and re-requesting reproduced it forever — the
+  // shots list stayed permanently empty. Now it retries once, cache-busted.
+  const BEANS = [{ id: "b1", name: "Brazil Gold" }];
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(url);
+    if (!String(url).includes("_cb=")) {
+      return { ok: false, status: 304, headers: { get: () => null }, json: async () => null };
+    }
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => BEANS };
+  };
+
+  const result = await NSXApi.fetchBeans();
+  assert.deepEqual(result, BEANS, "the retry actually returns the real data");
+  assert.equal(urls.length, 2, "exactly one retry — not a loop");
+  assert.ok(urls[1].includes("_cb="), "the retry is cache-busted");
+});

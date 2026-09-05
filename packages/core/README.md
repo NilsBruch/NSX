@@ -22,6 +22,14 @@ Loaded first (after `config`/`translations`/`api`). Provides:
 - `NSXCore.emit(name, payload)` — publish a semantic event to subscribers
 - `NSXCore.register(impl)` — a domain calls this to attach its selectors/commands
   as `NSXCore.<name>(...)`
+- `NSXCore.getStoreNamespace()` / `NSXCore.setStoreNamespace(ns)` — the gateway
+  KV-store namespace store.js and workflow.js persist into (settings, recipe
+  library, profile favorites). Defaults to `"NSX"`. **Every skin besides the
+  original must call `setStoreNamespace` before its bootstrap sequence**
+  (before `migrateLegacyStore`/`loadStore`/`loadRecipes`) or it silently shares
+  the same recipes/settings as whichever skin already owns the default —
+  reads and writes both skins make land in one place, each clobbering the
+  other's edits with no error.
 
 It also **bridges** api.js's low-level `window` CustomEvents into semantic
 `NSXCore` events, so presentation code subscribes to stable names instead of api
@@ -93,10 +101,34 @@ global (keeps core app-state-free).
   `createGrinder`, `updateGrinder`, `deleteGrinder`. Emits `grindersLoaded`.
 - **`bean.js`** — `getBeans`, `setBeansCache`, `loadBeans(includeArchived?)`,
   `createBean`, `updateBean`, `deleteBean`. Emits `beansLoaded`.
+  Also owns **bean/batch resolution**: `normalizeRoastDate(v)` (day-granular, so
+  a timestamp and a bare date compare equal), `findBatchForRoastDate(batches, d)`
+  (pure), `resolveBean(roaster, name)` and `resolveBatch(beanId, roastDate)` —
+  both **find-or-create**.
+  A *batch* is one **bag** of a bean, identified by **(beanId, roastDate)** —
+  *not* one per shot: every shot from the same bag resolves to the same batch.
+  A batch's `roastDate` is treated as **immutable**; a new roast date means a
+  different bag, so callers re-resolve to another batch instead of rewriting one
+  (rewriting would retroactively change the roast date every past shot on that
+  bag reports). The batch is also the only structural link a shot has back to a
+  bean (`shot.workflow.context.beanBatchId → batch.beanId → bean`), so a
+  workflow without one leaves that link to roaster/name string matching.
+  **Deleting a bean cascades on the gateway: its batches go with it.** Past
+  shots keep their own record (including the now-dangling `beanBatchId`) — they
+  are never deleted — but that link is gone, so they fall back to roaster/name
+  matching and, with the bean itself deleted, group under no bean at all. A
+  skin offering bean deletion should say so, and should also cut any recipe
+  still pointing at that bean: `resolveBean` is find-or-CREATE, so a recipe
+  that keeps resolving its roaster/name will silently resurrect the deleted
+  bean, stripped of everything but those two fields.
 - **`shot.js`** — per-shot-id detail cache (a `Map`, no single canonical list):
   `getCachedShotDetails(id)` (sync, cache-only), `getShotDetails(id)`
   (fetch-or-cache), `invalidateShotDetails`, `deleteShot`, `updateShot`,
-  `updateShotMeta`. CRUD wrappers invalidate the cache entry on success.
+  `updateShotMeta`, and `updateShotWorkflowContext(id, ctxPatch)` — patches the
+  recipe-as-brewed (grind setting, roaster/bean, targets) by MERGING onto the
+  full record, since the gateway's PUT replaces `workflow` wholesale and a
+  context-only patch would drop the embedded profile. CRUD wrappers invalidate
+  the cache entry on success.
 - **`profile.js`** — three independent caches (visible / visible+hidden /
   deleted), each `null` until loaded, never cached empty (gateway can transiently
   return none right after wake): `getProfiles`, `getProfilesAll`,
@@ -130,7 +162,79 @@ explicitly. This is the shared shot/workflow "domain model": `formatMmSs`,
 `normalizeWorkflowKeyPart`, `getWorkflowKey`, `normalizeShotData`,
 `getShotDurationSeconds`, `buildShotDiffData`,
 `buildWorkflowItemsFromShots(shotItems, ratingCache)`, `computeMaxRating`,
-`findShotsForWorkflow(workflow, source)`.
+`findShotsForWorkflow(workflow, source)`, `getBatchAge(iso)` (roast-date age,
+e.g. "2 weeks" — a recipe's roast date lives on the batch, not the bean stem).
+`resolveActualDose(shot)` / `resolveActualYield(fullShot)` back the shot-review
+ratio: dose falls back from an `annotations.actualDoseWeight` the user recorded
+to the recipe's planned target (the DE1 never measures dose-in, only output);
+yield resolves an `annotations.actualYield` override, then the machine's own
+volume snapshot, then the last nonzero scale-weight sample, then a
+virtual-scale estimate — in that order, matching NSX's real shot review.
+`resolveActualYield` needs a FULL shot (via `getShotDetails`, not the
+lightweight list-endpoint shot, which carries neither `measurements` nor
+`snapshot`).
+`resolveShotVolumeAndWeight(fullShot)` / `updateVolumeCalibration(existingCal, fullShot)`
+back the virtual-scale calibration feedback loop: every completed shot (with
+a real scale sample AND the machine's own volume tracking) refines a
+recipe's ml-per-gram factor (a rolling 4-sample average, rejecting
+implausible samples), which a later scale-less shot then uses to estimate
+weight from volume — mirrors NSX's real `_runPostShotActions` calibration
+step exactly.
+
+### App / machine / device settings
+
+- **`settings.js`** — three independent caches for three independent gateway
+  resources (app-level, machine-level, and machine-advanced/calibration
+  settings — kept separate rather than merged, since they're fetched/saved
+  independently): `getAppSettings`, `getMachineSettings`, `getAdvancedSettings`;
+  `loadAppSettings`, `loadMachineSettings`, `loadAdvancedSettings`,
+  `saveAppSetting(key, value)`, `saveMachineSetting(key, value)`,
+  `saveAdvancedSetting(key, value)` (each an optimistic local merge + gateway
+  write). Emits `settingsLoaded`.
+- **`devices.js`** — the on-demand REST device list + connect actions a settings
+  screen needs (distinct from the always-on `devices` bridged event in
+  `core.js`, which is live push status): `getDevices`, `loadDevices`,
+  `scanForDevices`, `connectToDevice(deviceId)`, `disconnectDevice(deviceId)`.
+  Emits `devicesLoaded`.
+- **`plugins.js`** — plugin list + per-plugin settings cache (e.g. the
+  Visualizer integration): `getPlugins`, `getPluginSettings(id)`, `loadPlugins`,
+  `setPluginEnabled(id, enabled)`, `loadPluginSettings(id)`,
+  `savePluginSetting(id, key, value)`. Emits `pluginsLoaded`.
+- **`display.js`** — what the gateway's **host platform** can do to the screen,
+  from `GET /api/v1/display`'s `platformSupported: { brightness, wakeLock }`:
+  `getDisplaySupport()` (sync, cached) and `loadDisplaySupport(force?)`. Emits
+  `displaySupportLoaded`. Where a capability is `false`, the matching
+  `NSXApi.setDisplayBrightness` / `requestWakeLockOverride` calls are no-ops on
+  that host, so a skin should **hide** its brightness slider / "keep screen
+  awake" switch rather than offer a control that does nothing. It is a
+  capability, not state — fetched once and cached; only an explicit `false`
+  hides anything, so an old gateway that omits the field (or one that is
+  briefly unreachable) leaves every control visible. The live values in the
+  same response are deliberately not cached — read those from
+  `NSXApi.fetchDisplayState()`.
+
+No domain of their own — two plain `NSXApi` reads a settings screen needs, with
+nothing worth caching:
+
+- **`NSXApi.fetchGatewayInfo()`** — `GET /api/v1/info`: the gateway's own build
+  (`version`, `buildNumber`, `fullVersion`, `commitShort`, `buildTime`). Not
+  the DE1's — that's `fetchMachineInfo()`.
+- **`NSXApi.fetchAppUpdate()`** — `GET /api/v1/update`: `{ phase,
+  currentVersion, latestVersion, releaseNotes }`. `phase` is an open set the
+  gateway defines (`available` and `upToDate` observed); anything else should
+  read as "nothing to report". **Read-only on purpose** — the bridge exposes no
+  documented way to start an update, so a skin shows the status and leaves
+  installing to the Decent app. Both routes are absent on older gateway builds,
+  so call them fail-soft.
+
+### Profile rendering — `profile-render.js` (owns **no state at all**)
+
+- **`renderProfileSpark(profile, opts?)`** — pure SVG string for a profile's
+  pressure/flow/temperature curve, ported from NSX's `_profileSparkSvg` so a
+  profile picker/manager in any skin gets byte-identical curves instead of
+  re-deriving the math. No DOM access: NSX read light/dark theme from
+  `document.documentElement.dataset.theme`; here it's an explicit
+  `opts.theme` (`"dark"` default). See the file header for the full options list.
 
 ---
 
@@ -227,6 +331,10 @@ Domain-emitted events (fire after a command mutates that domain):
 | `scheduleChanged` | schedule-state snapshot |
 | `grindersLoaded` | `{ grinders }` |
 | `beansLoaded` | `{ beans }` |
+| `settingsLoaded` | `{ app, machine, advanced }` |
+| `devicesLoaded` | `{ devices }` |
+| `pluginsLoaded` | `{ plugins }` |
+| `displaySupportLoaded` | `{ brightness, wakeLock }` |
 | `toast` | `string` (message to surface to the user) |
 
 ## TypeScript

@@ -30,6 +30,29 @@
 
   function pad2(n) { return String(n).padStart(2, "0"); }
 
+  /**
+   * The gateway schedule is wake-only: it fires (wakes the machine) at `time`
+   * and `keepAwakeFor` holds it awake for that many minutes afterwards, which
+   * is how the sleep time reaches the machine. We map keepAwakeFor to the
+   * awake window = (offTime - onTime).
+   *
+   * Caveats worth knowing:
+   *  - The field maxes at 720 (12h), so a longer awake window is capped there.
+   *  - keepAwakeFor only SUSPENDS the idle auto-sleep for its duration; once it
+   *    elapses the machine falls back to that timeout (userPresenceEnabled +
+   *    sleepTimeoutMinutes), so the machine actually sleeps a bit AFTER offTime,
+   *    not exactly at it. Trying to hit offTime exactly (diff - sleepTimeout)
+   *    would be fragile — it assumes auto-sleep is on and the machine idle.
+   *  - offTime == onTime is degenerate -> wake-only (null).
+   */
+  function computeKeepAwakeFor() {
+    const onMin = state.onHour * 60 + state.onMinute;
+    const offMin = state.offHour * 60 + state.offMinute;
+    const diff = (((offMin - onMin) % 1440) + 1440) % 1440;
+    if (diff <= 0) return null;
+    return Math.max(1, Math.min(720, diff));
+  }
+
   function emitChanged() {
     NSXCore.emit("scheduleChanged", Object.assign({}, state));
   }
@@ -53,6 +76,10 @@
     if (s.nsx_schedule && typeof s.nsx_schedule === "object") {
       Object.assign(state, DEFAULTS, s.nsx_schedule);
     }
+    // Emit so reactive subscribers (e.g. Nova's scheduleState, created at import
+    // time with DEFAULTS before the store loaded) refresh to the persisted state
+    // — otherwise the enabled toggle / days silently reset on reload.
+    emitChanged();
   }
 
   async function syncScheduleToApi() {
@@ -70,6 +97,7 @@
 
     const days = state.days.length > 0 ? state.days : [1, 2, 3, 4, 5, 6, 7];
     const time = `${pad2(state.onHour)}:${pad2(state.onMinute)}`;
+    const keepAwakeFor = computeKeepAwakeFor();
 
     if (state.scheduleId && typeof updateSchedule === "function") {
       try {
@@ -78,7 +106,7 @@
           time,
           daysOfWeek: days,
           enabled: true,
-          keepAwakeFor: 0,
+          keepAwakeFor,
         });
         return;
       } catch {
@@ -93,7 +121,7 @@
         time,
         daysOfWeek: days,
         enabled: true,
-        keepAwakeFor: 0,
+        keepAwakeFor,
       });
       state.scheduleId = created?.id || null;
       NSXCore.patchStore({ nsx_schedule: Object.assign({}, state) });
