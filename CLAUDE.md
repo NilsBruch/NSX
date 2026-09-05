@@ -27,10 +27,10 @@ when assembling the ZIP.
 
 ```
 espresso-skins/                     # repo root (npm workspaces)
-├── package.json                    # workspaces + scripts: sync-core, test, dev:nsx
+├── package.json                    # workspaces + scripts: sync-core, test, dev:nsx, dev:gateway
 ├── scripts/sync-core.mjs           # copies packages/core/src -> packages/nsx/src/core
 ├── tests/
-│   └── mock-gateway/               # dependency-light gateway stand-in (npm run dev:nsx)
+│   └── mock-gateway/               # dependency-light gateway stand-in (npm run dev:gateway)
 ├── packages/
 │   ├── core/                       # shared, DOM-FREE package (SOURCE OF TRUTH)
 │   │   ├── README.md               # ← full NSXCore API docs (read this for core)
@@ -165,10 +165,15 @@ skin wiring (the shared logic moved to NSXCore, above):
   `harness.mjs` stubs `window`/`WebSocket` and evaluates them; a test loads
   `core.js` + the domain under test and mocks `window.NSXApi`. Prefer adding a
   test here for any new pure core logic.
-- **`npm run dev:nsx`** — serves `packages/nsx/src` and a mock gateway (REST +
-  WebSocket, faithful ETag semantics) so the skin runs without a machine. See
-  `tests/mock-gateway/README.md`. Note: `config.js` hardcodes port 8080; on any
-  other port open with `?gateway=http://localhost:<port>`.
+- **`npm run dev:nsx`** — serves `packages/nsx/src` on port 5174, nothing else.
+  `config.js` derives the gateway host from `location.hostname` but pins the
+  port to 8080, so the skin talks to whatever owns 8080 — normally the real
+  Decent app. Open `http://localhost:5174`, no `?gateway=` needed.
+- **`npm run dev:gateway`** — the same server *with* a mock gateway (REST +
+  WebSocket, faithful ETag semantics) on port 8080, so the skin runs without a
+  machine. See `tests/mock-gateway/README.md`. Port 8080 must be free, so quit
+  the Decent app first — or use `PORT=8090` and open with
+  `?gateway=http://localhost:8090`.
 - `ws` is the repo's only (dev-only) dependency, used by the mock gateway.
 
 ## How the App Starts
