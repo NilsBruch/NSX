@@ -4965,10 +4965,14 @@ function _getShotTags(s) {
        : [];
 }
 
+// Most recently used tag first. Shots carry no createdAt, but `shots` is
+// newest-first throughout the skin (shots[0] is treated as the latest
+// everywhere), so Set insertion order already gives the wanted ordering —
+// sorting it alphabetically was what buried the tags actually in use.
 function _getAllUsedTags() {
   const set = new Set();
   for (const s of shots) _getShotTags(s).forEach(t => set.add(t));
-  return [...set].sort();
+  return [...set];
 }
 
 function _renderReviewTags() {
@@ -7319,10 +7323,9 @@ function _peditorRenderFrames() {
   const countEl = document.getElementById('peditor-phasen-count');
   if (countEl) countEl.textContent = _peditorFrames.length ? t('profileEditor.phasesCount').replace('{count}', _peditorFrames.length) : t('profileEditor.phasesLabel');
 
-  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const allFrameNames = () => {
     const all = Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : (NSXCore.getProfiles() || []);
-    return uniq(all.flatMap(r => (r.profile?.steps ?? r.profile?.frames ?? []).map(s => s.name)));
+    return NSXCore.uniqueFieldValuesByRecency(all, r => (r.profile?.steps ?? r.profile?.frames ?? []).map(s => s.name));
   };
 
   if (!_peditorFrames.length) {
@@ -9520,12 +9523,12 @@ let _fieldPickerAllOptions = [];
 let _fieldPickerOnConfirm = null;
 
 function _beanPickerOptions() {
-  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+  const beans = NSXCore.getBeans();
   return {
-    'bean-roaster':    uniq(NSXCore.getBeans().map(b => b.roaster)),
-    'bean-country':    uniq(NSXCore.getBeans().map(b => b.country)),
-    'bean-processing': uniq(NSXCore.getBeans().map(b => b.processing)),
-    'bean-variety':    uniq(NSXCore.getBeans().flatMap(b => Array.isArray(b.variety) ? b.variety : [])),
+    'bean-roaster':    NSXCore.uniqueFieldValuesByRecency(beans, 'roaster'),
+    'bean-country':    NSXCore.uniqueFieldValuesByRecency(beans, 'country'),
+    'bean-processing': NSXCore.uniqueFieldValuesByRecency(beans, 'processing'),
+    'bean-variety':    NSXCore.uniqueFieldValuesByRecency(beans, 'variety'),
   };
 }
 
@@ -9954,10 +9957,9 @@ window.closeNumberPicker = closeNumberPicker;
 }
 
 {
-  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const grinderTextInputs = {
-    'grinder-model':          () => uniq(NSXCore.getGrinders().map(g => g.model)),
-    'grinder-burrs':          () => uniq(NSXCore.getGrinders().map(g => g.burrs)),
+    'grinder-model':          () => NSXCore.uniqueFieldValuesByRecency(NSXCore.getGrinders(), 'model'),
+    'grinder-burrs':          () => NSXCore.uniqueFieldValuesByRecency(NSXCore.getGrinders(), 'burrs'),
     'grinder-setting-values': () => [],
   };
   Object.entries(grinderTextInputs).forEach(([id, getOptions]) => {
@@ -9971,11 +9973,10 @@ window.closeNumberPicker = closeNumberPicker;
 }
 
 {
-  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const allProfiles = () => Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : (NSXCore.getProfiles() || []);
   const profileEditorTextInputs = {
-    'profile-editor-title':  () => uniq(allProfiles().map(r => r.profile?.title)),
-    'profile-editor-author': () => uniq(allProfiles().map(r => r.profile?.author)),
+    'profile-editor-title':  () => NSXCore.uniqueFieldValuesByRecency(allProfiles(), 'profile.title'),
+    'profile-editor-author': () => NSXCore.uniqueFieldValuesByRecency(allProfiles(), 'profile.author'),
   };
   Object.entries(profileEditorTextInputs).forEach(([id, getOptions]) => {
     const el = document.getElementById(id);
@@ -10523,11 +10524,10 @@ function _beanManagerSuggestions(field) {
   // (e.g. "Schokoladig, Nussig, Beerig") that practically never repeat verbatim,
   // so suggestions add no value there — open a plain text field instead.
   if (field === 'name' || field === 'notes') return [];
-  const fromBeans = (key) => [...new Set(NSXCore.getBeans().map(b => b[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
-  if (field === 'variety') {
-    return [...new Set(NSXCore.getBeans().flatMap(b => Array.isArray(b.variety) ? b.variety : []).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
-  }
-  return fromBeans(field);
+  // Newest first (by the bean's createdAt), so the roaster you just entered is
+  // the first chip rather than whichever one starts with an early letter.
+  // 'variety' is an array field; uniqueFieldValuesByRecency handles both.
+  return NSXCore.uniqueFieldValuesByRecency(NSXCore.getBeans(), field);
 }
 
 function _beanManagerApplyField(target, field, value) {

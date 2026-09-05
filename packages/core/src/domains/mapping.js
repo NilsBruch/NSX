@@ -12,6 +12,7 @@
  * UI-rendering code that stays in each skin.
  *
  * Registered on NSXCore:
+ *   uniqueFieldValuesByRecency(items, pick),
  *   formatMmSs(ms), calcRatio(dose, yield_), resolveProfileTemp(profile),
  *   mapApiWorkflowToDisplay(wf), mapShotToWorkflow(shot),
  *   normalizeWorkflowKeyPart(value), getWorkflowKey(workflow),
@@ -585,6 +586,45 @@
       });
   }
 
+  /**
+   * Unique non-empty values of a field across `items`, newest first.
+   *
+   * Backs the pickers' suggestion strips. They used to sort alphabetically,
+   * which put whichever roaster happens to start with "A" ahead of the one
+   * just entered — the first chip was rarely the wanted one. The gateway
+   * stamps beans, grinders and profiles with createdAt, so recency is read
+   * from the data rather than guessed from list order.
+   *
+   * `pick` is a dotted path ('roaster', 'profile.title') or a function. Either
+   * may yield an array (a bean's variety, a profile's step names), in which
+   * case every entry is contributed under its item's timestamp. Items without
+   * a usable createdAt rank behind all dated ones, keeping their relative
+   * order rather than being dated 0 and interleaved with genuinely old ones.
+   */
+  function uniqueFieldValuesByRecency(items, pick) {
+    const read = typeof pick === "function"
+      ? pick
+      : (item) => String(pick).split(".").reduce((acc, part) => acc?.[part], item);
+
+    const newestByValue = new Map();
+    const list = Array.isArray(items) ? items : [];
+    list.forEach((item, index) => {
+      const raw = read(item);
+      const ts = Date.parse(item?.createdAt ?? "");
+      const rank = Number.isFinite(ts) ? ts : -(index + 1);
+      for (const entry of Array.isArray(raw) ? raw : [raw]) {
+        const value = typeof entry === "string" ? entry.trim()
+          : entry == null ? "" : String(entry);
+        if (!value) continue;
+        const prev = newestByValue.get(value);
+        if (prev === undefined || rank > prev) newestByValue.set(value, rank);
+      }
+    });
+    return [...newestByValue.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([value]) => value);
+  }
+
   // When each workflow key was last brewed: key -> newest shot timestamp (ms).
   // Built once per sort instead of scanning the shot list per recipe.
   function buildLastUsedIndex(shots) {
@@ -614,6 +654,7 @@
   }
 
   NSXCore.register({
+    uniqueFieldValuesByRecency,
     buildLastUsedIndex,
     sortRecipesByLastUsed,
     formatMmSs,

@@ -235,3 +235,98 @@ test("getShotStopReason returns the persisted reason, null for legacy/missing, a
   assert.equal(NSXCore.isKnownStopReason("someFutureReason"), false);
   assert.equal(NSXCore.isKnownStopReason(null), false);
 });
+
+/* ── uniqueFieldValuesByRecency ─────────────────────────── */
+
+const bean = (roaster, createdAt, extra = {}) => ({ roaster, createdAt, ...extra });
+
+test("uniqueFieldValuesByRecency orders values by their newest createdAt", () => {
+  const beans = [
+    bean("Aera",    "2026-01-01T10:00:00"),
+    bean("Mokuska", "2026-08-29T17:44:26"),
+    bean("Karma",   "2026-08-29T18:22:02"),
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(beans, "roaster"),
+    ["Karma", "Mokuska", "Aera"],
+    "newest first, not alphabetical",
+  );
+});
+
+test("uniqueFieldValuesByRecency dedupes on the newest occurrence", () => {
+  const beans = [
+    bean("Aera",    "2026-01-01T10:00:00"),
+    bean("Mokuska", "2026-02-01T10:00:00"),
+    bean("Aera",    "2026-09-01T10:00:00"),
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(beans, "roaster"),
+    ["Aera", "Mokuska"],
+    "a roaster reused on a newer bean moves to the front",
+  );
+});
+
+test("uniqueFieldValuesByRecency ranks undated items behind dated ones, in order", () => {
+  const beans = [
+    bean("NoDateFirst",  undefined),
+    bean("NoDateSecond", undefined),
+    bean("Dated",        "2020-01-01T00:00:00"),
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(beans, "roaster"),
+    ["Dated", "NoDateFirst", "NoDateSecond"],
+    "even an old dated item outranks undated ones, which keep their order",
+  );
+});
+
+test("uniqueFieldValuesByRecency drops empty values and trims", () => {
+  const beans = [
+    bean("  Karma  ", "2026-03-01T00:00:00"),
+    bean("",          "2026-04-01T00:00:00"),
+    bean(null,        "2026-05-01T00:00:00"),
+    bean("   ",       "2026-06-01T00:00:00"),
+  ];
+  assert.deepEqual(NSXCore.uniqueFieldValuesByRecency(beans, "roaster"), ["Karma"]);
+});
+
+test("uniqueFieldValuesByRecency reads dotted paths and array fields", () => {
+  const profiles = [
+    { createdAt: "2026-01-01T00:00:00", profile: { title: "Old" } },
+    { createdAt: "2026-09-01T00:00:00", profile: { title: "New" } },
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(profiles, "profile.title"),
+    ["New", "Old"],
+  );
+
+  const withVariety = [
+    bean("r1", "2026-01-01T00:00:00", { variety: ["Bourbon", "Typica"] }),
+    bean("r2", "2026-09-01T00:00:00", { variety: ["Catuai"] }),
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(withVariety, "variety"),
+    ["Catuai", "Bourbon", "Typica"],
+    "every entry of an array field is contributed under its item's date",
+  );
+});
+
+test("uniqueFieldValuesByRecency accepts a picker function and tolerates junk", () => {
+  const profiles = [
+    { createdAt: "2026-01-01T00:00:00", profile: { steps: [{ name: "Preinfuse" }] } },
+    { createdAt: "2026-09-01T00:00:00", profile: { steps: [{ name: "Pour" }, { name: "Preinfuse" }] } },
+  ];
+  // Both names occur in the newest profile, so they tie on rank and the sort
+  // is stable: they keep the order they were first encountered in.
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(profiles, (p) => (p.profile?.steps ?? []).map((s) => s.name)),
+    ["Preinfuse", "Pour"],
+  );
+
+  assert.deepEqual(NSXCore.uniqueFieldValuesByRecency(null, "roaster"), []);
+  assert.deepEqual(NSXCore.uniqueFieldValuesByRecency(undefined, "roaster"), []);
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency([{ createdAt: "nonsense", roaster: "X" }], "roaster"),
+    ["X"],
+    "an unparseable date must not drop the value",
+  );
+});

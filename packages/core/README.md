@@ -164,6 +164,12 @@ explicitly. This is the shared shot/workflow "domain model": `formatMmSs`,
 `buildWorkflowItemsFromShots(shotItems, ratingCache)`, `computeMaxRating`,
 `findShotsForWorkflow(workflow, source)`, `getBatchAge(iso)` (roast-date age,
 e.g. "2 weeks" — a recipe's roast date lives on the batch, not the bean stem).
+`uniqueFieldValuesByRecency(items, pick)` backs the pickers' suggestion strips:
+unique non-empty values of a field, newest first by the item's `createdAt` (the
+gateway stamps beans, grinders and profiles with it). `pick` is a dotted path
+(`'roaster'`, `'profile.title'`) or a function, and either may return an array
+(a bean's `variety`). Items without a parseable `createdAt` rank behind all
+dated ones, keeping their relative order.
 `resolveActualDose(shot)` / `resolveActualYield(fullShot)` back the shot-review
 ratio: dose falls back from an `annotations.actualDoseWeight` the user recorded
 to the recipe's planned target (the DE1 never measures dose-in, only output);
