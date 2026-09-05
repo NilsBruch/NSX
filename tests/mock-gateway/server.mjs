@@ -66,6 +66,7 @@ const state = {
   beanBatches: structuredClone(fx.beanBatches),
   grinders: structuredClone(fx.grinders),
   shots: structuredClone(fx.shots),
+  shotDetails: structuredClone(fx.shotDetails),
   store: structuredClone(fx.store),
   workflow: structuredClone(fx.currentWorkflow),
   // Simulated shot progression
@@ -214,9 +215,13 @@ function routeApi(req, res, url, body) {
     const offset = Number(q.get("offset") ?? 0);
     return jsonEtag({ items: state.shots.slice(offset, offset + limit), total: state.shots.length });
   }
+  // Only THIS endpoint carries measurements — the list above does not, exactly
+  // as the real gateway behaves. Serving fuller shots from the list would let
+  // a skin read `measurements` off a list shot and still work here while
+  // failing against a real machine.
   if (path.startsWith("/api/v1/shots/") && method === "GET") {
     const id = decodeURIComponent(path.split("/")[4]);
-    const s = state.shots.find((x) => x.id === id);
+    const s = state.shotDetails[id];
     return s ? json(s) : json({ message: "not found" }, 404);
   }
   if (path.startsWith("/api/v1/shots/") && method === "PUT") {
@@ -224,12 +229,17 @@ function routeApi(req, res, url, body) {
     const s = state.shots.find((x) => x.id === id);
     if (!s) return json({ message: "not found" }, 404);
     // The real API merges `extras` at field level.
-    if (body?.annotations) {
-      s.annotations = {
-        ...s.annotations,
+    const merge = (target) => {
+      if (!target?.annotations && !body?.annotations) return;
+      target.annotations = {
+        ...target.annotations,
         ...body.annotations,
-        extras: { ...s.annotations?.extras, ...body.annotations?.extras },
+        extras: { ...target.annotations?.extras, ...body.annotations?.extras },
       };
+    };
+    if (body?.annotations) {
+      merge(s);
+      if (state.shotDetails[id]) merge(state.shotDetails[id]);
     }
     return json(s);
   }
@@ -237,6 +247,7 @@ function routeApi(req, res, url, body) {
     const id = decodeURIComponent(path.split("/")[4]);
     const i = state.shots.findIndex((x) => x.id === id);
     if (i >= 0) state.shots.splice(i, 1);
+    delete state.shotDetails[id];
     return noContent();
   }
 
