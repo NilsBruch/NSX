@@ -10516,39 +10516,63 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   color: var(--c-label-3);
 }
 
+/* Suggestions sit in ONE horizontal row that scrolls sideways, like a phone
+   keyboard's suggestion strip. As a vertical list its height tracked the number
+   of matches, so filtering from two entries to one to none resized the sheet —
+   and since the sheet is bottom-anchored, the keyboard moved under the user's
+   fingers mid-word. A single row cannot change height, shows more candidates at
+   once, and leaves room the 5-row keyboard needs on the DE1's 630px screen. */
 .field-picker-list {
-  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 8px;
-  max-height: 108px;
-  width: 50%;
-  margin: 0 auto;
+  scrollbar-width: none;
+  padding: 0 12px 8px;
+}
+
+.field-picker-list::-webkit-scrollbar {
+  display: none;
 }
 
 .field-picker-list:empty {
   display: none;
 }
 
+/* Height is reserved for as long as the picker is open, decided once when it
+   opens — so a filter that matches nothing still cannot move the keyboard.
+   Pickers opened without suggestions stay compact (their list is always empty). */
+.field-picker-sheet.has-suggestions .field-picker-list,
+.field-picker-sheet.has-suggestions .field-picker-list:empty {
+  display: flex;
+  height: 56px;
+}
+
 .field-picker-option {
-  display: block;
-  width: 100%;
-  padding: 14px 16px;
-  text-align: center;
+  flex: none;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 10px 16px;
+  border-radius: 999px;
   font-size: var(--fs-input);
   color: var(--c-label);
-  background: none;
+  background: rgba(255, 255, 255, 0.1);
   border: none;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.06);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 .field-picker-option:active {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .field-picker-option.is-selected {
-  color: var(--c-accent, #0a84ff);
+  color: #fff;
+  background: var(--c-accent, #0a84ff);
   font-weight: 600;
 }
 

@@ -9540,6 +9540,9 @@ function _renderFieldPickerList(filter) {
   list.innerHTML = filtered.map(o =>
     `<button type="button" class="field-picker-option${o === current ? ' is-selected' : ''}" data-value="${o.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">${o.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</button>`
   ).join('');
+  // Back to the start on every re-filter, so the closest match is the one in
+  // view rather than wherever the strip happened to be scrolled to.
+  list.scrollLeft = 0;
   list.querySelectorAll('.field-picker-option').forEach(btn => {
     btn.addEventListener('click', () => {
       if (pickerInput) {
@@ -9679,6 +9682,10 @@ function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = nul
   // Numeric fields (inputMode 'numeric') swap the QWERTY layout for the numpad.
   document.getElementById('field-picker-keyboard')
     ?.classList.toggle('fp-keyboard--numeric', inputMode === 'numeric');
+  // Decided once per open, never while typing: the sheet's height must not
+  // change as the suggestion list filters down, or the keyboard moves.
+  modal.querySelector('.field-picker-sheet')
+    ?.classList.toggle('has-suggestions', _fieldPickerAllOptions.length > 0);
   pickerInput.value = initialValue !== null ? String(initialValue) : (inputEl?.value || '');
 
   // Show FIRST, then fill. This used to run the list render and shift setup
