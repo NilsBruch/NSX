@@ -11369,33 +11369,6 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   padding-bottom: calc(max(env(safe-area-inset-bottom, 8px), 8px) + 200px);
 }
 
-/* ─── Text Picker Modal ──────────────────────────────── */
-.text-picker-sheet {
-  width: min(320px, 90vw);
-}
-
-.text-picker-body {
-  padding: 20px 16px 24px;
-}
-
-.text-picker-input {
-  width: 100%;
-  background: var(--c-fill-2, rgba(255,255,255,0.12));
-  border: none;
-  border-radius: 10px;
-  padding: 14px 16px;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--c-label);
-  text-align: center;
-  outline: none;
-  font-family: inherit;
-}
-
-.text-picker-input:focus {
-  background: var(--c-fill-3, rgba(255,255,255,0.18));
-}
-
 .flush-machine-settings {
   display: flex;
   flex-direction: row;

@@ -3334,7 +3334,8 @@ steamSettingsModalEl?.querySelectorAll('.steam-settings-preset').forEach(presetE
 });
 
 steamSettingsModalEl?.querySelectorAll('.steam-settings-name-input').forEach(input => {
-  input.addEventListener('click', () => {
+  input.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     window._openTextPicker(input.value, val => { input.value = val || input.placeholder; });
   });
 });
@@ -3494,6 +3495,11 @@ document.getElementById('calib-steam-time')?.addEventListener('input', e => {
   }
 });
 
+document.getElementById('calib-steam-time')?.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  openFieldPicker(e.currentTarget, [], { inputMode: 'numeric' });
+});
+
 /* ── Pitcher Presets ─────────────────────────────────── */
 
 let _pitcherDraft = null;
@@ -3504,7 +3510,17 @@ function _renderPitcherPresetCards() {
     const p = _pitcherDraft?.[idx] ?? NSXCore.getPitcherPresets()[idx];
     if (!p) return;
 
-    card.querySelector('.pitcher-preset-name').value = p.name ?? `Pitcher ${idx + 1}`;
+    const nameEl = card.querySelector('.pitcher-preset-name');
+    nameEl.value = p.name ?? `Pitcher ${idx + 1}`;
+    if (!nameEl.dataset.kbBound) {
+      nameEl.dataset.kbBound = '1';
+      nameEl.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        window._openTextPicker(nameEl.value, (val) => {
+          nameEl.value = val || nameEl.placeholder;
+        });
+      });
+    }
 
     const weightEl = card.querySelector('.pitcher-weight-value');
     weightEl.textContent = p.pitcherWeight != null ? p.pitcherWeight.toFixed(1) + ' g' : '— g';
@@ -3671,7 +3687,8 @@ hotwaterSettingsModalEl?.querySelectorAll('.hotwater-settings-preset').forEach(p
 });
 
 hotwaterSettingsModalEl?.querySelectorAll('.steam-settings-name-input').forEach(input => {
-  input.addEventListener('click', () => {
+  input.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     window._openTextPicker(input.value, val => { input.value = val || input.placeholder; });
   });
 });
@@ -3801,7 +3818,8 @@ flushSettingsModalEl?.querySelectorAll('.flush-settings-preset').forEach(presetE
       _renderFlushSettingsValues(presetEl, p);
     });
   });
-  presetEl.querySelector('.steam-settings-name-input')?.addEventListener('click', function() {
+  presetEl.querySelector('.steam-settings-name-input')?.addEventListener('pointerdown', function(e) {
+    e.preventDefault();
     window._openTextPicker(this.value, val => { this.value = val || this.placeholder; });
   });
   presetEl.querySelectorAll('.flush-settings-value').forEach(span => {
@@ -7674,6 +7692,25 @@ document.getElementById('profile-editor-notes')?.addEventListener('input', (e) =
   _peditorRefreshDirtyState();
 });
 
+// Route these three through our own keyboards instead of letting the tablet's
+// Android IME take over. The 'input' handlers above still do the work — both
+// pickers write the value and dispatch 'input' on the target.
+['profile-editor-title', 'profile-editor-author'].forEach(id => {
+  document.getElementById(id)?.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    openFieldPicker(e.currentTarget, []);
+  });
+});
+
+document.getElementById('profile-editor-notes')?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  const el = e.currentTarget;
+  openTextEditorModal(el.value ?? '', (val) => {
+    el.value = val;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+});
+
 document.getElementById('profile-editor-stop-weight-enabled')?.addEventListener('change', e => {
   _peditorStopWeightEnabled = e.target.checked;
   _peditorRenderStopControls();
@@ -8708,7 +8745,13 @@ document.getElementById('btn-profile-picker-import-visualizer')?.addEventListene
   if (!modal || !input) return;
   input.value = '';
   modal.hidden = false;
-  setTimeout(() => input.focus(), 50);
+  // Deliberately not focused: focusing a plain input opens Android's keyboard.
+  // Tapping the field opens ours instead (handler below).
+});
+
+document.getElementById('visualizer-import-input')?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  openFieldPicker(e.currentTarget, []);
 });
 
 document.getElementById('profile-import-file-input')?.addEventListener('change', async (e) => {
@@ -9018,6 +9061,15 @@ function _addTag(value) {
 (function () {
   const input = document.getElementById('edit-tags-input');
   if (!input) return;
+  // Same treatment as the shot-review tag field: the field picker supplies the
+  // keyboard plus a filterable list of tags already in use.
+  input.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const options = _getAllUsedTags().filter(tag => !_editTags.includes(tag));
+    openFieldPicker(null, options, {
+      onConfirm: (val) => _addTag(val ?? ''),
+    });
+  });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
@@ -9632,11 +9684,16 @@ document.getElementById('profile-picker-search')?.addEventListener('pointerdown'
   openFieldPicker(e.target, []);
 });
 
-document.querySelector('.workflows-search')?.addEventListener('click', (e) => {
+// pointerdown + preventDefault, not click: 'click' fires AFTER the input has
+// already taken focus, so Android opens its own keyboard first and the layout
+// reflows twice before the field picker settles on top.
+document.querySelector('.workflows-search')?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
   openFieldPicker(e.target, []);
 });
 
-document.getElementById('history-search')?.addEventListener('click', (e) => {
+document.getElementById('history-search')?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
   openFieldPicker(e.target, []);
 });
 
@@ -9750,36 +9807,16 @@ function _npMomentum(velocityPxPerMs) {
 }
 
 /* ── Text Picker ─────────────────────────────────────── */
-{
-  let _textPickerCallback = null;
-  const _textPickerModal = document.getElementById('text-picker-modal');
-  const _textPickerInput = document.getElementById('text-picker-input');
-
-  window._openTextPicker = function(currentValue, onConfirm) {
-    if (!_textPickerModal || !_textPickerInput) return;
-    _textPickerCallback = onConfirm;
-    _textPickerInput.value = currentValue ?? '';
-    _textPickerModal.hidden = false;
-    setTimeout(() => { _textPickerInput.focus(); _textPickerInput.select(); }, 80);
-  };
-
-  document.getElementById('btn-text-picker-cancel')?.addEventListener('click', () => {
-    _textPickerModal.hidden = true;
-    _textPickerCallback = null;
+// Kept as an API (preset-name fields call it) but backed by the field picker,
+// which owns the on-screen keyboard. The old standalone modal focused a plain
+// input, so every preset rename summoned Android's keyboard inside what looked
+// like one of our own dialogs.
+window._openTextPicker = function(currentValue, onConfirm) {
+  openFieldPicker(null, [], {
+    initialValue: currentValue ?? '',
+    onConfirm: (val) => onConfirm?.((val ?? '').trim()),
   });
-
-  document.getElementById('btn-text-picker-confirm')?.addEventListener('click', () => {
-    const val = _textPickerInput.value.trim();
-    _textPickerModal.hidden = true;
-    if (_textPickerCallback) _textPickerCallback(val);
-    _textPickerCallback = null;
-  });
-
-  _textPickerInput?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('btn-text-picker-confirm')?.click();
-    if (e.key === 'Escape') document.getElementById('btn-text-picker-cancel')?.click();
-  });
-}
+};
 
 function openNumberPicker(values, currentValue, onConfirm, decimalPlaces = 0, formatter = null) {
   _npValues = values;
