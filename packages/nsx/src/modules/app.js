@@ -199,6 +199,11 @@ let _liveVolumeCountingActive = false;
 let _lastSnapTime = null;
 let currentScaleRate = 0;
 let _forcedLiveWorkflow = null;
+// Which recipe is actually being brewed, pinned at shot start. Everything
+// after the shot (lastUsed, yield, batch deduction) must credit THIS one —
+// selectedWorkflowIndex keeps moving while the user browses during the brew
+// and the up-to-30s post-shot poll.
+let _liveShotWorkflowId = null;
 let machineConnectedState = false;
 let currentWaterLevelPct = null;
 let _espressoFullscreenVisible = false;
@@ -351,6 +356,37 @@ function openFilterModal() {
   filterModalEl.hidden = false;
 }
 
+// Render the recipe list together with its "filtered" notice. A filter that
+// hides most of the library looks exactly like a broken/short list otherwise —
+// which is how a stale filter got mistaken for missing recipes.
+function _renderWorkflowList() {
+  const shown = getDisplayWorkflows();
+  renderWorkflows(shown, selectedWorkflowIndex);
+  const notice = document.getElementById('workflow-filter-notice');
+  if (!notice) return;
+  const total = workflowItems.length;
+  const filtered = Boolean(workflowSearchQuery) || hasActiveFilters();
+  notice.hidden = !filtered;
+  if (filtered) {
+    notice.textContent = t('recipe.filterNotice')
+      .replace('{shown}', String(shown.length))
+      .replace('{total}', String(total));
+  }
+}
+
+function clearWorkflowFilters() {
+  workflowSearchQuery = '';
+  if (workflowSearchEl) workflowSearchEl.value = '';
+  workflowFilters.roasters.clear();
+  workflowFilters.beans.clear();
+  workflowFilters.grinders.clear();
+  workflowFilters.profiles.clear();
+  updateFilterButtonState();
+  _renderWorkflowList();
+}
+
+document.getElementById('workflow-filter-notice')?.addEventListener('click', clearWorkflowFilters);
+
 function handleFilterChipClick(event, activeSet) {
   const chip = event.target.closest('.filter-chip');
   if (!chip) return;
@@ -363,7 +399,7 @@ function handleFilterChipClick(event, activeSet) {
     chip.classList.add('is-selected');
   }
   updateFilterButtonState();
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
 }
 
 filterChipsRoaster?.addEventListener('click', e => handleFilterChipClick(e, workflowFilters.roasters));
@@ -384,7 +420,7 @@ document.getElementById('btn-filter-reset')?.addEventListener('click', () => {
   workflowFilters.profiles.clear();
   filterModalEl.hidden = true;
   updateFilterButtonState();
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
 });
 
 filterModalEl?.addEventListener('click', e => {
@@ -654,6 +690,44 @@ function _schedulePushCurrentSkinState(bypassStateCheck = false) {
 }
 
 let _pushDebounceTimer = null;
+let _pendingPushRecipeId = null;
+
+/** The selected recipe, or null when nothing is selected (index -1). */
+function getSelectedWorkflow() {
+  return selectedWorkflowIndex >= 0 ? (workflowItems[selectedWorkflowIndex] ?? null) : null;
+}
+
+function _cancelPendingPush() {
+  clearTimeout(_pushDebounceTimer);
+  _pushDebounceTimer = null;
+  _pendingPushRecipeId = null;
+}
+
+// Queue the debounced push for ONE specific recipe. The recipe is bound by id
+// here rather than re-read from selectedWorkflowIndex when the timer fires:
+// a background refresh (_rebuildWorkflowsFromRecipes) can rebuild
+// workflowItems and move the selection inside this 400ms window, which would
+// otherwise send the machine a recipe the user never tapped.
+function _schedulePushForRecipe(recipe) {
+  const id = recipe?.id ?? null;
+  if (id == null) return;
+  setWorkflowSyncState?.('pending');
+  clearTimeout(_pushDebounceTimer);
+  _pendingPushRecipeId = id;
+  _pushDebounceTimer = setTimeout(() => {
+    _pushDebounceTimer = null;
+    _pendingPushRecipeId = null;
+    const target = workflowItems.find(w => w.id === id);
+    // Still the user's choice? If the selection moved out from under us the
+    // rebuild has already cleared it and warned; pushing now would contradict
+    // what the screen shows.
+    if (!target || target.id !== getSelectedWorkflow()?.id) {
+      setWorkflowSyncState?.('error');
+      return;
+    }
+    pushSelectedWorkflowToMachine(target);
+  }, 400);
+}
 
 function renderHomeRecentRecipes() {
   const card   = document.getElementById('home-recent-recipes');
@@ -711,6 +785,10 @@ function renderHomeRecentRecipes() {
   rowsEl.querySelectorAll('.home-rr-row').forEach(row => {
     row.addEventListener('click', () => {
       const idx = Number(row.dataset.workflowIndex);
+      // Remember WHICH recipe was tapped, not where it sat: the press
+      // animation defers the selection by 120ms, and a background refresh can
+      // reorder workflowItems in that window.
+      const tappedId = workflowItems[idx]?.id ?? null;
       row.style.transition = 'transform 100ms ease, opacity 100ms ease';
       row.style.transform = 'scale(0.98)';
       row.style.opacity = '0.75';
@@ -718,7 +796,9 @@ function renderHomeRecentRecipes() {
         row.style.transform = '';
         row.style.opacity = '';
         row.style.transition = '';
-        selectWorkflow(idx);
+        const nowIdx = tappedId != null ? workflowItems.findIndex(w => w.id === tappedId) : -1;
+        if (nowIdx < 0) return;
+        selectWorkflow(nowIdx);
         if (storeSettings.nsx_recent_recipe_nav === true) {
           window.NSXRouter?.setTab(1);
         }
@@ -757,19 +837,16 @@ function selectWorkflow(index) {
   selectedWorkflowIndex = index;
   _lastRecipeId = workflowItems[index]?.id ?? null;
   patchStoreSettings({ nsx_last_recipe_id: _lastRecipeId });
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
   renderHomeRecentRecipes();
   setCurrentWorkflow(workflowItems[index]);
   plotWorkflowShot(workflowItems[index]);
 
-  setWorkflowSyncState?.('pending');
-  clearTimeout(_pushDebounceTimer);
-  _pushDebounceTimer = setTimeout(() => {
-    pushSelectedWorkflowToMachine(workflowItems[selectedWorkflowIndex]);
-  }, 400);
+  _schedulePushForRecipe(workflowItems[index]);
 }
 
 function plotWorkflowShot(workflow, requestedIndex, _retrying = false) {
+  if (!workflow) return;
   const graphEl = document.getElementById("workflow-shot-graph");
   if (!graphEl) return;
   if (graphEl._liveMode && liveShot) return;
@@ -1051,6 +1128,7 @@ function closeEspressoFullscreen() {
 
 function startLiveShotSession() {
   const workflow = _forcedLiveWorkflow || workflowItems[selectedWorkflowIndex];
+  _liveShotWorkflowId = workflow?.id ?? null;
   liveShot = {
     dataStart: null,
     elapsed: [],
@@ -1092,7 +1170,15 @@ async function endLiveShotSession() {
 
   const _capturedWeight        = liveWeight;
   const _capturedSubstate      = _lastEspressoSubstate;
-  const _capturedWorkflow      = _forcedLiveWorkflow || workflowItems[selectedWorkflowIndex];
+  // Resolve by the id pinned at shot start, not by the current selection —
+  // the user may have browsed to another recipe while the shot ran. Falls
+  // back to the selection only if a start was never seen (e.g. the skin
+  // loaded mid-shot), which is the old, best-effort behaviour.
+  const _capturedWorkflow      = _forcedLiveWorkflow
+    || (_liveShotWorkflowId != null && workflowItems.find(w => w.id === _liveShotWorkflowId))
+    || workflowItems[selectedWorkflowIndex];
+  const _capturedWorkflowId    = _capturedWorkflow?.id ?? null;
+  _liveShotWorkflowId = null;
   const _capturedScaleConnected = scaleConnected;
   _lastEspressoSubstate   = null;
   _lastProfileFrameLabel  = null;
@@ -1215,23 +1301,34 @@ async function endLiveShotSession() {
     }
   };
 
+  // Credit the brewed recipe and float it to the top of "Recent". Looked up by
+  // id at call time rather than held as a reference: the poll can outlive a
+  // rebuild of workflowItems (cross-device refresh, store reload).
+  const _stampRecipeUsed = (id) => {
+    const target = id != null ? workflowItems.find(w => w.id === id) : null;
+    if (!target) {
+      if (workflowItems.length > 0) {
+        selectedWorkflowIndex = Math.max(0, Math.min(selectedWorkflowIndex, workflowItems.length - 1));
+      }
+      return;
+    }
+    target.lastUsed = Date.now();
+    workflowItems.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
+    selectedWorkflowIndex = Math.max(0, workflowItems.indexOf(target));
+    _saveRecipesToStore(workflowItems);
+  };
+
   const applyRefreshedShots = (newShots) => {
     shots = Array.isArray(newShots) ? newShots : [];
 
     _runPostShotActions(newShots[0]);
 
-    if (workflowItems[selectedWorkflowIndex]) {
-      workflowItems[selectedWorkflowIndex].lastUsed = Date.now();
-      workflowItems.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
-      selectedWorkflowIndex = 0;
-      _saveRecipesToStore(workflowItems);
-    } else if (workflowItems.length > 0) {
-      selectedWorkflowIndex = Math.max(0, Math.min(selectedWorkflowIndex, workflowItems.length - 1));
-    }
-    renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
-    if (workflowItems.length > 0) {
-      setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
-      plotWorkflowShot(workflowItems[selectedWorkflowIndex], 0);
+    _stampRecipeUsed(_capturedWorkflowId);
+    _renderWorkflowList();
+    const _brewed = getSelectedWorkflow();
+    if (_brewed) {
+      setCurrentWorkflow(_brewed);
+      plotWorkflowShot(_brewed, 0);
     }
     renderHistory();
     _updateScaleIndicatorVisibility();
@@ -1269,9 +1366,18 @@ async function endLiveShotSession() {
 
     if (Date.now() - pollStart < POLL_TIMEOUT) {
       setTimeout(pollForNewShot, POLL_INTERVAL);
-    } else {
-      _hideLiveWidget();
+      return;
     }
+
+    // Timed out: the shot record never surfaced. It was still brewed, so the
+    // recipe is credited anyway — otherwise a gateway hiccup silently drops it
+    // out of "Recent". Post-shot actions are skipped: there is no shot to
+    // annotate. Say so rather than failing quietly.
+    _stampRecipeUsed(_capturedWorkflowId);
+    _renderWorkflowList();
+    setCurrentWorkflow(getSelectedWorkflow());
+    showToast(t('shot.notRecorded'), 6000);
+    _hideLiveWidget();
   };
 
   pollForNewShot();
@@ -1467,12 +1573,13 @@ async function loadApiData() {
       if (stored >= 0) selectedWorkflowIndex = stored;
     }
 
-    renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+    _renderWorkflowList();
     renderHomeRecentRecipes();
     renderHistory();
-    if (workflowItems.length > 0) {
-      setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
-      plotWorkflowShot(workflowItems[selectedWorkflowIndex]);
+    const _booted = getSelectedWorkflow();
+    if (_booted) {
+      setCurrentWorkflow(_booted);
+      plotWorkflowShot(_booted);
       if (canExecuteOperation('setWorkflow')) {
         _schedulePushCurrentSkinState();
       }
@@ -1537,14 +1644,26 @@ async function _silentRevalidate(getFn, loadFn, renderFn) {
 // user's current selection (by id). Display-only — it never auto-pushes to the
 // machine on a background refresh.
 function _rebuildWorkflowsFromRecipes(storedRecipes) {
-  const keepId = workflowItems[selectedWorkflowIndex]?.id ?? _lastRecipeId;
+  const keepId = getSelectedWorkflow()?.id ?? _lastRecipeId;
   workflowItems = Array.isArray(storedRecipes) ? [...storedRecipes] : [];
   workflowItems.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
   const idx = keepId ? workflowItems.findIndex(w => w.id === keepId) : -1;
-  selectedWorkflowIndex = idx >= 0 ? idx : 0;
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  if (idx >= 0) {
+    selectedWorkflowIndex = idx;
+  } else {
+    // The selected recipe is not in the refreshed list. Falling back to index 0
+    // here used to substitute a DIFFERENT recipe silently — and since a queued
+    // push resolves against the selection, the machine could then be loaded
+    // with a recipe the user never chose. Drop to "nothing selected", cancel
+    // any queued push, and say so instead.
+    selectedWorkflowIndex = -1;
+    _cancelPendingPush();
+    setWorkflowSyncState?.('');
+    if (keepId) showToast(t('toast.recipeSelectionLost'), 8000);
+  }
+  _renderWorkflowList();
   renderHomeRecentRecipes();
-  setCurrentWorkflow(workflowItems.length > 0 ? workflowItems[selectedWorkflowIndex] : null);
+  setCurrentWorkflow(getSelectedWorkflow());
 }
 
 let _lastShotsResponse = null;
@@ -2142,6 +2261,10 @@ workflowListEl.addEventListener("click", (event) => {
     return;
   }
 
+  // Bind to the recipe, not its position — the 120ms press animation defers
+  // the selection and a background refresh can reorder workflowItems meanwhile.
+  const tappedId = workflowItems[nextIndex]?.id ?? null;
+
   cardEl.style.transition = 'transform 100ms ease, opacity 100ms ease';
   cardEl.style.transform = 'scale(0.98)';
   cardEl.style.opacity = '0.75';
@@ -2151,7 +2274,9 @@ workflowListEl.addEventListener("click", (event) => {
     cardEl.style.transform = '';
     cardEl.style.opacity = '';
     cardEl.style.transition = '';
-    selectWorkflow(nextIndex);
+    const nowIdx = tappedId != null ? workflowItems.findIndex(w => w.id === tappedId) : -1;
+    if (nowIdx < 0) return;
+    selectWorkflow(nowIdx);
   }, 120);
 });
 
@@ -2161,7 +2286,7 @@ recipeListScrollEl.addEventListener("scroll", updateRecipeListFade, { passive: t
 const workflowSearchEl = document.querySelector('.workflows-search');
 workflowSearchEl?.addEventListener('input', () => {
   workflowSearchQuery = workflowSearchEl.value.trim();
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
 });
 
 
@@ -2728,7 +2853,7 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
   async function _refreshShotsFromApi(limit = 80) {
     const fresh = await _fetchRecentShots(limit);
     shots = fresh;
-    renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+    _renderWorkflowList();
     renderHistory();
   }
 
@@ -4158,17 +4283,14 @@ async function deleteWorkflowShots(workflowIndex) {
   await _saveRecipesToStore(workflowItems);
   selectedWorkflowIndex = Math.max(0, Math.min(selectedWorkflowIndex, Math.max(0, workflowItems.length - 1)));
   historySelectedRecipeIndex = Math.min(historySelectedRecipeIndex, workflowItems.length - 1);
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
   renderHomeRecentRecipes();
   renderHistory();
-  if (workflowItems.length > 0) {
-    setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
-    plotWorkflowShot(workflowItems[selectedWorkflowIndex]);
-    setWorkflowSyncState?.('pending');
-    clearTimeout(_pushDebounceTimer);
-    _pushDebounceTimer = setTimeout(() => {
-      pushSelectedWorkflowToMachine(workflowItems[selectedWorkflowIndex]);
-    }, 400);
+  const _afterDelete = getSelectedWorkflow();
+  if (_afterDelete) {
+    setCurrentWorkflow(_afterDelete);
+    plotWorkflowShot(_afterDelete);
+    _schedulePushForRecipe(_afterDelete);
   }
 
   showToast(t('toast.recipeDeleted'));
@@ -4442,7 +4564,7 @@ document.getElementById('history-accordion-list')?.addEventListener('click', e =
         _recipeRatingCache.clear();
         historySelectedRecipeIndex = -1;
         renderHistory();
-        renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+        _renderWorkflowList();
         showToast(t('toast.shotsDeleted').replace('{count}', recipeShotIds.length));
       } catch {
         showToast(t('toast.shotsDeleteFailed'));
@@ -4494,7 +4616,7 @@ async function _deleteHistoryShot(shotId) {
       historySelectedRecipeIndex = workflowItems.length > 0 ? 0 : -1;
     }
     renderHistory();
-    renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+    _renderWorkflowList();
     showToast(t('toast.shotDeleted'));
   } catch {
     showToast(t('toast.shotDeleteFailed'));
@@ -4776,8 +4898,8 @@ window.addEventListener('router:tabchange', e => {
       const wfGraphEl = document.getElementById('workflow-shot-graph');
       if (wfGraphEl && !wfGraphEl._liveMode) initLiveShotChart?.(wfGraphEl);
       if (wfGraphEl?._liveMode) updateLiveShotChart?.(wfGraphEl, liveShot);
-    } else if (workflowItems.length > 0) {
-      plotWorkflowShot(workflowItems[selectedWorkflowIndex]);
+    } else {
+      plotWorkflowShot(getSelectedWorkflow());
     }
   }
   if (idx === 2) renderHistory();
@@ -8819,7 +8941,7 @@ document.getElementById('btn-edit-save')?.addEventListener('click', async () => 
 
   await _saveRecipesToStore(workflowItems);
 
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
   renderHomeRecentRecipes();
   const activeIndex = isCreate ? 0 : index;
   if (activeIndex === selectedWorkflowIndex) {

@@ -170,6 +170,7 @@ const TRANSLATIONS = {
     'recipe.filterAria':   'Filter',
     'recipe.addAria':      'Rezept hinzufügen',
     'recipe.listAria':     'Verfügbare Rezepte',
+    'recipe.filterNotice': '{shown} von {total} Rezepten · Filter aktiv — tippen zum Zurücksetzen',
 
     // History panel
     'history.search':      'Röster, Bohne, Mühle, Profil…',
@@ -532,6 +533,7 @@ const TRANSLATIONS = {
     'shot.stopWeight':     'Zielgewicht erreicht · {weight} g',
     'shot.stopVolume':     'Zielvolumen erreicht',
     'shot.stopProfile':    'Profil beendet',
+    'shot.notRecorded':    'Shot nicht in der Historie gefunden',
     'shot.extraction':     'Extraktion',
 
 
@@ -583,6 +585,7 @@ const TRANSLATIONS = {
     'toast.shotDeleteFailed': 'Shot konnte nicht gelöscht werden',
     'toast.shotsDeleteFailed': 'Shots konnten nicht gelöscht werden',
     'toast.recipeDeleted':    'Rezept gelöscht',
+    'toast.recipeSelectionLost': 'Rezeptliste hat sich geändert — Auswahl aufgehoben, bitte neu wählen',
     'toast.deleting':         'Wird gelöscht…',
     'toast.profileDeleted':   'Profil gelöscht',
     'toast.profileApiMissing': 'Profile API nicht verfügbar',
@@ -847,6 +850,7 @@ const TRANSLATIONS = {
     'recipe.filterAria':   'Filter',
     'recipe.addAria':      'Add recipe',
     'recipe.listAria':     'Available recipes',
+    'recipe.filterNotice': '{shown} of {total} recipes · filter active — tap to clear',
 
     // History panel
     'history.search':      'Roaster, bean, grinder, profile…',
@@ -1209,6 +1213,7 @@ const TRANSLATIONS = {
     'shot.stopWeight':     'Target weight reached · {weight} g',
     'shot.stopVolume':     'Target volume reached',
     'shot.stopProfile':    'Profile finished',
+    'shot.notRecorded':    'Shot not found in history',
     'shot.extraction':     'Extraction',
 
 
@@ -1260,6 +1265,7 @@ const TRANSLATIONS = {
     'toast.shotDeleteFailed': 'Could not delete shot',
     'toast.shotsDeleteFailed': 'Could not delete shots',
     'toast.recipeDeleted':    'Recipe deleted',
+    'toast.recipeSelectionLost': 'Recipe list changed — selection cleared, please pick again',
     'toast.deleting':         'Deleting…',
     'toast.profileDeleted':   'Profile deleted',
     'toast.profileApiMissing': 'Profiles API not available',
