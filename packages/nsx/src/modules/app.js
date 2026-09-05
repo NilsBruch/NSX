@@ -9537,10 +9537,11 @@ function _renderFieldPickerList(filter) {
   const list = document.getElementById('field-picker-list');
   const pickerInput = document.getElementById('field-picker-input');
   if (!list) return;
-  const q = String(filter ?? '').toLowerCase().trim();
   const current = pickerInput?.value ?? '';
   const all = Array.isArray(_fieldPickerAllOptions) ? _fieldPickerAllOptions : [];
-  const filtered = q ? all.filter(o => o.toLowerCase().includes(q)) : all;
+  // Prefix matches first, then word-start, then merely-contains — people type
+  // the start of a name. Ties keep `all`'s order, which is newest-first.
+  const filtered = NSXCore.rankSuggestions(all, filter);
   list.innerHTML = filtered.map(o =>
     `<button type="button" class="field-picker-option${o === current ? ' is-selected' : ''}" data-value="${o.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">${o.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</button>`
   ).join('');

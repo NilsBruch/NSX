@@ -12,7 +12,7 @@
  * UI-rendering code that stays in each skin.
  *
  * Registered on NSXCore:
- *   uniqueFieldValuesByRecency(items, pick),
+ *   uniqueFieldValuesByRecency(items, pick), rankSuggestions(values, query),
  *   formatMmSs(ms), calcRatio(dose, yield_), resolveProfileTemp(profile),
  *   mapApiWorkflowToDisplay(wf), mapShotToWorkflow(shot),
  *   normalizeWorkflowKeyPart(value), getWorkflowKey(workflow),
@@ -625,6 +625,43 @@
       .map(([value]) => value);
   }
 
+  /**
+   * Filter and rank suggestion values against what the user has typed.
+   *
+   * Plain substring matching ranked "Kristians Kaffe" alongside "Risteriet"
+   * for "ris", because the letters occur somewhere inside. People type the
+   * START of a name, so matches are tiered:
+   *
+   *   0  the value itself starts with the query
+   *   1  any word inside it starts with the query  ("kaf" -> "Kristians Kaffe")
+   *   2  it merely contains the query somewhere    ("ris" -> "Kristians Kaffe")
+   *
+   * Tier 2 is kept rather than dropped: it costs nothing once it sorts last,
+   * and it is the only thing that finds a value by its middle when someone
+   * half-remembers a name. Within a tier the incoming order is preserved, so
+   * an upstream ordering (see uniqueFieldValuesByRecency) still decides ties.
+   */
+  function rankSuggestions(values, query) {
+    const list = Array.isArray(values) ? values : [];
+    const q = String(query ?? "").trim().toLowerCase();
+    if (!q) return list;
+
+    const tierOf = (value) => {
+      const v = String(value).toLowerCase();
+      if (v.startsWith(q)) return 0;
+      if (v.split(/[^\p{L}\p{N}]+/u).some((word) => word && word.startsWith(q))) return 1;
+      return v.includes(q) ? 2 : -1;
+    };
+
+    return list
+      .map((value, index) => ({ value, index, tier: tierOf(value) }))
+      .filter((e) => e.tier >= 0)
+      // The index tiebreak keeps this deterministic rather than relying on
+      // Array.sort stability for same-tier entries.
+      .sort((a, b) => a.tier - b.tier || a.index - b.index)
+      .map((e) => e.value);
+  }
+
   // When each workflow key was last brewed: key -> newest shot timestamp (ms).
   // Built once per sort instead of scanning the shot list per recipe.
   function buildLastUsedIndex(shots) {
@@ -655,6 +692,7 @@
 
   NSXCore.register({
     uniqueFieldValuesByRecency,
+    rankSuggestions,
     buildLastUsedIndex,
     sortRecipesByLastUsed,
     formatMmSs,

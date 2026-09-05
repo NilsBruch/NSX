@@ -330,3 +330,59 @@ test("uniqueFieldValuesByRecency accepts a picker function and tolerates junk", 
     "an unparseable date must not drop the value",
   );
 });
+
+/* ── rankSuggestions ────────────────────────────────────── */
+
+test("rankSuggestions puts a prefix match ahead of a mid-word one", () => {
+  // The reported case: typing "ris" must offer Risteriet, not Kristians Kaffe.
+  const roasters = ["Kristians Kaffe", "Risteriet"];
+  assert.deepEqual(
+    NSXCore.rankSuggestions(roasters, "ris"),
+    ["Risteriet", "Kristians Kaffe"],
+  );
+});
+
+test("rankSuggestions ranks a word-start above a mid-word match", () => {
+  const values = ["Unkaffee", "Kristians Kaffe", "Kaffeine"];
+  assert.deepEqual(
+    NSXCore.rankSuggestions(values, "kaf"),
+    ["Kaffeine", "Kristians Kaffe", "Unkaffee"],
+    "whole-string prefix, then word prefix, then merely contains",
+  );
+});
+
+test("rankSuggestions keeps mid-word matches rather than dropping them", () => {
+  assert.deepEqual(
+    NSXCore.rankSuggestions(["Kristians Kaffe"], "stian"),
+    ["Kristians Kaffe"],
+    "half-remembering the middle of a name still finds it",
+  );
+  assert.deepEqual(NSXCore.rankSuggestions(["Risteriet"], "zzz"), []);
+});
+
+test("rankSuggestions preserves the incoming order within a tier", () => {
+  // Upstream order is recency (uniqueFieldValuesByRecency), and it must survive
+  // as the tiebreak so the newest of two equally good matches stays first.
+  const values = ["Kaffe Neu", "Kaffe Alt"];
+  assert.deepEqual(NSXCore.rankSuggestions(values, "kaffe"), ["Kaffe Neu", "Kaffe Alt"]);
+});
+
+test("rankSuggestions is case-insensitive and ignores surrounding whitespace", () => {
+  assert.deepEqual(NSXCore.rankSuggestions(["Risteriet"], "  RIS "), ["Risteriet"]);
+});
+
+test("rankSuggestions treats punctuation as a word break", () => {
+  assert.deepEqual(
+    NSXCore.rankSuggestions(["Bönor-Röstare", "Xbonor"], "rö"),
+    ["Bönor-Röstare"],
+    "a hyphen starts a new word; accented letters count as letters",
+  );
+});
+
+test("rankSuggestions returns everything for an empty query, and tolerates junk", () => {
+  const values = ["A", "B"];
+  assert.deepEqual(NSXCore.rankSuggestions(values, ""), values);
+  assert.deepEqual(NSXCore.rankSuggestions(values, "   "), values);
+  assert.deepEqual(NSXCore.rankSuggestions(values, null), values);
+  assert.deepEqual(NSXCore.rankSuggestions(null, "a"), []);
+});
