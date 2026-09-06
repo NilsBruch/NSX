@@ -143,6 +143,57 @@ function snapshot() {
   };
 }
 
+
+/**
+ * The shot-list filters the real gateway supports. Until this existed the mock
+ * ignored every one of them and always returned the whole list — so a skin
+ * scoping shots to a bean looked broken here while working against a machine,
+ * which is exactly the mock-vs-reality gap the fixtures were regenerated to
+ * close. Verified against the live API: `search` is a case-insensitive
+ * substring across coffee name, roaster, profile title, grinder model and
+ * notes, while profileTitle/coffeeName/… match exactly.
+ */
+function filterShots(list, q) {
+  const ctxOf = (s) => s?.workflow?.context || {};
+  const titleOf = (s) => s?.workflow?.profile?.title || s?.workflow?.profileTitle || "";
+
+  // beanId isn't stored on a shot — it is reached through the bag it was
+  // pulled from, the same hop the skin's own batch->bean map makes.
+  const beanIdOf = (s) => {
+    const batchId = ctxOf(s).beanBatchId;
+    if (!batchId) return null;
+    for (const [beanId, batches] of Object.entries(state.beanBatches)) {
+      if ((batches || []).some((b) => b?.id === batchId)) return beanId;
+    }
+    return null;
+  };
+
+  const eq = (param, read) => {
+    const want = q.get(param);
+    if (!want) return null;
+    return (s) => String(read(s) ?? "") === want;
+  };
+
+  const tests = [
+    eq("beanId", beanIdOf),
+    eq("beanBatchId", (s) => ctxOf(s).beanBatchId),
+    eq("coffeeName", (s) => ctxOf(s).coffeeName),
+    eq("coffeeRoaster", (s) => ctxOf(s).coffeeRoaster),
+    eq("grinderId", (s) => ctxOf(s).grinderId),
+    eq("grinderModel", (s) => ctxOf(s).grinderModel),
+    eq("profileTitle", titleOf),
+  ].filter(Boolean);
+
+  const search = (q.get("search") || "").trim().toLowerCase();
+  if (search) {
+    tests.push((s) => [
+      ctxOf(s).coffeeName, ctxOf(s).coffeeRoaster, titleOf(s),
+      ctxOf(s).grinderModel, s?.annotations?.espressoNotes,
+    ].some((v) => String(v ?? "").toLowerCase().includes(search)));
+  }
+
+  return tests.length ? list.filter((s) => tests.every((t) => t(s))) : list;
+}
 /* ── REST routing ────────────────────────────────────────── */
 
 function routeApi(req, res, url, body) {
@@ -236,7 +287,8 @@ function routeApi(req, res, url, body) {
   if (path === "/api/v1/shots" && method === "GET") {
     const limit = Number(q.get("limit") ?? 20);
     const offset = Number(q.get("offset") ?? 0);
-    return jsonEtag({ items: state.shots.slice(offset, offset + limit), total: state.shots.length });
+    const filtered = filterShots(state.shots, q);
+    return jsonEtag({ items: filtered.slice(offset, offset + limit), total: filtered.length });
   }
   // Only THIS endpoint carries measurements — the list above does not, exactly
   // as the real gateway behaves. Serving fuller shots from the list would let

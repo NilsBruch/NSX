@@ -76,7 +76,17 @@ export const roasterGroups = computed(() => {
     byRoaster.get(key).push(bean);
   }
   let groups = [...byRoaster.entries()].map(([name, list]) => ({ name, beans: list }));
-  if (diaryState.query) groups = groups.filter((g) => matches(g.name, diaryState.query));
+  if (diaryState.query) {
+    // A roaster surfaces if ITS OWN name matches, or if any bean under it
+    // does — so a bean whose roaster you have forgotten is still reachable
+    // from here. Deliberately name-only: profile lives on the SHOT, and the
+    // shot list this page has loaded is only the newest 200 across the whole
+    // account, so a profile match here could never be more than "whatever
+    // happens to be in the window". Profile search belongs where the server
+    // can answer it completely — inside a bean, see loadBeanShots.
+    const q = diaryState.query;
+    groups = groups.filter((g) => matches(g.name, q) || g.beans.some((b) => matches(b.name, q)));
+  }
   return sortByNameOrder(groups, diaryState.sort);
 });
 
@@ -102,11 +112,22 @@ const shotProfile = (shot) => shot?.workflow?.profile?.title || shot?.workflow?.
 const byTimestampDesc = (a, b) => (Date.parse(b?.timestamp || 0) || 0) - (Date.parse(a?.timestamp || 0) || 0);
 
 /**
- * Shots for the bean currently drilled INTO — fetched from the server scoped to
- * that bean (coffeeName + coffeeRoaster), so ALL of its shots show, not just the
- * ones that happened to be in the global newest-200. A text search is passed as
- * an ADDITIONAL argument on that same query (see loadBeanShots). Kept separate
- * from the global `shots` list so the flat full-history view is untouched.
+ * Shots for the bean currently drilled INTO — fetched from the server scoped
+ * to that bean, so ALL of its shots show, not just the ones that happened to
+ * be in the global newest-200. Kept separate from the global `shots` list so
+ * the flat full-history view is untouched.
+ *
+ * Scoped by `beanId` rather than coffeeName + coffeeRoaster: the id is the
+ * real key (the server resolves it through the shot's beanBatchId), so a
+ * renamed roaster or a spelling variant can no longer split one bean's
+ * history in two.
+ *
+ * `search` is the SAME free-text the gateway applies across coffee name,
+ * roaster, profile title, grinder model and notes — case-insensitive
+ * substring, verified against the live API. Combined with beanId it ANDs, so
+ * typing a profile name inside a bean narrows to that profile's shots across
+ * that bean's WHOLE history, not just a client-side window. (profileTitle is
+ * also a supported filter, but it matches exactly — no use for typed input.)
  */
 export const beanShots = ref([]);
 export const beanShotsLoading = ref(false);
@@ -117,8 +138,7 @@ export async function loadBeanShots(bean, query = '') {
   try {
     const res = await NSXApi.fetchShots({
       limit: 500,
-      coffeeName: bean.name || '',
-      coffeeRoaster: bean.roaster || '',
+      beanId: bean.id || '',
       search: query || '',
     });
     beanShots.value = Array.isArray(res) ? res : (res?.items ?? []);
@@ -146,10 +166,15 @@ export const shotCountForBean = (bean) => shots.value.filter((s) => shotMatchesB
 
 /**
  * One entry per profile used with this bean — groups shotsInBean (already
- * sorted/filtered) rather than re-deriving from the raw shot list, so the
- * existing sort/search behavior at level 2 applies here too. Map preserves
- * insertion order, so groups naturally come out "most/least recently used
- * profile first" (matching diaryState.sort) with no extra ordering logic.
+ * sorted) rather than re-deriving from the raw shot list, so diaryState.sort
+ * applies here too. Map preserves insertion order, so groups naturally come
+ * out "most/least recently used profile first" with no extra ordering logic.
+ *
+ * Searching at this level is NOT filtered here — the query goes back to the
+ * server (loadBeanShots, via the diaryState.query watcher below), which
+ * matches profile title among other fields across this bean's whole history.
+ * Filtering client-side instead would only ever see the shots already
+ * fetched, which is exactly the window problem this level avoids.
  */
 export const profileGroupsInBean = computed(() => {
   const byProfile = new Map();
@@ -336,11 +361,20 @@ export function enterRoaster(name) {
   diaryState.roasterName = name;
   diaryState.bean = null;
   diaryState.level = 1;
-  diaryState.query = '';
+  // Query deliberately NOT cleared here (unlike enterBean below): a roaster
+  // can surface at level 0 because one of its BEANS matched, not its own
+  // name — that is how you find a bean whose roaster you have forgotten.
+  // Clearing on the way in would drop that filter exactly when it is about to
+  // do its job, leaving you to spot the bean by eye. Both levels search names,
+  // so the term stays meaningful; level 2 is a different domain and does clear.
 }
 export function enterBean(bean) {
   diaryState.bean = bean;
   diaryState.level = 2;
+  // Cleared on the way in: the roaster/bean list searches NAMES, this level
+  // searches SHOTS (server-side, see loadBeanShots) — two different question
+  // domains, so carrying the name you typed upstairs into a shot query would
+  // usually just empty the list. Type again here to search this bean's shots.
   diaryState.query = '';
   diaryState.expandedProfile = null;
   if (diaryState.sort === 'alpha') diaryState.sort = 'newest'; // alpha has no meaning for shots
@@ -362,8 +396,17 @@ export function cycleSort() {
   diaryState.sort = opts[(i + 1) % opts.length];
 }
 export function setView(view) {
+  // Searching the full history calls loadShots(200, 0, query), and loadShots
+  // writes the GLOBAL shots list — the same one Browse reads for its per-bean
+  // counts (shotCountForBean) and the recipes view for its "last brewed" sort.
+  // Clearing the query below does not undo that: the watcher further down only
+  // re-queries while 'full' is still the active view, and by then it isn't. So
+  // leaving a filtered history used to strand every other view on the search
+  // result — most beans showing 0 shots until the next reload.
+  const leavingFilteredHistory = diaryState.view === 'full' && !!diaryState.query;
   diaryState.view = view;
   diaryState.query = '';
+  if (leavingFilteredHistory) loadShots(200);
   diaryState.expandedRecipe = null;
   diaryState.editingRecipes = false; // never leave a destructive mode armed across views
   // `sort` is shared, but the recipes view's vocabulary doesn't overlap the

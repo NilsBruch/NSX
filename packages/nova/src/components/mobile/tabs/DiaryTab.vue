@@ -284,7 +284,7 @@ async function onRecipeCreated() {
           </button>
         </div>
       </template>
-      <div v-if="!profileGroupsInBean.length" class="phone-empty">{{ t('diary.noShotsYet') }}</div>
+      <div v-if="!profileGroupsInBean.length" class="phone-empty">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</div>
     </div>
 
     <RecipePicker

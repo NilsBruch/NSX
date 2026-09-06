@@ -305,9 +305,13 @@ export default {
     add: 'Add',
     addRecipe: 'New recipe',
     search: 'Search',
-    searchRoaster: 'Search roaster…',
+    // Each level says what it actually searches: the roaster list matches
+    // roaster AND bean names (so a bean whose roaster you forgot is still
+    // findable), the bean list matches bean names, and inside a bean the
+    // query goes to the server across that bean's whole shot history.
+    searchRoaster: 'Search roaster or bean…',
     searchBean: 'Search bean…',
-    searchProfile: 'Search profile…',
+    searchProfile: 'Search profile, grinder, or notes…',
     filteredBy: 'Filtered by {q}',
     clearFilter: 'Clear filter',
     in: 'in',

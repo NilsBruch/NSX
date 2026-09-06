@@ -443,7 +443,7 @@ watch(
                 </button>
               </div>
             </template>
-            <div v-if="!profileGroupsInBean.length" class="list-row"><span class="rsub">{{ t('diary.noShotsYet') }}</span></div>
+            <div v-if="!profileGroupsInBean.length" class="list-row"><span class="rsub">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</span></div>
           </div>
         </div>
 

@@ -528,6 +528,10 @@ async function fetchShots(limit = 20, offset = 0, search = '') {
     if (filters.profileTitle) queryParams.append('profileTitle', filters.profileTitle);
     if (filters.grinderId) queryParams.append('grinderId', filters.grinderId);
     if (filters.beanBatchId) queryParams.append('beanBatchId', filters.beanBatchId);
+    // beanId scopes to a bean across ALL its bags, where beanBatchId scopes to
+    // one bag. The gateway resolves it through each shot's beanBatchId, so it
+    // is the right key for "this bean's whole history" (Nova's Diary drill-in).
+    if (filters.beanId) queryParams.append('beanId', filters.beanId);
   } else {
     queryParams.append('limit', limit);
     queryParams.append('offset', offset);
