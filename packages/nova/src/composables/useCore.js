@@ -40,39 +40,35 @@ export const boot = reactive({ done: false, error: null });
 export const currentWorkflow = ref(null);
 
 /**
- * Full shot list — NOT a core cache (shot.js only caches per-id detail; no
- * skin-agnostic full-list cache exists because "how much to page/filter" is
- * skin-shaped). Nova keeps its own here so Espresso's history button and the
- * Diary read the same list instead of each re-fetching it. (The recipe
- * picker no longer needs it — recipes are real persisted entities now, see
- * useRecipe.js, not derived from shot history.)
+ * The RECENT-SHOTS REFERENCE LIST: newest ~200 shots, never filtered, never
+ * paged. Deliberately one fixed query, because everything reading it wants the
+ * same thing — "what has been brewed lately" — regardless of what the user is
+ * searching for elsewhere: the Diary's per-bean shot counts, the recipe list's
+ * "last brewed" sort, Espresso's history button, post-shot matching.
+ *
+ * NOT a core cache (shot.js only caches per-id detail; no skin-agnostic
+ * full-list cache exists, because "how much to page/filter" is skin-shaped).
+ * Nova keeps its own here so those consumers share one fetch.
+ *
+ * Anything that needs a DIFFERENT query — a search, a bean's whole history, a
+ * paged history browse — owns its own ref rather than writing this one. See
+ * useDiary.js's `historyPage` and `beanShots`. That separation is load-bearing:
+ * while this ref doubled as the full-history search buffer, one search left
+ * every other consumer reading the filtered result, so most beans showed 0
+ * shots until the next reload.
  */
 export const shots = ref([]);
-/** Server-reported total for the CURRENT shots query (full history, or a search).
- *  Drives the Diary's "Load more" button: more exist iff shots.value.length < this. */
-export const shotsTotal = ref(0);
 
-function _shotsFrom(res) {
+/** Normalise fetchShots' response, which is either a bare array or {items,total}. */
+export function shotsFromResponse(res) {
   const items = Array.isArray(res) ? res : (res?.items ?? []);
   const total = Array.isArray(res) ? items.length : (res?.total ?? items.length);
   return { items, total };
 }
 
-/** Replace the shot list with a fresh page-0 query (optionally a server-side search). */
-export async function loadShots(limit = 200, offset = 0, search = '') {
-  const { items, total } = _shotsFrom(await NSXApi.fetchShots(limit, offset, search));
-  shots.value = items;
-  shotsTotal.value = total;
-  return shots.value;
-}
-
-/** Append the next page (server order), keeping any active search. De-dupes by id
- *  so an overlapping page can't double-list a shot. */
-export async function loadMoreShots(pageSize = 20, search = '') {
-  const { items, total } = _shotsFrom(await NSXApi.fetchShots(pageSize, shots.value.length, search));
-  const seen = new Set(shots.value.map((s) => s.id));
-  shots.value = [...shots.value, ...items.filter((s) => !seen.has(s.id))];
-  shotsTotal.value = total;
+/** Refresh the reference list. No offset/search parameters by design — see above. */
+export async function loadShots(limit = 200) {
+  shots.value = shotsFromResponse(await NSXApi.fetchShots(limit)).items;
   return shots.value;
 }
 

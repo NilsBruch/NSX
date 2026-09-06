@@ -9,7 +9,7 @@
  * a fake timestamp. Shots DO have a real `timestamp`, sorted by that instead.
  */
 import { computed, reactive, ref, watch } from 'vue';
-import { beans, shots, shotsTotal, loadShots, loadMoreShots } from './useCore.js';
+import { beans, shots, loadShots, shotsFromResponse } from './useCore.js';
 import { recipes, refreshRecipes, loadOrCreateRecipeForBeanProfile } from './useRecipe.js';
 
 const { NSXApi, NSXCore } = window;
@@ -316,23 +316,60 @@ export async function openRecipeForBeanProfile(bean, profileTitle, fallbackProfi
   await loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallbackProfile, fallbackContext);
 }
 
-// The flat full-history list is whatever the current server query returned (a
-// plain newest-first page, or a server-side search — see the query watcher
-// below); no client-side text filter, so results aren't limited to the loaded
-// page. Just apply the sort toggle.
+/**
+ * The flat full-history browse: its OWN paged query, not a view over the
+ * recent-shots reference list in useCore.js. It has to be, because it is the
+ * one shot list the user can both search and page through — writing those
+ * results into the shared ref left every other consumer (per-bean counts,
+ * "last brewed" sorting) reading a filtered, or arbitrarily long, list.
+ *
+ * `historyTotal` is what the server reports for the CURRENT query, so "are
+ * there more?" stays correct under a search as well as without one.
+ */
+const historyPage = ref([]);
+const historyTotal = ref(0);
+
+/** Replace the history with a fresh page 0, optionally server-side searched.
+ *  The gateway's free-text covers coffee name, roaster, profile title, grinder
+ *  model and notes, so this searches the WHOLE history, not the loaded page. */
+export async function loadHistory(query = '') {
+  const { items, total } = shotsFromResponse(await NSXApi.fetchShots({ limit: 200, offset: 0, search: query }));
+  historyPage.value = items;
+  historyTotal.value = total;
+}
+
+/** Append the next page, keeping whatever search is active. De-dupes by id so
+ *  an overlapping page (a shot recorded between requests shifts the window)
+ *  cannot list the same shot twice. */
+export async function loadMoreHistory(pageSize = 20) {
+  const { items, total } = shotsFromResponse(
+    await NSXApi.fetchShots({ limit: pageSize, offset: historyPage.value.length, search: diaryState.query || '' })
+  );
+  const seen = new Set(historyPage.value.map((s) => s.id));
+  historyPage.value = [...historyPage.value, ...items.filter((s) => !seen.has(s.id))];
+  historyTotal.value = total;
+}
+
+/** Re-run the current history query, but only if that list is what's on screen
+ *  — for the two places a shot appears or disappears out from under it (a brew
+ *  finishing, a shot deleted in the review). While the full history shared the
+ *  reference list, useLiveShot.js's loadShots(200) covered both for free. */
+export async function refreshHistoryIfActive() {
+  if (diaryState.view !== 'full') return;
+  await loadHistory(diaryState.query || '');
+}
+
+// No client-side text filter here: the server already applied the query, so
+// results are never limited to the page in memory. Just apply the sort toggle.
 export const fullHistoryShots = computed(() => {
-  const list = shots.value.slice().sort(byTimestampDesc);
+  const list = historyPage.value.slice().sort(byTimestampDesc);
   if (diaryState.sort === 'oldest') list.reverse();
   return list;
 });
 
-/** True when the server reports more shots than are currently loaded — drives the
- *  full-history "Load more" button. */
-export const hasMoreShots = computed(() => shots.value.length < shotsTotal.value);
-
-export async function loadMoreFullHistory(pageSize = 20) {
-  await loadMoreShots(pageSize, diaryState.query || '');
-}
+/** True when the server reports more shots than are currently loaded — drives
+ *  the full-history "Load more" button. */
+export const hasMoreHistory = computed(() => historyPage.value.length < historyTotal.value);
 
 /**
  * Route the search box to the server where the data isn't fully in memory:
@@ -351,7 +388,7 @@ watch(
       // deliberately falls through both branches. The `view === 'browse'`
       // guard matters: level/bean survive a view switch, so without it typing
       // here would re-query the last-browsed bean's shots.
-      if (diaryState.view === 'full') loadShots(200, 0, q || '');
+      if (diaryState.view === 'full') loadHistory(q || '');
       else if (diaryState.view === 'browse' && diaryState.level === 2 && diaryState.bean) loadBeanShots(diaryState.bean, q || '');
     }, 250);
   }
@@ -396,17 +433,12 @@ export function cycleSort() {
   diaryState.sort = opts[(i + 1) % opts.length];
 }
 export function setView(view) {
-  // Searching the full history calls loadShots(200, 0, query), and loadShots
-  // writes the GLOBAL shots list — the same one Browse reads for its per-bean
-  // counts (shotCountForBean) and the recipes view for its "last brewed" sort.
-  // Clearing the query below does not undo that: the watcher further down only
-  // re-queries while 'full' is still the active view, and by then it isn't. So
-  // leaving a filtered history used to strand every other view on the search
-  // result — most beans showing 0 shots until the next reload.
-  const leavingFilteredHistory = diaryState.view === 'full' && !!diaryState.query;
   diaryState.view = view;
   diaryState.query = '';
-  if (leavingFilteredHistory) loadShots(200);
+  // Each view owns its own data now, so switching cannot leave another view
+  // reading a filtered list — but the history's own ref does need filling,
+  // both on first entry and to drop a search made on a previous visit.
+  if (view === 'full') loadHistory('');
   diaryState.expandedRecipe = null;
   diaryState.editingRecipes = false; // never leave a destructive mode armed across views
   // `sort` is shared, but the recipes view's vocabulary doesn't overlap the
@@ -432,7 +464,12 @@ export function toggleArchived() {
 export async function ensureDiaryLoaded() {
   // refreshRecipes feeds the recipes view — the library is a separate store
   // read from shots/beans, and nothing else on this page loads it.
-  const [shotsResult] = await Promise.allSettled([loadShots(200), loadBatchMap(), refreshRecipes()]);
+  // diaryState survives unmounting (module-level), so the Diary can re-open
+  // straight into the full history — which owns its own list and would
+  // otherwise mount empty until the user switched views and back.
+  const [shotsResult] = await Promise.allSettled([
+    loadShots(200), loadBatchMap(), refreshRecipes(), refreshHistoryIfActive(),
+  ]);
   // A failed fetch previously left the list silently empty with no signal at
   // all — surface it the same way every other load failure in Nova does.
   if (shotsResult.status === 'rejected') {

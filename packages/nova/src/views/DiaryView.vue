@@ -6,7 +6,7 @@ import {
   diaryState, roasterGroups, beansInRoaster, fullHistoryShots,
   enterRoaster, enterBean, goBack, cycleSort, setView, toggleArchived, ensureDiaryLoaded,
   profileGroupsInBean, toggleProfileExpanded, openRecipeForBeanProfile,
-  ensureShotMetrics, hasMoreShots, loadMoreFullHistory,
+  ensureShotMetrics, hasMoreHistory, loadMoreHistory,
   recipeRows, toggleRecipeExpanded, toggleEditingRecipes,
 } from '../composables/useDiary.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
@@ -195,7 +195,7 @@ const loadingMore = ref(false);
 async function onLoadMore() {
   if (loadingMore.value) return;
   loadingMore.value = true;
-  try { await loadMoreFullHistory(20); } finally { loadingMore.value = false; }
+  try { await loadMoreHistory(20); } finally { loadingMore.value = false; }
 }
 
 const crumb = computed(() => {
@@ -300,7 +300,7 @@ watch(
         <DiaryShotRow :shot="shot" scope="history" />
       </button>
       <div v-if="!fullHistoryShots.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
-      <button v-if="hasMoreShots" class="load-more" :disabled="loadingMore" @click="onLoadMore">
+      <button v-if="hasMoreHistory" class="load-more" :disabled="loadingMore" @click="onLoadMore">
         {{ loadingMore ? t('diary.loading') : t('diary.loadMore', { n: 20 }) }}
       </button>
     </div>

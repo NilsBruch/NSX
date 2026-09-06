@@ -26,10 +26,6 @@
  */
 import { boot, refreshProfiles, loadShots } from './useCore.js';
 import { refreshRecipes } from './useRecipe.js';
-import { diaryState } from './useDiary.js';
-import { isPhone } from './useLayout.js';
-import { phoneTab } from './usePhoneNav.js';
-import router from '../router/index.js';
 
 const { NSXCore } = window;
 
@@ -48,22 +44,17 @@ export async function revalidateSharedData() {
   if (now - lastRunAt < THROTTLE_MS) return;
   lastRunAt = now;
 
-  // Diary's full-history search re-queries shots server-side with the typed
-  // term (useDiary.js's diaryState.query watcher), writing the GLOBAL shots
-  // list. A bare loadShots(200) here would replace those results underneath
-  // the user — but ONLY while that search is the thing on screen. Once they
-  // have navigated elsewhere, that same filtered list is stale state every
-  // other view reads (per-bean counts, "last brewed" sorting), so leaving it
-  // in place across a tab switch would preserve a bug rather than avoid one.
-  const showingDiary = isPhone.value ? phoneTab.value === 'diary' : router.currentRoute.value.name === 'diary';
-  const skipShots = showingDiary && diaryState.view === 'full' && !!diaryState.query;
-
+  // loadShots is unconditional: it refreshes the recent-shots reference list,
+  // which no view writes a search into any more (useCore.js / useDiary.js's
+  // historyPage). This used to need a guard against clobbering an on-screen
+  // full-history search — and that guard, in turn, preserved the filtered list
+  // for every other view. Neither problem exists now.
   await Promise.allSettled([
     refreshRecipes(true),
     refreshProfiles(true),
     NSXCore.loadBeans(),
     NSXCore.loadGrinders(),
-    skipShots ? Promise.resolve() : loadShots(200),
+    loadShots(200),
   ]);
 }
 

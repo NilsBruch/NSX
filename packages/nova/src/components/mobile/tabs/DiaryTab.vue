@@ -16,7 +16,7 @@ import {
   diaryState, roasterGroups, beansInRoaster, fullHistoryShots,
   enterRoaster, enterBean, goBack, cycleSort, setView, toggleArchived, ensureDiaryLoaded,
   profileGroupsInBean, toggleProfileExpanded, openRecipeForBeanProfile,
-  shotMetrics, ensureShotMetrics, hasMoreShots, loadMoreFullHistory,
+  shotMetrics, ensureShotMetrics, hasMoreHistory, loadMoreHistory,
 } from '../../../composables/useDiary.js';
 import { findRecipeForBeanProfile, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
 import { toggleArchiveBean, confirmAndDeleteBean } from '../../../composables/useBeanActions.js';
@@ -146,7 +146,7 @@ const loadingMore = ref(false);
 async function onLoadMore() {
   if (loadingMore.value) return;
   loadingMore.value = true;
-  try { await loadMoreFullHistory(20); } finally { loadingMore.value = false; }
+  try { await loadMoreHistory(20); } finally { loadingMore.value = false; }
 }
 
 const showRecipeCreator = ref(false);
@@ -220,7 +220,7 @@ async function onRecipeCreated() {
         </span>
       </button>
       <div v-if="!fullHistoryShots.length" class="phone-empty">{{ t('diary.noResults') }}</div>
-      <button v-if="hasMoreShots" class="phone-load-more" :disabled="loadingMore" @click="onLoadMore">
+      <button v-if="hasMoreHistory" class="phone-load-more" :disabled="loadingMore" @click="onLoadMore">
         {{ loadingMore ? t('diary.loading') : t('diary.loadMore', { n: 20 }) }}
       </button>
     </div>

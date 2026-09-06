@@ -12,6 +12,7 @@ import { machine, shots, loadShots, currentWorkflow } from './useCore.js';
 import { recipe, bumpRecipeLastUsed, saveVolumeCalibration } from './useRecipe.js';
 import { skinSettings } from './useSettings.js';
 import { flushSession } from './useCleaningSession.js';
+import { refreshHistoryIfActive } from './useDiary.js';
 
 const { NSXCore, NSXApi } = window;
 
@@ -247,6 +248,10 @@ async function finishLive() {
     phase.value = 'saving';
     fullShot = await waitForFreshShot();
   }
+  // waitForFreshShot's polling refreshes the reference list; the Diary's
+  // full-history page is a separate ref since the split, and would otherwise
+  // sit one shot behind if that is the list open behind this overlay.
+  refreshHistoryIfActive();
   loadHistoryForCurrentRecipe();
   scheduleReviewAutoClose();
   // Matches NSX's real trigger exactly: selecting a recipe never touches
@@ -417,7 +422,9 @@ export async function deleteCurrentShot() {
   if (!shot?.id) return;
   await NSXCore.deleteShot(shot.id);
   historyShots.value = historyShots.value.filter((s) => s.id !== shot.id);
-  await loadShots(200); // keep Diary / full-history in sync with the deletion
+  // The reference list and, if it is the list on screen, the Diary's own
+  // full-history page — two refs since the split, one call each.
+  await Promise.allSettled([loadShots(200), refreshHistoryIfActive()]);
   if (!historyShots.value.length) { closeHistory(); return; }
   if (historyIndex.value >= historyShots.value.length) historyIndex.value = historyShots.value.length - 1;
   // The [historyIndex, historyShots] watcher refetches currentFullShot.
