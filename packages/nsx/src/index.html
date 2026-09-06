@@ -461,6 +461,11 @@
                       <path d="m21 21-4.35-4.35"></path>
                     </svg>
                     <input type="text" class="workflows-search" placeholder="Rezepte durchsuchen" data-i18n-placeholder="recipe.search" inputmode="none" />
+                    <button type="button" id="btn-workflow-search-clear" class="workflows-search-clear" aria-label="Suche löschen" data-i18n-aria="recipe.clearSearchAria" hidden>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
                   </div>
                   <button class="workflows-btn workflows-btn-filter" id="btn-workflow-filter" aria-label="Filter" data-i18n-aria="recipe.filterAria">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -504,6 +509,11 @@
                     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                   </svg>
                   <input type="search" id="history-search" class="history-search-input" placeholder="Röster, Bohne, Mühle, Profil…" data-i18n-placeholder="history.search" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="none">
+                  <button type="button" id="btn-history-search-clear" class="workflows-search-clear" aria-label="Suche löschen" data-i18n-aria="recipe.clearSearchAria" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
                 </div>
                 <button type="button" id="btn-history-view-toggle" class="history-toolbar-btn" aria-label="Ansicht wechseln" data-i18n-aria="history.viewToggleAria">
                   <span id="history-view-toggle-label" data-i18n="history.orderedByRecipe">Nach Rezept sortiert</span>

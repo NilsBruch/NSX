@@ -400,6 +400,7 @@ function clearWorkflowFilters() {
   workflowFilters.grinders.clear();
   workflowFilters.profiles.clear();
   updateFilterButtonState();
+  _updateWorkflowSearchClear();
   _renderWorkflowList();
 }
 
@@ -521,8 +522,19 @@ document.getElementById('history-filter-chips-bean')?.addEventListener('click', 
 document.getElementById('history-filter-chips-grinder')?.addEventListener('click', e => _handleHistoryChipClick(e, _historyFilters.grinders));
 document.getElementById('history-filter-chips-profile')?.addEventListener('click', e => _handleHistoryChipClick(e, _historyFilters.profiles));
 
+// Dispatches 'input' rather than duplicating the debounced search below, so
+// there is only one place that decides what clearing the query means.
+document.getElementById('btn-history-search-clear')?.addEventListener('click', () => {
+  const el = document.getElementById('history-search');
+  if (!el) return;
+  el.value = '';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
 document.getElementById('history-search')?.addEventListener('input', e => {
   _historySearch = e.target.value.trim();
+  const clearBtn = document.getElementById('btn-history-search-clear');
+  if (clearBtn) clearBtn.hidden = !e.target.value;
   clearTimeout(_historySearchTimer);
   if (!_historySearch) {
     historyShots = [...shots];
@@ -2302,8 +2314,25 @@ recipeListScrollEl.addEventListener("scroll", updateRecipeListFade, { passive: t
 
 /* ── Workflow Search ──────────────────────────────────── */
 const workflowSearchEl = document.querySelector('.workflows-search');
+const workflowSearchClearEl = document.getElementById('btn-workflow-search-clear');
+
+// Shown only with something to clear. Clears the SEARCH only — the filter
+// chips have their own reset, and wiping both from here would silently undo a
+// filter the user set separately.
+function _updateWorkflowSearchClear() {
+  if (workflowSearchClearEl) workflowSearchClearEl.hidden = !workflowSearchEl?.value;
+}
+
 workflowSearchEl?.addEventListener('input', () => {
   workflowSearchQuery = workflowSearchEl.value.trim();
+  _updateWorkflowSearchClear();
+  _renderWorkflowList();
+});
+
+workflowSearchClearEl?.addEventListener('click', () => {
+  if (workflowSearchEl) workflowSearchEl.value = '';
+  workflowSearchQuery = '';
+  _updateWorkflowSearchClear();
   _renderWorkflowList();
 });
 

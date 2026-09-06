@@ -171,6 +171,7 @@ const TRANSLATIONS = {
     'recipe.addAria':      'Rezept hinzufügen',
     'recipe.listAria':     'Verfügbare Rezepte',
     'recipe.filterNotice': '{shown} von {total} Rezepten · Filter aktiv — tippen zum Zurücksetzen',
+    'recipe.clearSearchAria': 'Suche löschen',
 
     // History panel
     'history.search':      'Röster, Bohne, Mühle, Profil…',
@@ -852,6 +853,7 @@ const TRANSLATIONS = {
     'recipe.addAria':      'Add recipe',
     'recipe.listAria':     'Available recipes',
     'recipe.filterNotice': '{shown} of {total} recipes · filter active — tap to clear',
+    'recipe.clearSearchAria': 'Clear search',
 
     // History panel
     'history.search':      'Roaster, bean, grinder, profile…',
