@@ -10469,13 +10469,21 @@ function _persistBeanManagerCollapsedRoasters() {
   patchStoreSettings({ nsx_bean_manager_collapsed_roasters: [..._beanManagerCollapsedRoasters] });
 }
 
+// One definition of what text a bean is searchable by, shared by the list
+// filter and the search field's suggestions — otherwise confirming a suggestion
+// like "Roaster Bean" matches neither field on its own and the list comes back
+// empty. Roaster and name are each substrings of it, so searching either alone
+// still works.
+function _beanSearchLabel(bean) {
+  return [bean?.roaster, bean?.name].filter(Boolean).join(' ');
+}
+
 function _beanManagerFilteredBeans() {
   const q = _beanManagerSearchQuery.toLowerCase().trim();
   return NSXCore.getBeans().filter(b => {
     if (!_beanManagerShowArchived && b.archived) return false;
     if (!q) return true;
-    return (b.name || '').toLowerCase().includes(q)
-      || (b.roaster || '').toLowerCase().includes(q)
+    return _beanSearchLabel(b).toLowerCase().includes(q)
       || (b.country || '').toLowerCase().includes(q);
   });
 }
@@ -10881,9 +10889,15 @@ beanManagerModalEl?.addEventListener('click', (e) => {
 
 document.getElementById('bean-manager-search')?.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  const current = _beanManagerSearchQuery;
-  openFieldPicker(null, [], {
-    initialValue: current,
+  // Offer the beans themselves as suggestions, so the strip narrows as you
+  // type. Filtering the list live instead would be invisible: the picker
+  // covers it with a dimmed, blurred backdrop.
+  const beans = _beanManagerShowArchived
+    ? NSXCore.getBeans()
+    : NSXCore.getBeans().filter(b => !b.archived);
+  const labels = NSXCore.uniqueFieldValuesByRecency(beans, _beanSearchLabel);
+  openFieldPicker(null, labels, {
+    initialValue: _beanManagerSearchQuery,
     onConfirm: (val) => {
       _beanManagerSearchQuery = val.trim();
       const searchEl = document.getElementById('bean-manager-search');
