@@ -86,8 +86,8 @@ export const recipe = reactive({
  *  history-derived one. Lazily loaded (RecipePicker.vue calls this on open),
  *  matching every other lazily-loaded panel's own load-on-open convention. */
 export const recipes = ref([]);
-export async function refreshRecipes() {
-  recipes.value = await NSXCore.loadRecipes();
+export async function refreshRecipes(force = false) {
+  recipes.value = await NSXCore.loadRecipes(force);
   return recipes.value;
 }
 

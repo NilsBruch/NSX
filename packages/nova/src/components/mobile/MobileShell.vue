@@ -41,6 +41,13 @@ watch(
   },
   { immediate: true }
 );
+
+// The phone layout never navigates through vue-router (see usePhoneNav.js),
+// so router/index.js's afterEach — the tablet's revalidation trigger, see
+// useRevalidate.js — never fires here. A tab switch is the phone's equivalent
+// "about to look at a list that may be stale" moment; not `immediate`, since
+// bootCore() already fetched everything fresh before this ever mounts.
+watch(phoneTab, () => window.dispatchEvent(new Event('router:revalidate')));
 </script>
 
 <template>

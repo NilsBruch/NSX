@@ -37,10 +37,22 @@ export const TABS = [
   { name: 'settings', path: '/settings', component: Settings, side: 'right', accent: '#4fa3b5', icon: ICONS.settings },
 ];
 
-export default createRouter({
+const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', redirect: '/espresso' },
     ...TABS.map(({ name, path, component }) => ({ name, path, component })),
   ],
 });
+
+// Every tab switch is a moment the user is about to look at data (recipes,
+// beans, shots) this device may not have re-fetched in a while — see
+// useRevalidate.js. A plain window event, not a direct import, so the router
+// stays decoupled from Nova's data layer; useRevalidate.js is what listens.
+// afterEach rather than beforeEach so the '/' -> '/espresso' redirect above
+// has already settled into its real destination before this fires.
+router.afterEach(() => {
+  window.dispatchEvent(new Event('router:revalidate'));
+});
+
+export default router;

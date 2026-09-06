@@ -58,6 +58,7 @@ import i18n from './i18n';
 import { bootCore } from './composables/useCore.js';
 import { adoptCurrentWorkflowAsRecipe } from './composables/useRecipe.js';
 import { skinSettings, loadSkinSettings, loadDisplaySupport } from './composables/useSettings.js';
+import { wireRevalidateTriggers } from './composables/useRevalidate.js';
 
 createApp(App).use(router).use(i18n).mount('#app');
 
@@ -75,6 +76,10 @@ createApp(App).use(router).use(i18n).mount('#app');
 loadDisplaySupport();
 
 bootCore().then(() => {
+  // Two devices on the same gateway otherwise never notice each other's
+  // writes short of a full reload — see useRevalidate.js.
+  wireRevalidateTriggers();
+
   adoptCurrentWorkflowAsRecipe();
   loadSkinSettings();
 
