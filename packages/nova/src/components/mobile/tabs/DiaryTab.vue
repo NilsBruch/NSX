@@ -22,7 +22,7 @@ import { findRecipeForBeanProfile, togglePinRecipe, deleteRecipe } from '../../.
 import { toggleArchiveBean, confirmAndDeleteBean } from '../../../composables/useBeanActions.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { openHistoryAt } from '../../../composables/useLiveShot.js';
-import { singleGrinder } from '../../../composables/useCore.js';
+import { singleGrinder, formatShortDate } from '../../../composables/useCore.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
 import { goPhoneTab } from '../../../composables/usePhoneNav.js';
 import RecipePicker from '../../RecipePicker.vue';
@@ -54,12 +54,6 @@ const factsFor = (shot) => window.NSXCore.mapShotToWorkflow(shot);
 const actualDose = (shot) => window.NSXCore.resolveActualDose(shot);
 const metricsFor = (shot) => shotMetrics.get(shot.id) || null;
 
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`;
-}
 
 function onEnterBean(bean) {
   enterBean(bean);
@@ -211,7 +205,7 @@ async function onRecipeCreated() {
         @click="openHistoryAt(fullHistoryShots, shot)"
       >
         <span class="shot-facts">
-          <span class="fact"><b>{{ fmtDate(shot.timestamp) }}</b></span>
+          <span class="fact"><b>{{ formatShortDate(shot.timestamp) }}</b></span>
           <span class="fact">{{ factsFor(shot).coffeeRoaster }} — {{ factsFor(shot).coffeeName }}</span>
           <span class="fact">{{ factsFor(shot).profileTitle }}</span>
           <span class="fact" v-if="!singleGrinder"><b>{{ factsFor(shot).grinderModel }}</b></span>
@@ -279,7 +273,7 @@ async function onRecipeCreated() {
             @click="openHistoryAt(group.shots, shot)"
           >
             <span class="shot-facts">
-              <span class="fact"><b>{{ fmtDate(shot.timestamp) }}</b></span>
+              <span class="fact"><b>{{ formatShortDate(shot.timestamp) }}</b></span>
               <span class="fact"><b>{{ actualDose(shot)?.toFixed(1) ?? '—' }}</b>g<template v-if="metricsFor(shot)"> → <b>{{ metricsFor(shot).yield?.toFixed(1) ?? '—' }}</b>{{ metricsFor(shot).yieldUnit }}</template></span>
             </span>
             <span class="stars">

@@ -128,6 +128,20 @@ export function formatGrinderLabel(g) {
   return g?.burrs ? `${model} (${g.burrs})` : model;
 }
 
+/** A short date like "09/07/26" — locale-following (NSXI18n.getLocale()), so
+ *  the digit order actually matches how the active language writes a date
+ *  instead of a hardcoded DD/MM/YY that an en-US reader parses as MM/DD.
+ *  Was duplicated near-verbatim in DiaryShotRow.vue, mobile/RecipeDetail.vue,
+ *  mobile/tabs/DiaryTab.vue and EspressoView.vue; one home for it here. */
+export function formatShortDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat(window.NSXI18n?.getLocale?.() ?? 'en-US', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+  }).format(d);
+}
+
 /**
  * A recipe's identity as dot-separated parts: roaster, bean, grinder, profile.
  * Shared by the Coffee page's title bar and the Diary's recipe rows so the two

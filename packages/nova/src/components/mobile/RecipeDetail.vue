@@ -25,7 +25,7 @@
  */
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { grinders, formatGrinderLabel, singleGrinder, recipeIdentityParts } from '../../composables/useCore.js';
+import { grinders, formatGrinderLabel, singleGrinder, recipeIdentityParts, formatShortDate } from '../../composables/useCore.js';
 import {
   recipe, recipes, pushRecipe, selectRecipe, deleteRecipe, togglePinRecipe, patchRecipeEntry,
   setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, cloneProfile, roastAge,
@@ -49,17 +49,11 @@ const source = computed(() => (isLoaded.value ? recipe : libraryEntry.value));
 
 const titleParts = computed(() => recipeIdentityParts(source.value));
 
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`;
-}
 // roastAge is only meaningful for the LOADED recipe — it reads the live
 // batch, which a non-loaded entry's raw roastDate field can't stand in for
 // (see the roast-date note above). The row itself is loaded-only anyway.
 const roastLabel = computed(() =>
-  source.value.roastDate ? `${fmtDate(source.value.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
+  source.value.roastDate ? `${formatShortDate(source.value.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
 );
 
 async function editDose() {

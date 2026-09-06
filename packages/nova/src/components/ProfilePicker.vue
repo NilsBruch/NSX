@@ -120,7 +120,11 @@ const entries = computed(() => {
   for (const [group, members] of groups) {
     sortable.push({ sortKey: group, rows: [{ kind: 'group', id: `group:${group}`, label: group }, ...members] });
   }
-  sortable.sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'de'));
+  // 'de' was a leftover from the shared core's shot/recipe-key normalisation
+  // convention — Nova is English-only (main.js forces setLang('en')), so this
+  // was sorting an English profile list with German collation rules for no
+  // reason. NSXI18n.getLocale() follows whatever language is actually active.
+  sortable.sort((a, b) => a.sortKey.localeCompare(b.sortKey, window.NSXI18n?.getLocale?.() ?? 'en-US'));
   return sortable.flatMap((s) => s.rows);
 });
 

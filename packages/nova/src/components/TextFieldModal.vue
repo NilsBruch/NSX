@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n';
 import { textFieldState, resolveTextField } from '../composables/useModals.js';
 
 const { t } = useI18n();
+const { NSXCore } = window;
 const inputEl = ref(null);
 const draft = ref('');
 const shift = ref(false);
@@ -124,28 +125,31 @@ function releaseKey() {
   pressedEl = null;
 }
 
-// Existing values that match what's been typed so far (case-insensitive), so the
-// user can tap one instead of re-typing — keeps roaster/origin/etc. consistent.
+// Existing values that match what's been typed so far, so the user can tap
+// one instead of re-typing — keeps roaster/origin/etc. consistent. Ranked by
+// NSXCore.rankSuggestions rather than a plain substring test: typing "ris"
+// used to be able to offer "Kristians Kaffe" ahead of "Risteriet" (the letters
+// occur somewhere inside), since nothing distinguished that from an actual
+// prefix match. Ties keep `all`'s incoming order, which callers (BeanEditor.vue)
+// already provide newest-first.
 const suggestions = computed(() => {
   const all = textFieldState.suggestions || [];
   if (!all.length) return [];
-  const q = draft.value.trim().toLowerCase();
+  const current = draft.value.trim().toLowerCase();
   const seen = new Set();
-  const out = [];
+  const candidates = [];
   for (const s of all) {
     const val = String(s || '').trim();
     if (!val) continue;
     const low = val.toLowerCase();
-    if (low === q) continue;          // don't suggest the exact current value
-    if (q && !low.includes(q)) continue;
+    if (low === current) continue;    // don't suggest the exact current value
     if (seen.has(low)) continue;
     // Tag mode: an already-added note is not a useful suggestion.
     if (textFieldState.tags && hasTag(val)) continue;
     seen.add(low);
-    out.push(val);
-    if (out.length >= 8) break;
+    candidates.push(val);
   }
-  return out;
+  return NSXCore.rankSuggestions(candidates, draft.value).slice(0, 8);
 });
 // Plain mode: tapping a suggestion IS the answer — fill and confirm in one tap.
 // Tag mode: it ADDS that note and leaves the modal open, so several can be

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { grinders, formatGrinderLabel, recipeIdentityParts } from '../composables/useCore.js';
+import { grinders, formatGrinderLabel, recipeIdentityParts, formatShortDate } from '../composables/useCore.js';
 import { recipe, roastAge, pushRecipe, setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, cloneProfile, applyEditedProfile } from '../composables/useRecipe.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { openNumberPad, openRating, openChooser, openConfirm } from '../composables/useModals.js';
@@ -46,13 +46,8 @@ const hasRecipe = computed(() => {
 // render the same recipe identically (see useCore's recipeIdentityParts).
 const titleParts = computed(() => recipeIdentityParts(recipe));
 
-function fmtDate(iso) {
-  const d = new Date(iso);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`;
-}
 const roastLabel = computed(() =>
-  recipe.roastDate ? `${t('espresso.roasted')} ${fmtDate(recipe.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
+  recipe.roastDate ? `${t('espresso.roasted')} ${formatShortDate(recipe.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
 );
 
 // The blurred recipe browser, opened by tapping the combined identity title.

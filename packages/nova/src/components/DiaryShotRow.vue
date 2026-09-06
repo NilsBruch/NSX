@@ -17,7 +17,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { shotMetrics } from '../composables/useDiary.js';
-import { singleGrinder } from '../composables/useCore.js';
+import { singleGrinder, formatShortDate } from '../composables/useCore.js';
 
 const props = defineProps({
   shot: { type: Object, required: true },
@@ -38,18 +38,12 @@ function durationLabel(shot) {
   const sec = metricsFor(shot)?.durationSec;
   return Number.isFinite(sec) ? `${Math.round(sec)}s` : '';
 }
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`;
-}
 </script>
 
 <template>
   <span class="shot-body">
     <span class="shot-facts">
-      <span class="fact"><b>{{ fmtDate(shot.timestamp) }}</b></span>
+      <span class="fact"><b>{{ formatShortDate(shot.timestamp) }}</b></span>
       <template v-if="showIdentity">
         <span class="fact">{{ factsFor(shot).coffeeRoaster }}</span>
         <span class="fact">{{ factsFor(shot).coffeeName }}</span>

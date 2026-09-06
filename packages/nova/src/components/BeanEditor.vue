@@ -48,25 +48,16 @@ const showMore = ref(false);
  */
 const LIST_FIELDS = new Set(['country', 'region', 'producer', 'species', 'variety', 'processing', 'notes']);
 
-// Every bean's raw value for a field, as a display string.
-function rawValuesFor(field) {
-  const beans = NSXCore.getBeans() || [];
-  const vals = [];
-  for (const b of beans) {
-    const raw = field === 'variety'
-      ? (Array.isArray(b?.variety) ? b.variety.join(', ') : b?.variety)
-      : b?.[field];
-    const val = String(raw ?? '').trim();
-    if (val) vals.push(val);
-  }
-  return vals;
-}
-
 // Distinct existing values for a bean field, pulled from every bean already in
 // the library — surfaced as tap-to-fill suggestions so the same roaster/name
-// isn't re-spelled slightly differently each time.
+// isn't re-spelled slightly differently each time. Newest bean first
+// (NSXCore.uniqueFieldValuesByRecency, keyed off each bean's createdAt) rather
+// than alphabetical — the roaster you just typed for a previous bean is what
+// you want to tap again, not whichever one starts with an early letter. Folds
+// case variants together (first occurrence, which is now the most recent
+// bean's casing) so near-duplicate spellings still collapse into one chip.
 function suggestionsFor(field) {
-  return [...new Set(rawValuesFor(field))].sort((a, b) => a.localeCompare(b));
+  return dedupeCaseInsensitive(NSXCore.uniqueFieldValuesByRecency(NSXCore.getBeans(), field));
 }
 
 /**
@@ -74,18 +65,32 @@ function suggestionsFor(field) {
  * a whole combination ("blueberry, dark chocolate, cane sugar", or a blend's
  * "Ethiopia, Brazil"), but they very much share the individual entries — so
  * suggesting whole strings off other beans almost never produced a usable hit.
- * Split every bean's value on commas and suggest the individual entries, which
- * the tag field then lets the user reassemble by tapping.
+ * `pick` here returns the SPLIT entries (or, for `variety`, the array it
+ * already is) so uniqueFieldValuesByRecency's per-item array handling ranks
+ * each entry by its own bean's createdAt, not the whole field's.
  */
 function entrySuggestionsFor(field) {
-  const seen = new Map(); // lowercase -> first-seen casing, so chips stay consistent
-  for (const raw of rawValuesFor(field)) {
-    for (const part of raw.split(',')) {
-      const val = part.trim();
-      if (val && !seen.has(val.toLowerCase())) seen.set(val.toLowerCase(), val);
-    }
+  const pick = (b) => {
+    const raw = field === 'variety' ? (Array.isArray(b?.variety) ? b.variety : []) : String(b?.[field] ?? '').split(',');
+    return raw.map((v) => String(v).trim()).filter(Boolean);
+  };
+  return dedupeCaseInsensitive(NSXCore.uniqueFieldValuesByRecency(NSXCore.getBeans(), pick));
+}
+
+// uniqueFieldValuesByRecency dedupes on exact string equality; these fields
+// have historically allowed inconsistent casing ("Ethiopia" / "ethiopia"),
+// so fold case variants together on top of it, keeping whichever casing is
+// first in the (already recency-ordered) list.
+function dedupeCaseInsensitive(values) {
+  const seen = new Set();
+  const out = [];
+  for (const v of values) {
+    const key = v.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
   }
-  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  return out;
 }
 
 async function editField(field, label, type = 'text') {
