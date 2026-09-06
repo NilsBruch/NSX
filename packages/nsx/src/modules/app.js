@@ -2799,6 +2799,7 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
   const cleaningStep2El       = document.getElementById('cleaning-step-2');
   const cleaningStep3El       = document.getElementById('cleaning-step-3');
   const cleaningStep4El       = document.getElementById('cleaning-step-4');
+  const cleaningStepRinseEl   = document.getElementById('cleaning-step-rinse');
   const cleaningProfileListEl = document.getElementById('cleaning-profile-list');
   const cleaningStep3IdleEl   = document.getElementById('cleaning-step3-idle');
   const cleaningGraphEl       = document.getElementById('cleaning-live-graph');
@@ -2855,6 +2856,12 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
   let _cleaningRunStartedAt    = 0;
   let _cleaningProfileHint     = null;
   let _cleaningWasEspresso     = false;
+  // The forward-flush profile is a backflush, so it wants two passes (with
+  // powder, then without) and a hand rinse afterwards. Every other cleaning
+  // profile — Weber Spring Clean carries its own rinse frames — keeps the
+  // single-pass flow, since running it repeatedly would just be more chemical.
+  let _cleaningMultiPass       = false;
+  let _cleaningPass            = 1;
   let _cleaningStateHandler    = null;
   let _cleaningSnapshotHandler = null;
 
@@ -2953,9 +2960,20 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
     return candidates[0] || null;
   }
 
+  // Steps are addressed by name rather than index since the x5 flow inserts one
+  // between the run and the finish.
+  const _cleaningSteps = {
+    1: cleaningStep1El,
+    2: cleaningStep2El,
+    3: cleaningStep3El,
+    4: cleaningStep4El,
+    rinse: cleaningStepRinseEl,
+  };
+
   function _cleaningShowStep(n) {
-    [cleaningStep1El, cleaningStep2El, cleaningStep3El, cleaningStep4El]
-      .forEach((el, i) => { if (el) el.hidden = (i + 1) !== n; });
+    for (const [key, el] of Object.entries(_cleaningSteps)) {
+      if (el) el.hidden = String(key) !== String(n);
+    }
   }
 
   function _cleaningStopGraph() {
@@ -2981,6 +2999,8 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
     _cleaningRunStartedAt = 0;
     _cleaningProfileHint  = null;
     _cleaningWasEspresso = false;
+    _cleaningMultiPass   = false;
+    _cleaningPass        = 1;
     const hadCleaningProfile = !!_forcedLiveWorkflow;
     _forcedLiveWorkflow  = null;
     if (_cleaningStateHandler) {
@@ -3005,6 +3025,10 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
   document.getElementById('btn-cleaning-cancel')?.addEventListener('click', _cleaningClose);
   document.getElementById('btn-cleaning-step3-abort')?.addEventListener('click', _cleaningClose);
   document.getElementById('btn-cleaning-step2-back')?.addEventListener('click', () => _cleaningShowStep(1));
+  document.getElementById('btn-cleaning-rinse-abort')?.addEventListener('click', _cleaningClose);
+  // Second pass: the profile is already loaded on the machine from the first,
+  // so this only waits for the GHC button again.
+  document.getElementById('btn-cleaning-rinse-ready')?.addEventListener('click', () => _cleaningArmRun());
 
   // Schritt 1 → 2: Profile laden und filtern
   document.getElementById('btn-cleaning-ready')?.addEventListener('click', async () => {
@@ -3066,6 +3090,11 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
       cleaningProfile.target_weight = 0;
       cleaningProfile.target_volume = 0;
       _cleaningProfileHint = String(cleaningProfile?.title || '').trim() || null;
+      // Title match, deliberately: the frames alone do not say whether a
+      // profile expects a blind basket. Renaming the profile falls back to
+      // the single-pass flow rather than guessing.
+      _cleaningMultiPass = /forward\s*flush/i.test(_cleaningProfileHint || '');
+      _cleaningPass = 1;
 
       const cleaningContext = {
         ...(currentWf?.context || {}),
@@ -3107,9 +3136,18 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
       return;
     }
 
-    _cleaningShowStep(3);
+    _cleaningArmRun();
+  }
 
-    // Auf Espresso-Zyklus warten: espresso → idle = fertig
+  // Show step 3 and wait for one espresso cycle (the user presses the GHC
+  // button — the skin cannot start a run). Called once per pass, since the
+  // handler removes itself when the cycle ends.
+  function _cleaningArmRun() {
+    _cleaningShowStep(3);
+    if (cleaningStep3IdleEl)  cleaningStep3IdleEl.hidden  = false;
+    if (cleaningGraphEl)      cleaningGraphEl.hidden      = true;
+    if (cleaningStep3TitleEl) cleaningStep3TitleEl.textContent = t('cleaning.running.title');
+
     _cleaningWasEspresso = false;
     _cleaningStateHandler = ({ detail }) => {
       const state = detail?.state || 'idle';
@@ -3141,10 +3179,32 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
         _cleaningStateHandler = null;
         _cleaningWasEspresso  = false;
         _cleaningStopGraph();
-        _cleaningShowStep(4);
+        _cleaningFinishPass();
       }
     };
     window.addEventListener('gateway:machineState', _cleaningStateHandler);
+  }
+
+  // One pass of the profile has finished. The x5 backflush is run twice — with
+  // powder, then without — and closes on an instruction to rinse the group by
+  // hand, which the skin cannot drive: the flush button is on the machine.
+  function _cleaningFinishPass() {
+    if (_cleaningMultiPass && _cleaningPass === 1) {
+      _cleaningPass = 2;
+      _cleaningShowStep('rinse');
+      return;
+    }
+    _cleaningApplyDoneText();
+    _cleaningShowStep(4);
+  }
+
+  function _cleaningApplyDoneText() {
+    const titleEl = cleaningStep4El?.querySelector('.modal-title');
+    const textEl  = cleaningStep4El?.querySelector('.cleaning-instruction-text');
+    if (titleEl) titleEl.textContent = _cleaningMultiPass
+      ? t('cleaning.finalFlush.title') : t('cleaning.done.title');
+    if (textEl) textEl.textContent = _cleaningMultiPass
+      ? t('cleaning.finalFlush.text') : t('cleaning.done.text');
   }
 
   // Schritt 4: Fertig — Shot behalten, zurück zu Home

@@ -548,6 +548,9 @@ const TRANSLATIONS = {
     'cleaning.running.wait':  'Warte auf Maschine…',
     'cleaning.stepProgress':  'Schritt {x} von {y}',
     'cleaning.skipStep':      'Step ↷',
+    'cleaning.rinse.text':    'Blindsieb ausspülen und ohne Reinigungspulver wieder einsetzen.',
+    'cleaning.finalFlush.title': 'Klarspülen',
+    'cleaning.finalFlush.text':  'Siebträger abnehmen und so oft spülen, bis das Wasser klar ist.',
     'cleaning.done.title':    'Reinigung fertig',
     'cleaning.done.text':     'Reinigung abgeschlossen. Auf Fertig drücken wenn du bereit bist.',
 
@@ -1230,6 +1233,9 @@ const TRANSLATIONS = {
     'cleaning.running.wait':  'Waiting for machine…',
     'cleaning.stepProgress':  'Step {x} of {y}',
     'cleaning.skipStep':      'Step ↷',
+    'cleaning.rinse.text':    'Rinse the blind basket and reinsert it without cleaning powder.',
+    'cleaning.finalFlush.title': 'Final rinse',
+    'cleaning.finalFlush.text':  'Remove the portafilter and flush as often as it takes until the water runs clear.',
     'cleaning.done.title':    'Cleaning done',
     'cleaning.done.text':     'Cleaning complete. Press Done when you are ready.',
 
