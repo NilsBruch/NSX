@@ -168,6 +168,10 @@ let HISTORY_SERIES_VISIBILITY = { ...DEFAULT_SERIES_VISIBILITY };
 
 /* ── i18n shorthand ──────────────────────────────────── */
 const t = k => window.NSXI18n?.t?.(k) ?? k;
+// BCP 47 tag for the active language. Display formatting only — the key
+// normalisation in _recipeKey stays pinned to de-DE on purpose, since a
+// recipe key must not change with the UI language.
+const getLocale = () => window.NSXI18n?.getLocale?.() ?? 'de-DE';
 
 function getSeriesVisibility(overrides, mode = 'workflow') {
   const base = mode === 'live' ? LIVE_SERIES_VISIBILITY
@@ -273,7 +277,7 @@ function setScaleConnected(connected) {
 }
 
 function formatTemperature(value) {
-  return value.toLocaleString("de-DE", {
+  return value.toLocaleString(getLocale(), {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
@@ -609,7 +613,7 @@ function formatShotDateShort(timestamp) {
   if (!timestamp) return "--.--.----";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "--.--.----";
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(getLocale(), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -625,9 +629,9 @@ function renderShotMeta(reserveEl, shot, normalized, navContext, workflow) {
   const shotDate = shot?.timestamp ? new Date(shot.timestamp) : null;
   const hasValidDate = shotDate instanceof Date && !Number.isNaN(shotDate.getTime());
 
-  const day  = hasValidDate ? new Intl.DateTimeFormat('de-DE', { weekday: 'short' }).format(shotDate) : '--';
-  const date = hasValidDate ? new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(shotDate) : '--.--.';
-  const time = hasValidDate ? new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(shotDate) : '--:--';
+  const day  = hasValidDate ? new Intl.DateTimeFormat(getLocale(), { weekday: 'short' }).format(shotDate) : '--';
+  const date = hasValidDate ? new Intl.DateTimeFormat(getLocale(), { day: '2-digit', month: '2-digit' }).format(shotDate) : '--.--.';
+  const time = hasValidDate ? new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(shotDate) : '--:--';
 
   const totalDuration = Array.isArray(normalized?.elapsed) && normalized.elapsed.length
     ? normalized.elapsed[normalized.elapsed.length - 1] : null;
@@ -1629,7 +1633,7 @@ const _xSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 function _historyFormatDate(timestamp) {
   if (!timestamp) return '—';
   const d = new Date(timestamp);
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 const _starFilledSvg = `<svg class="history-shot-fav" viewBox="0 0 24 24" fill="#FF3B30" stroke="#FF3B30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Favorit"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;

@@ -11,7 +11,8 @@
  *   - GET /store/<ns>?full=1 sends an ETag
  *   - GET /store/<ns>/<key> does NOT  ← the quirk behind issue #3
  *
- * Run: npm run dev:mock   (runs sync-core first, then this)
+ * Run: npm run dev:gateway   (runs sync-core first, then this)
+ *      npm run dev:nsx       (same server, --static: skin only, no mock API)
  */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -22,7 +23,12 @@ import { WebSocketServer } from "ws";
 
 import * as fx from "./fixtures.mjs";
 
-const PORT = Number(process.env.PORT || 8080);
+// --static serves the skin only, leaving the API to whoever owns port 8080 —
+// normally the real Decent app. core/config.js derives the gateway host from
+// location.hostname but pins the port to 8080, so a skin served from :5174
+// reaches the real machine with no ?gateway= override. Mirrors dev:nova.
+const STATIC_ONLY = process.argv.includes("--static");
+const PORT = Number(process.env.PORT || (STATIC_ONLY ? 5174 : 8080));
 
 // Which skin to serve: `--skin=nova` (default: nsx). A CLI flag rather than an env
 // var so it works the same in cmd/PowerShell/bash.
@@ -39,8 +45,10 @@ const WEB_ROOT = [join(SKIN_DIR, "dist"), join(SKIN_DIR, "src")]
 
 if (!WEB_ROOT) {
   console.error(
-    `mock-gateway: no servable skin for --skin=${SKIN}\n` +
-    `  looked for index.html in ${join(SKIN_DIR, "dist")} and ${join(SKIN_DIR, "src")}\n` +
+    `mock-gateway: no servable skin for --skin=${SKIN}
+` +
+    `  looked for index.html in ${join(SKIN_DIR, "dist")} and ${join(SKIN_DIR, "src")}
+` +
     `  (a Vite skin must be built first: npm run build:nova)`
   );
   process.exit(1);
@@ -81,118 +89,21 @@ const state = {
   beanBatches: structuredClone(fx.beanBatches),
   grinders: structuredClone(fx.grinders),
   shots: structuredClone(fx.shots),
+  shotDetails: structuredClone(fx.shotDetails),
   store: structuredClone(fx.store),
   workflow: structuredClone(fx.currentWorkflow),
-  appSettings: structuredClone(fx.appSettings),
-  machineSettings: structuredClone(fx.machineSettings),
-  machineSettingsAdvanced: structuredClone(fx.machineSettingsAdvanced),
-  presenceSettings: structuredClone(fx.presenceSettings),
-  displayBrightness: 80,
-  devices: structuredClone(fx.devices),
-  plugins: structuredClone(fx.plugins),
-  pluginSettings: structuredClone(fx.pluginSettings),
-  schedules: [],
   // Simulated shot progression
   shotStartedAt: 0,
   frameOffset: 0,
-  heatingStartedAt: 0,
-  maintenanceStartedAt: 0,
 };
 
 const FLOWING = new Set(["espresso", "steam", "hotWater", "flush"]);
 const FRAME_SECONDS = 6;
-const SHOT_SECONDS = 15; // sped up for dev; a real espresso shot runs ~25-40s
-
-/**
- * Secure plugin fields are STORED but never returned: from Decaid
- * 0.7.17-beta.4 a GET reports only whether one is set. Mirroring that here is
- * the point — a mock that hands secrets back lets a client quietly depend on
- * reading them, which is exactly how Nova's Visualizer panel shipped believing
- * it could show the saved password.
- */
-const SECURE_PLUGIN_FIELDS = { "visualizer.reaplugin": ["Password"] };
-function redactPluginSettings(id, settings) {
-  const out = { ...settings };
-  for (const key of SECURE_PLUGIN_FIELDS[id] ?? []) {
-    const v = out[key];
-    out[key] = { isSet: typeof v === "string" ? v !== "" : v?.isSet === true };
-  }
-  return out;
-}
-
-/**
- * Persists a shot record for the just-finished brew, built from state.workflow
- * (the currently loaded recipe) — so Nova's "after the shot, show this recipe's
- * history" flow has something real to land on instead of only the seeded mocks.
- * Measurements use the nested { machine: {...}, scale: {...} } shape
- * NSXCore.normalizeShotData actually parses (see fixtures.mjs's shot() builder).
- */
-/** One-level-deep merge for PUT/POST /api/v1/workflow — see the route's comment. */
-function mergeWorkflow(current, patch) {
-  if (!patch || typeof patch !== "object") return current;
-  const merged = { ...current };
-  for (const [key, value] of Object.entries(patch)) {
-    const isPlainObject = (x) => x && typeof x === "object" && !Array.isArray(x);
-    merged[key] = isPlainObject(value) && isPlainObject(current?.[key])
-      ? { ...current[key], ...value }
-      : value;
-  }
-  return merged;
-}
-
-function persistFinishedShot(durationSec) {
-  const ctx = state.workflow?.context ?? {};
-  const profile = state.workflow?.profile ?? { title: "—", steps: [] };
-  const n = 30;
-  const start = new Date(Date.now() - durationSec * 1000);
-  const rec = {
-    id: `shot-${Date.now()}`,
-    startTime: start.toISOString(),
-    timestamp: start.toISOString(),
-    // A completed pour in the sim — drives the post-shot stop-reason toast
-    // (NSXCore.getShotStopReason). Real values are an open set; see the API note.
-    stopReason: "targetWeight",
-    annotations: { enjoyment: null, espressoNotes: null, extras: { favorite: false, tags: [] } },
-    workflow: { profile, context: ctx },
-    measurements: Array.from({ length: n }, (_, i) => {
-      const t = (i / (n - 1)) * durationSec;
-      const pouring = t > durationSec * 0.15;
-      return {
-        machine: {
-          timestamp: new Date(start.getTime() + t * 1000).toISOString(),
-          state: { substate: pouring ? "pouring" : "preinfusion" },
-          pressure: pouring ? 9 : (t / (durationSec * 0.15)) * 9,
-          targetPressure: 9,
-          flow: pouring ? 2.1 : 0.4,
-          targetFlow: 2,
-          groupTemperature: 92,
-          targetGroupTemperature: 93,
-          profileFrame: pouring ? 1 : 0,
-        },
-        scale: { weightFlow: pouring ? 1.9 : 0.2 },
-      };
-    }),
-  };
-  state.shots.unshift(rec);
-  return rec;
-}
-
-// Simulated heat-up: 12s in dev (real machines take a couple of minutes) so the
-// status island's heating ring is exercisable without waiting.
-const HEATING_MS = 12_000;
 
 function setMachineState(next) {
   if (next === "skipStep") {
     state.frameOffset += 1; // advance one profile frame
     return;
-  }
-  // Persist a shot record on ANY transition away from a flowing state while one
-  // was actually in progress — the timed auto-finish below, but just as much a
-  // client-triggered early stop (Nova's "Skip" button just PUTs machine/state/
-  // idle, same as any other state change; there is no separate stop endpoint).
-  if (state.shotStartedAt > 0 && FLOWING.has(state.machine.state) && !FLOWING.has(next)) {
-    const elapsed = (Date.now() - state.shotStartedAt) / 1000;
-    if (elapsed > 0.5) persistFinishedShot(elapsed); // ignore accidental double-calls
   }
   state.machine.state = next;
   if (FLOWING.has(next)) {
@@ -204,28 +115,6 @@ function setMachineState(next) {
     state.shotStartedAt = 0;
     state.frameOffset = 0;
   }
-  state.heatingStartedAt = next === "heating" ? Date.now() : 0;
-  state.maintenanceStartedAt = MAINTENANCE.has(next) ? Date.now() : 0;
-}
-
-/** { remainingMs } while heating, mirroring the real time-to-ready plugin socket;
- *  null once idle/ready — a skin's heating ring should disappear on null, not 0. */
-function timeToReady() {
-  if (state.machine.state !== "heating" || !state.heatingStartedAt) return { remainingMs: null };
-  const remaining = Math.max(0, HEATING_MS - (Date.now() - state.heatingStartedAt));
-  if (remaining === 0) setMachineState("idle"); // heat-up finished
-  return { remainingMs: remaining };
-}
-
-// "cleaning" (backflush) and "descaling" have no live-data stream of their own —
-// unlike a shot, there's nothing to sample. They just run for a while then
-// return to idle, which is exactly what the guided assistant's on-screen Start
-// is waiting to observe (see CleaningAssistant.vue).
-const MAINTENANCE = new Set(["cleaning", "descaling"]);
-const MAINTENANCE_MS = 8_000;
-function maybeFinishMaintenance() {
-  if (!MAINTENANCE.has(state.machine.state) || !state.maintenanceStartedAt) return;
-  if (Date.now() - state.maintenanceStartedAt >= MAINTENANCE_MS) setMachineState("idle");
 }
 
 /** Current simulated snapshot, driving the live graph + step progress. */
@@ -234,7 +123,7 @@ function snapshot() {
   const elapsed = flowing ? (Date.now() - state.shotStartedAt) / 1000 : 0;
 
   if (flowing && elapsed > 2) state.machine.substate = "pouring";
-  if (flowing && elapsed > SHOT_SECONDS) setMachineState("idle"); // persists the shot itself
+  if (flowing && elapsed > 45) setMachineState("idle");
 
   const frameCount = state.workflow?.profile?.steps?.length || 4;
   const profileFrame = flowing
@@ -286,89 +175,13 @@ function routeApi(req, res, url, body) {
     return json(state.machine);
   }
   if (path === "/api/v1/machine/info") return json(fx.machineInfo);
-  if (path === "/api/v1/info") return json(fx.gatewayInfo);
-  if (path === "/api/v1/update") return json(fx.appUpdate);
   if (path === "/api/v1/machine/waterLevels") return json(fx.waterLevels);
-  if (path === "/api/v1/machine/settings") {
-    if (method === "GET") return json(state.machineSettings);
-    state.machineSettings = { ...state.machineSettings, ...body };
-    return noContent();
-  }
-  if (path === "/api/v1/machine/settings/advanced") {
-    if (method === "GET") return json(state.machineSettingsAdvanced);
-    state.machineSettingsAdvanced = { ...state.machineSettingsAdvanced, ...body };
-    return noContent();
-  }
-
-  // ── app/gateway settings ──
-  if (path === "/api/v1/settings") {
-    if (method === "GET") return json(state.appSettings);
-    state.appSettings = { ...state.appSettings, ...body };
-    return noContent();
-  }
-  if (path === "/api/v1/presence/settings") {
-    if (method === "GET") return json(state.presenceSettings);
-    state.presenceSettings = { ...state.presenceSettings, ...body };
-    return noContent();
-  }
-
-  // ── display ──
-  if (path === "/api/v1/display" && method === "GET") return json({ brightness: state.displayBrightness });
-  if (path === "/api/v1/display/brightness" && method === "PUT") {
-    state.displayBrightness = body?.brightness ?? state.displayBrightness;
-    return noContent();
-  }
-  if (path === "/api/v1/display/wakelock" && (method === "POST" || method === "DELETE")) return noContent();
-
-  // ── devices ──
-  if (path === "/api/v1/devices" && method === "GET") return json(state.devices);
-  if (path === "/api/v1/devices/scan" && method === "GET") return noContent();
-  if (path === "/api/v1/devices/connect" && method === "PUT") {
-    const id = q.get("deviceId");
-    const d = state.devices.find((x) => x.id === id);
-    if (d) d.connected = true;
-    return d ? json(d) : json({ error: `Device not found: ${id}` }, 404);
-  }
-  // Disconnect is PUT /devices/disconnect?deviceId=, symmetric with connect —
-  // matches the real bridge (the old DELETE /devices/{id} route doesn't exist).
-  if (path === "/api/v1/devices/disconnect" && method === "PUT") {
-    const id = q.get("deviceId");
-    const d = state.devices.find((x) => x.id === id);
-    if (d) d.connected = false;
-    return d ? json(d) : json({ error: `Device not found: ${id}` }, 404);
-  }
-
-  // ── plugins ──
-  if (path === "/api/v1/plugins" && method === "GET") return json(state.plugins);
-  const pluginToggle = path.match(/^\/api\/v1\/plugins\/([^/]+)\/(enable|disable)$/);
-  if (pluginToggle && method === "POST") {
-    const id = decodeURIComponent(pluginToggle[1]);
-    const p = state.plugins.find((x) => x.id === id);
-    if (p) p.loaded = pluginToggle[2] === "enable";
-    return noContent();
-  }
-  const pluginSettingsMatch = path.match(/^\/api\/v1\/plugins\/([^/]+)\/settings$/);
-  if (pluginSettingsMatch) {
-    const id = decodeURIComponent(pluginSettingsMatch[1]);
-    if (method === "GET") return json(redactPluginSettings(id, state.pluginSettings[id] ?? {}));
-    state.pluginSettings[id] = { ...(state.pluginSettings[id] ?? {}), ...body };
-    return noContent();
-  }
+  if (path === "/api/v1/machine/settings") return method === "GET" ? json({}) : noContent();
 
   // ── workflow ──
-  // NSXApi.fetchCurrentWorkflow() GETs the bare path; pushWorkflow() tries PUT/POST
-  // on both this and /workflow/current (gateway-version tolerance) — the mock
-  // answers GET on both so either form round-trips the same state.
-  if (path === "/api/v1/workflow" && method === "GET") return json(state.workflow);
   if (path === "/api/v1/workflow/current" && method === "GET") return json(state.workflow);
   if (path === "/api/v1/workflow" && (method === "PUT" || method === "POST")) {
-    // One-level-deep merge, not a replace: steam.js/hotwater.js/flush.js each push
-    // a partial patch of just their own top-level key (e.g. { steamSettings: {
-    // targetTemperature } }) whenever a single value changes — a naive replace
-    // would wipe out the loaded recipe's profile/context (and any of
-    // steamSettings' OTHER fields) every time. buildGatewayPayload's full pushes
-    // still replace profile/context wholesale, since those always arrive complete.
-    state.workflow = mergeWorkflow(state.workflow, body);
+    state.workflow = body ?? state.workflow;
     return json(state.workflow);
   }
 
@@ -413,106 +226,25 @@ function routeApi(req, res, url, body) {
     const incl = q.get("includeArchived") === "true";
     return jsonEtag(incl ? state.beans : state.beans.filter((b) => !b.archived));
   }
-  if (path === "/api/v1/beans" && method === "POST") {
-    const rec = { id: `bean:${Date.now()}`, archived: false, ...body };
-    state.beans.push(rec);
-    state.beanBatches[rec.id] = [];
-    return json(rec, 201);
-  }
-  if (path.startsWith("/api/v1/beans/") && !path.endsWith("/batches") && (method === "PUT" || method === "DELETE")) {
-    const id = decodeURIComponent(path.split("/")[4]);
-    const i = state.beans.findIndex((b) => b.id === id);
-    if (i < 0) return json({ message: "not found" }, 404);
-    if (method === "DELETE") { state.beans.splice(i, 1); return noContent(); }
-    state.beans[i] = { ...state.beans[i], ...body };
-    return json(state.beans[i]);
-  }
-
   const batchMatch = path.match(/^\/api\/v1\/beans\/([^/]+)\/batches$/);
   if (batchMatch && method === "GET") {
     return jsonEtag(state.beanBatches[decodeURIComponent(batchMatch[1])] ?? []);
   }
-  if (batchMatch && method === "POST") {
-    const beanId = decodeURIComponent(batchMatch[1]);
-    const rec = { id: `batch:${Date.now()}`, beanId, archived: false, ...body };
-    state.beanBatches[beanId] = state.beanBatches[beanId] ?? [];
-    state.beanBatches[beanId].unshift(rec); // newest first, like the real gateway
-    return json(rec, 201);
-  }
-  const singleBatchMatch = path.match(/^\/api\/v1\/bean-batches\/([^/]+)$/);
-  if (singleBatchMatch) {
-    const id = decodeURIComponent(singleBatchMatch[1]);
-    const list = Object.values(state.beanBatches).flat();
-    const rec = list.find((b) => b.id === id);
-    if (method === "GET") return rec ? json(rec) : json({ message: "not found" }, 404);
-    if (method === "PUT") {
-      if (!rec) return json({ message: "not found" }, 404);
-      Object.assign(rec, body);
-      return json(rec);
-    }
-    if (method === "DELETE") {
-      for (const beanId of Object.keys(state.beanBatches)) {
-        state.beanBatches[beanId] = state.beanBatches[beanId].filter((b) => b.id !== id);
-      }
-      return noContent();
-    }
-  }
-
   if (path === "/api/v1/grinders" && method === "GET") return jsonEtag(state.grinders);
-  if (path === "/api/v1/grinders" && method === "POST") {
-    const rec = { id: `grinder:${Date.now()}`, ...body };
-    state.grinders.push(rec);
-    return json(rec, 201);
-  }
-  if (path.startsWith("/api/v1/grinders/") && (method === "PUT" || method === "DELETE")) {
-    const id = decodeURIComponent(path.split("/").pop());
-    const i = state.grinders.findIndex((g) => g.id === id);
-    if (i < 0) return json({ message: "not found" }, 404);
-    if (method === "DELETE") { state.grinders.splice(i, 1); return noContent(); }
-    state.grinders[i] = { ...state.grinders[i], ...body };
-    return json(state.grinders[i]);
-  }
 
   // ── shots ──
   if (path === "/api/v1/shots" && method === "GET") {
     const limit = Number(q.get("limit") ?? 20);
     const offset = Number(q.get("offset") ?? 0);
-
-    // api.js sends these filters (see fetchShots); ignoring them and returning
-    // every shot regardless — which this route used to do — is exactly the kind
-    // of "the mock silently lies" bug that has bitten more than once. Nova's
-    // orphan-bag cleanup asks "are there any shots for this batch?", and a mock
-    // that answers "yes, here are all of them" makes that logic untestable.
-    const eq = (a, b) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
-    const filters = [
-      ["beanBatchId", (s, v) => s.workflow?.context?.beanBatchId === v],
-      ["grinderId", (s, v) => s.workflow?.context?.grinderId === v],
-      ["coffeeName", (s, v) => eq(s.workflow?.context?.coffeeName, v)],
-      ["coffeeRoaster", (s, v) => eq(s.workflow?.context?.coffeeRoaster, v)],
-      ["grinderModel", (s, v) => eq(s.workflow?.context?.grinderModel, v)],
-      ["profileTitle", (s, v) => eq(s.workflow?.profile?.title, v)],
-    ];
-
-    let matched = state.shots;
-    for (const [param, predicate] of filters) {
-      const value = q.get(param);
-      if (value != null && value !== "") matched = matched.filter((s) => predicate(s, value));
-    }
-    const search = q.get("search");
-    if (search) {
-      const needle = search.trim().toLowerCase();
-      matched = matched.filter((s) => {
-        const ctx = s.workflow?.context || {};
-        return [ctx.coffeeName, ctx.coffeeRoaster, s.workflow?.profile?.title]
-          .some((field) => String(field ?? "").toLowerCase().includes(needle));
-      });
-    }
-
-    return jsonEtag({ items: matched.slice(offset, offset + limit), total: matched.length });
+    return jsonEtag({ items: state.shots.slice(offset, offset + limit), total: state.shots.length });
   }
+  // Only THIS endpoint carries measurements — the list above does not, exactly
+  // as the real gateway behaves. Serving fuller shots from the list would let
+  // a skin read `measurements` off a list shot and still work here while
+  // failing against a real machine.
   if (path.startsWith("/api/v1/shots/") && method === "GET") {
     const id = decodeURIComponent(path.split("/")[4]);
-    const s = state.shots.find((x) => x.id === id);
+    const s = state.shotDetails[id];
     return s ? json(s) : json({ message: "not found" }, 404);
   }
   if (path.startsWith("/api/v1/shots/") && method === "PUT") {
@@ -520,12 +252,17 @@ function routeApi(req, res, url, body) {
     const s = state.shots.find((x) => x.id === id);
     if (!s) return json({ message: "not found" }, 404);
     // The real API merges `extras` at field level.
-    if (body?.annotations) {
-      s.annotations = {
-        ...s.annotations,
+    const merge = (target) => {
+      if (!target?.annotations && !body?.annotations) return;
+      target.annotations = {
+        ...target.annotations,
         ...body.annotations,
-        extras: { ...s.annotations?.extras, ...body.annotations?.extras },
+        extras: { ...target.annotations?.extras, ...body.annotations?.extras },
       };
+    };
+    if (body?.annotations) {
+      merge(s);
+      if (state.shotDetails[id]) merge(state.shotDetails[id]);
     }
     return json(s);
   }
@@ -533,6 +270,7 @@ function routeApi(req, res, url, body) {
     const id = decodeURIComponent(path.split("/")[4]);
     const i = state.shots.findIndex((x) => x.id === id);
     if (i >= 0) state.shots.splice(i, 1);
+    delete state.shotDetails[id];
     return noContent();
   }
 
@@ -567,23 +305,8 @@ function routeApi(req, res, url, body) {
 
   // ── misc ──
   if (path === "/api/v1/scale/tare") return noContent();
-  // Real CRUD (not a stub): NSXCore.schedule.js relies on the created id coming
-  // back so it can PUT updates to the same resource instead of re-POSTing a new
-  // schedule on every change.
-  if (path === "/api/v1/presence/schedules" && method === "GET") return json(state.schedules);
-  if (path === "/api/v1/presence/schedules" && method === "POST") {
-    const rec = { id: `schedule:${Date.now()}`, ...body };
-    state.schedules.push(rec);
-    return json(rec, 201);
-  }
-  if (path.startsWith("/api/v1/presence/schedules/") && (method === "PUT" || method === "DELETE")) {
-    const id = decodeURIComponent(path.split("/").pop());
-    const i = state.schedules.findIndex((s) => s.id === id);
-    if (i < 0) return json({ message: "not found" }, 404);
-    if (method === "DELETE") { state.schedules.splice(i, 1); return noContent(); }
-    state.schedules[i] = { ...state.schedules[i], ...body };
-    return json(state.schedules[i]);
-  }
+  if (path === "/api/v1/devices/scan") return noContent();
+  if (path === "/api/v1/presence/schedules") return method === "GET" ? json([]) : json(body ?? {}, 201);
   if (path.startsWith("/api/v1/steams/")) return json({ message: "not found" }, 404);
 
   return json({ message: `mock: unhandled ${method} ${path}` }, 404);
@@ -613,17 +336,7 @@ async function serveStatic(url, res) {
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
-  // Permissive CORS — dev only. The real gateway serves the skin from its own
-  // origin, but a Vite dev server (Nova, port 5173) is a different origin, and the
-  // shared core deliberately calls the gateway on an absolute URL rather than
-  // through a proxy. Without these headers the browser would block every REST call.
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, If-None-Match");
-  res.setHeader("Access-Control-Expose-Headers", "ETag");
-  if (req.method === "OPTIONS") { res.writeHead(204); return void res.end(); }
-
-  if (!url.pathname.startsWith("/api/")) return void serveStatic(url, res);
+  if (STATIC_ONLY || !url.pathname.startsWith("/api/")) return void serveStatic(url, res);
 
   const chunks = [];
   req.on("data", (c) => chunks.push(c));
@@ -655,6 +368,7 @@ const WS_PATHS = [
 const wss = new Map(WS_PATHS.map((p) => [p, new WebSocketServer({ noServer: true })]));
 
 server.on("upgrade", (req, socket, head) => {
+  if (STATIC_ONLY) return void socket.destroy();
   const { pathname } = new URL(req.url, `http://localhost:${PORT}`);
   const target = wss.get(pathname);
   if (!target) return void socket.destroy();
@@ -667,38 +381,39 @@ const broadcast = (path, payload) => {
   }
 };
 
-// Announce connected devices + scale status on connect. NO_SCALE=1 omits the
-// scale so the skin's no-scale code paths (e.g. hot-water volume readout) can
-// be exercised.
-const NO_SCALE = process.env.NO_SCALE === "1";
+// Announce connected devices + scale status on connect.
 wss.get("/ws/v1/devices").on("connection", (ws) =>
   ws.send(JSON.stringify({
     devices: [
       { type: "machine", state: "connected" },
-      ...(NO_SCALE ? [] : [{ type: "scale", state: "connected" }]),
+      { type: "scale", state: "connected" },
     ],
   })));
-wss.get("/ws/v1/scale/snapshot").on("connection", (ws) => ws.send(JSON.stringify({ status: NO_SCALE ? "disconnected" : "connected" })));
+wss.get("/ws/v1/scale/snapshot").on("connection", (ws) => ws.send(JSON.stringify({ status: "connected" })));
 wss.get("/ws/v1/machine/waterLevels").on("connection", (ws) => ws.send(JSON.stringify(fx.waterLevels)));
 
 // Live streams.
-setInterval(() => { maybeFinishMaintenance(); broadcast("/ws/v1/machine/snapshot", snapshot()); }, 250);
-setInterval(() => {
-  if (NO_SCALE) return; // no scale device -> no weight stream
-  const flowing = FLOWING.has(state.machine.state) && state.shotStartedAt > 0;
-  const elapsed = flowing ? (Date.now() - state.shotStartedAt) / 1000 : 0;
-  broadcast("/ws/v1/scale/snapshot", {
-    weight: flowing ? Math.round(elapsed * 1.2 * 10) / 10 : 0,
-    weightFlow: flowing ? 1.2 : 0,
-  });
-}, 250);
-setInterval(() => broadcast("/ws/v1/machine/waterLevels", fx.waterLevels), 5000);
-setInterval(() => broadcast("/ws/v1/plugins/time-to-ready.reaplugin/timeToReady", timeToReady()), 250);
+if (!STATIC_ONLY) {
+  setInterval(() => broadcast("/ws/v1/machine/snapshot", snapshot()), 250);
+  setInterval(() => {
+    const flowing = FLOWING.has(state.machine.state) && state.shotStartedAt > 0;
+    const elapsed = flowing ? (Date.now() - state.shotStartedAt) / 1000 : 0;
+    broadcast("/ws/v1/scale/snapshot", {
+      weight: flowing ? Math.round(elapsed * 1.2 * 10) / 10 : 0,
+      weightFlow: flowing ? 1.2 : 0,
+    });
+  }, 250);
+  setInterval(() => broadcast("/ws/v1/machine/waterLevels", fx.waterLevels), 5000);
+}
 
 server.listen(PORT, () => {
+  if (STATIC_ONLY) {
+    console.log(`NSX skin on http://localhost:${PORT}`);
+    console.log(`  web root: ${WEB_ROOT}`);
+    console.log(`  gateway:  http://localhost:8080 (whatever owns that port)`);
+    return;
+  }
   console.log(`Mock gateway on http://localhost:${PORT}`);
   console.log(`  web root: ${WEB_ROOT}`);
   console.log(`  PUT /api/v1/machine/state/espresso to start a simulated shot`);
-  console.log(`  PUT /api/v1/machine/state/heating to simulate a ${HEATING_MS / 1000}s heat-up`);
-  console.log(`  PUT /api/v1/machine/state/{cleaning,descaling} to simulate a ${MAINTENANCE_MS / 1000}s maintenance cycle`);
 });

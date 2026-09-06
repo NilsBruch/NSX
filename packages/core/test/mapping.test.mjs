@@ -235,3 +235,154 @@ test("getShotStopReason returns the persisted reason, null for legacy/missing, a
   assert.equal(NSXCore.isKnownStopReason("someFutureReason"), false);
   assert.equal(NSXCore.isKnownStopReason(null), false);
 });
+
+/* ── uniqueFieldValuesByRecency ─────────────────────────── */
+
+const bean = (roaster, createdAt, extra = {}) => ({ roaster, createdAt, ...extra });
+
+test("uniqueFieldValuesByRecency orders values by their newest createdAt", () => {
+  const beans = [
+    bean("Zulu Beans",    "2026-01-01T10:00:00"),
+    bean("Bravo Roasters", "2026-08-29T17:44:26"),
+    bean("Alpha Coffee",   "2026-08-29T18:22:02"),
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(beans, "roaster"),
+    ["Alpha Coffee", "Bravo Roasters", "Zulu Beans"],
+    "newest first, not alphabetical",
+  );
+});
+
+test("uniqueFieldValuesByRecency dedupes on the newest occurrence", () => {
+  const beans = [
+    bean("Zulu Beans",    "2026-01-01T10:00:00"),
+    bean("Bravo Roasters", "2026-02-01T10:00:00"),
+    bean("Zulu Beans",    "2026-09-01T10:00:00"),
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(beans, "roaster"),
+    ["Zulu Beans", "Bravo Roasters"],
+    "a roaster reused on a newer bean moves to the front",
+  );
+});
+
+test("uniqueFieldValuesByRecency ranks undated items behind dated ones, in order", () => {
+  const beans = [
+    bean("NoDateFirst",  undefined),
+    bean("NoDateSecond", undefined),
+    bean("Dated",        "2020-01-01T00:00:00"),
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(beans, "roaster"),
+    ["Dated", "NoDateFirst", "NoDateSecond"],
+    "even an old dated item outranks undated ones, which keep their order",
+  );
+});
+
+test("uniqueFieldValuesByRecency drops empty values and trims", () => {
+  const beans = [
+    bean("  Alpha Coffee  ", "2026-03-01T00:00:00"),
+    bean("",          "2026-04-01T00:00:00"),
+    bean(null,        "2026-05-01T00:00:00"),
+    bean("   ",       "2026-06-01T00:00:00"),
+  ];
+  assert.deepEqual(NSXCore.uniqueFieldValuesByRecency(beans, "roaster"), ["Alpha Coffee"]);
+});
+
+test("uniqueFieldValuesByRecency reads dotted paths and array fields", () => {
+  const profiles = [
+    { createdAt: "2026-01-01T00:00:00", profile: { title: "Old" } },
+    { createdAt: "2026-09-01T00:00:00", profile: { title: "New" } },
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(profiles, "profile.title"),
+    ["New", "Old"],
+  );
+
+  const withVariety = [
+    bean("r1", "2026-01-01T00:00:00", { variety: ["Bourbon", "Typica"] }),
+    bean("r2", "2026-09-01T00:00:00", { variety: ["Catuai"] }),
+  ];
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(withVariety, "variety"),
+    ["Catuai", "Bourbon", "Typica"],
+    "every entry of an array field is contributed under its item's date",
+  );
+});
+
+test("uniqueFieldValuesByRecency accepts a picker function and tolerates junk", () => {
+  const profiles = [
+    { createdAt: "2026-01-01T00:00:00", profile: { steps: [{ name: "Preinfuse" }] } },
+    { createdAt: "2026-09-01T00:00:00", profile: { steps: [{ name: "Pour" }, { name: "Preinfuse" }] } },
+  ];
+  // Both names occur in the newest profile, so they tie on rank and the sort
+  // is stable: they keep the order they were first encountered in.
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency(profiles, (p) => (p.profile?.steps ?? []).map((s) => s.name)),
+    ["Preinfuse", "Pour"],
+  );
+
+  assert.deepEqual(NSXCore.uniqueFieldValuesByRecency(null, "roaster"), []);
+  assert.deepEqual(NSXCore.uniqueFieldValuesByRecency(undefined, "roaster"), []);
+  assert.deepEqual(
+    NSXCore.uniqueFieldValuesByRecency([{ createdAt: "nonsense", roaster: "X" }], "roaster"),
+    ["X"],
+    "an unparseable date must not drop the value",
+  );
+});
+
+/* ── rankSuggestions ────────────────────────────────────── */
+
+test("rankSuggestions puts a prefix match ahead of a mid-word one", () => {
+  // The reported case: typing "ris" must offer Risteriet, not Kristians Kaffe.
+  const roasters = ["Kristians Kaffe", "Risteriet"];
+  assert.deepEqual(
+    NSXCore.rankSuggestions(roasters, "ris"),
+    ["Risteriet", "Kristians Kaffe"],
+  );
+});
+
+test("rankSuggestions ranks a word-start above a mid-word match", () => {
+  const values = ["Unkaffee", "Kristians Kaffe", "Kaffeine"];
+  assert.deepEqual(
+    NSXCore.rankSuggestions(values, "kaf"),
+    ["Kaffeine", "Kristians Kaffe", "Unkaffee"],
+    "whole-string prefix, then word prefix, then merely contains",
+  );
+});
+
+test("rankSuggestions keeps mid-word matches rather than dropping them", () => {
+  assert.deepEqual(
+    NSXCore.rankSuggestions(["Kristians Kaffe"], "stian"),
+    ["Kristians Kaffe"],
+    "half-remembering the middle of a name still finds it",
+  );
+  assert.deepEqual(NSXCore.rankSuggestions(["Risteriet"], "zzz"), []);
+});
+
+test("rankSuggestions preserves the incoming order within a tier", () => {
+  // Upstream order is recency (uniqueFieldValuesByRecency), and it must survive
+  // as the tiebreak so the newest of two equally good matches stays first.
+  const values = ["Kaffe Neu", "Kaffe Alt"];
+  assert.deepEqual(NSXCore.rankSuggestions(values, "kaffe"), ["Kaffe Neu", "Kaffe Alt"]);
+});
+
+test("rankSuggestions is case-insensitive and ignores surrounding whitespace", () => {
+  assert.deepEqual(NSXCore.rankSuggestions(["Risteriet"], "  RIS "), ["Risteriet"]);
+});
+
+test("rankSuggestions treats punctuation as a word break", () => {
+  assert.deepEqual(
+    NSXCore.rankSuggestions(["Bönor-Röstare", "Xbonor"], "rö"),
+    ["Bönor-Röstare"],
+    "a hyphen starts a new word; accented letters count as letters",
+  );
+});
+
+test("rankSuggestions returns everything for an empty query, and tolerates junk", () => {
+  const values = ["A", "B"];
+  assert.deepEqual(NSXCore.rankSuggestions(values, ""), values);
+  assert.deepEqual(NSXCore.rankSuggestions(values, "   "), values);
+  assert.deepEqual(NSXCore.rankSuggestions(values, null), values);
+  assert.deepEqual(NSXCore.rankSuggestions(null, "a"), []);
+});

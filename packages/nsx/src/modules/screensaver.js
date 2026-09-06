@@ -148,7 +148,7 @@
 
   function ssUpdateClock() {
     const now = new Date();
-    const locale = window.NSXI18n?.getLang?.() === "en" ? "en-US" : "de-DE";
+    const locale = window.NSXI18n?.getLocale?.() ?? "de-DE";
     if (ssTimeEl) ssTimeEl.textContent = now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
     if (ssDateEl) ssDateEl.textContent = now.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
   }

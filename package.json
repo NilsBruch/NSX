@@ -9,8 +9,8 @@
   "scripts": {
     "sync-core": "node scripts/sync-core.mjs",
     "test": "node --test \"packages/core/test/*.test.mjs\"",
-    "dev:mock": "npm run sync-core && node tests/mock-gateway/server.mjs --skin=nsx",
-    "dev:gateway": "node tests/mock-gateway/server.mjs --skin=nsx",
+    "dev:nsx": "npm run sync-core && node tests/mock-gateway/server.mjs --static",
+    "dev:gateway": "npm run sync-core && node tests/mock-gateway/server.mjs",
     "dev:nova": "npm run sync-core && npm run dev -w @espresso-skins/nova",
     "build:nova": "npm run sync-core && npm run build -w @espresso-skins/nova"
   },
