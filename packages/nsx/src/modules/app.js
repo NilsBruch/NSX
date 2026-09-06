@@ -102,8 +102,26 @@ const {
   setWorkflowSyncState,
 } = window.NSXUI || {};
 
+/* ── Crash visibility ─────────────────────────────────── */
+// The skin had no error handler at all, so an exception thrown inside any event
+// handler was swallowed by the browser: the button simply "did nothing", with
+// no clue on a tablet that has no reachable console. Surface it instead — the
+// message is deliberately raw, since its audience is whoever is diagnosing.
+let _lastErrorMsg = '';
+function _reportRuntimeError(where, err) {
+  const msg = `${where}: ${err?.message || err}`;
+  console.error('[NSX]', msg, err);
+  // Don't let a repeating error (e.g. one fired from an interval) bury the UI.
+  if (msg === _lastErrorMsg) return;
+  _lastErrorMsg = msg;
+  setTimeout(() => { _lastErrorMsg = ''; }, 10000);
+  try { showToast(msg, 8000); } catch { /* toast itself is broken — console has it */ }
+}
+window.addEventListener('error', (e) => _reportRuntimeError('Error', e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => _reportRuntimeError('Promise', e.reason));
+
 /* ── Translations ─────────────────────────────────────── */
-const { t, setLang, getLang } = window.NSXI18n || {};
+const { t, setLang, getLang, getLocale } = window.NSXI18n || {};
 
 // Apply the current language to this skin's data-i18n DOM (core's NSXI18n is
 // DOM-free and only provides t()/setLang()/getLang()).
@@ -199,6 +217,11 @@ let _liveVolumeCountingActive = false;
 let _lastSnapTime = null;
 let currentScaleRate = 0;
 let _forcedLiveWorkflow = null;
+// Which recipe is actually being brewed, pinned at shot start. Everything
+// after the shot (lastUsed, yield, batch deduction) must credit THIS one —
+// selectedWorkflowIndex keeps moving while the user browses during the brew
+// and the up-to-30s post-shot poll.
+let _liveShotWorkflowId = null;
 let machineConnectedState = false;
 let currentWaterLevelPct = null;
 let _espressoFullscreenVisible = false;
@@ -351,6 +374,38 @@ function openFilterModal() {
   filterModalEl.hidden = false;
 }
 
+// Render the recipe list together with its "filtered" notice. A filter that
+// hides most of the library looks exactly like a broken/short list otherwise —
+// which is how a stale filter got mistaken for missing recipes.
+function _renderWorkflowList() {
+  const shown = getDisplayWorkflows();
+  renderWorkflows(shown, selectedWorkflowIndex);
+  const notice = document.getElementById('workflow-filter-notice');
+  if (!notice) return;
+  const total = workflowItems.length;
+  const filtered = Boolean(workflowSearchQuery) || hasActiveFilters();
+  notice.hidden = !filtered;
+  if (filtered) {
+    notice.textContent = t('recipe.filterNotice')
+      .replace('{shown}', String(shown.length))
+      .replace('{total}', String(total));
+  }
+}
+
+function clearWorkflowFilters() {
+  workflowSearchQuery = '';
+  if (workflowSearchEl) workflowSearchEl.value = '';
+  workflowFilters.roasters.clear();
+  workflowFilters.beans.clear();
+  workflowFilters.grinders.clear();
+  workflowFilters.profiles.clear();
+  updateFilterButtonState();
+  _updateWorkflowSearchClear();
+  _renderWorkflowList();
+}
+
+document.getElementById('workflow-filter-notice')?.addEventListener('click', clearWorkflowFilters);
+
 function handleFilterChipClick(event, activeSet) {
   const chip = event.target.closest('.filter-chip');
   if (!chip) return;
@@ -363,7 +418,7 @@ function handleFilterChipClick(event, activeSet) {
     chip.classList.add('is-selected');
   }
   updateFilterButtonState();
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
 }
 
 filterChipsRoaster?.addEventListener('click', e => handleFilterChipClick(e, workflowFilters.roasters));
@@ -384,7 +439,7 @@ document.getElementById('btn-filter-reset')?.addEventListener('click', () => {
   workflowFilters.profiles.clear();
   filterModalEl.hidden = true;
   updateFilterButtonState();
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
 });
 
 filterModalEl?.addEventListener('click', e => {
@@ -467,8 +522,19 @@ document.getElementById('history-filter-chips-bean')?.addEventListener('click', 
 document.getElementById('history-filter-chips-grinder')?.addEventListener('click', e => _handleHistoryChipClick(e, _historyFilters.grinders));
 document.getElementById('history-filter-chips-profile')?.addEventListener('click', e => _handleHistoryChipClick(e, _historyFilters.profiles));
 
+// Dispatches 'input' rather than duplicating the debounced search below, so
+// there is only one place that decides what clearing the query means.
+document.getElementById('btn-history-search-clear')?.addEventListener('click', () => {
+  const el = document.getElementById('history-search');
+  if (!el) return;
+  el.value = '';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
 document.getElementById('history-search')?.addEventListener('input', e => {
   _historySearch = e.target.value.trim();
+  const clearBtn = document.getElementById('btn-history-search-clear');
+  if (clearBtn) clearBtn.hidden = !e.target.value;
   clearTimeout(_historySearchTimer);
   if (!_historySearch) {
     historyShots = [...shots];
@@ -499,7 +565,7 @@ function formatShotDateShort(timestamp) {
   if (!timestamp) return "--.--.----";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "--.--.----";
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(getLocale(), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -654,6 +720,44 @@ function _schedulePushCurrentSkinState(bypassStateCheck = false) {
 }
 
 let _pushDebounceTimer = null;
+let _pendingPushRecipeId = null;
+
+/** The selected recipe, or null when nothing is selected (index -1). */
+function getSelectedWorkflow() {
+  return selectedWorkflowIndex >= 0 ? (workflowItems[selectedWorkflowIndex] ?? null) : null;
+}
+
+function _cancelPendingPush() {
+  clearTimeout(_pushDebounceTimer);
+  _pushDebounceTimer = null;
+  _pendingPushRecipeId = null;
+}
+
+// Queue the debounced push for ONE specific recipe. The recipe is bound by id
+// here rather than re-read from selectedWorkflowIndex when the timer fires:
+// a background refresh (_rebuildWorkflowsFromRecipes) can rebuild
+// workflowItems and move the selection inside this 400ms window, which would
+// otherwise send the machine a recipe the user never tapped.
+function _schedulePushForRecipe(recipe) {
+  const id = recipe?.id ?? null;
+  if (id == null) return;
+  setWorkflowSyncState?.('pending');
+  clearTimeout(_pushDebounceTimer);
+  _pendingPushRecipeId = id;
+  _pushDebounceTimer = setTimeout(() => {
+    _pushDebounceTimer = null;
+    _pendingPushRecipeId = null;
+    const target = workflowItems.find(w => w.id === id);
+    // Still the user's choice? If the selection moved out from under us the
+    // rebuild has already cleared it and warned; pushing now would contradict
+    // what the screen shows.
+    if (!target || target.id !== getSelectedWorkflow()?.id) {
+      setWorkflowSyncState?.('error');
+      return;
+    }
+    pushSelectedWorkflowToMachine(target);
+  }, 400);
+}
 
 function renderHomeRecentRecipes() {
   const card   = document.getElementById('home-recent-recipes');
@@ -711,6 +815,10 @@ function renderHomeRecentRecipes() {
   rowsEl.querySelectorAll('.home-rr-row').forEach(row => {
     row.addEventListener('click', () => {
       const idx = Number(row.dataset.workflowIndex);
+      // Remember WHICH recipe was tapped, not where it sat: the press
+      // animation defers the selection by 120ms, and a background refresh can
+      // reorder workflowItems in that window.
+      const tappedId = workflowItems[idx]?.id ?? null;
       row.style.transition = 'transform 100ms ease, opacity 100ms ease';
       row.style.transform = 'scale(0.98)';
       row.style.opacity = '0.75';
@@ -718,7 +826,9 @@ function renderHomeRecentRecipes() {
         row.style.transform = '';
         row.style.opacity = '';
         row.style.transition = '';
-        selectWorkflow(idx);
+        const nowIdx = tappedId != null ? workflowItems.findIndex(w => w.id === tappedId) : -1;
+        if (nowIdx < 0) return;
+        selectWorkflow(nowIdx);
         if (storeSettings.nsx_recent_recipe_nav === true) {
           window.NSXRouter?.setTab(1);
         }
@@ -757,19 +867,16 @@ function selectWorkflow(index) {
   selectedWorkflowIndex = index;
   _lastRecipeId = workflowItems[index]?.id ?? null;
   patchStoreSettings({ nsx_last_recipe_id: _lastRecipeId });
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
   renderHomeRecentRecipes();
   setCurrentWorkflow(workflowItems[index]);
   plotWorkflowShot(workflowItems[index]);
 
-  setWorkflowSyncState?.('pending');
-  clearTimeout(_pushDebounceTimer);
-  _pushDebounceTimer = setTimeout(() => {
-    pushSelectedWorkflowToMachine(workflowItems[selectedWorkflowIndex]);
-  }, 400);
+  _schedulePushForRecipe(workflowItems[index]);
 }
 
 function plotWorkflowShot(workflow, requestedIndex, _retrying = false) {
+  if (!workflow) return;
   const graphEl = document.getElementById("workflow-shot-graph");
   if (!graphEl) return;
   if (graphEl._liveMode && liveShot) return;
@@ -1051,6 +1158,7 @@ function closeEspressoFullscreen() {
 
 function startLiveShotSession() {
   const workflow = _forcedLiveWorkflow || workflowItems[selectedWorkflowIndex];
+  _liveShotWorkflowId = workflow?.id ?? null;
   liveShot = {
     dataStart: null,
     elapsed: [],
@@ -1092,7 +1200,15 @@ async function endLiveShotSession() {
 
   const _capturedWeight        = liveWeight;
   const _capturedSubstate      = _lastEspressoSubstate;
-  const _capturedWorkflow      = _forcedLiveWorkflow || workflowItems[selectedWorkflowIndex];
+  // Resolve by the id pinned at shot start, not by the current selection —
+  // the user may have browsed to another recipe while the shot ran. Falls
+  // back to the selection only if a start was never seen (e.g. the skin
+  // loaded mid-shot), which is the old, best-effort behaviour.
+  const _capturedWorkflow      = _forcedLiveWorkflow
+    || (_liveShotWorkflowId != null && workflowItems.find(w => w.id === _liveShotWorkflowId))
+    || workflowItems[selectedWorkflowIndex];
+  const _capturedWorkflowId    = _capturedWorkflow?.id ?? null;
+  _liveShotWorkflowId = null;
   const _capturedScaleConnected = scaleConnected;
   _lastEspressoSubstate   = null;
   _lastProfileFrameLabel  = null;
@@ -1215,23 +1331,34 @@ async function endLiveShotSession() {
     }
   };
 
+  // Credit the brewed recipe and float it to the top of "Recent". Looked up by
+  // id at call time rather than held as a reference: the poll can outlive a
+  // rebuild of workflowItems (cross-device refresh, store reload).
+  const _stampRecipeUsed = (id) => {
+    const target = id != null ? workflowItems.find(w => w.id === id) : null;
+    if (!target) {
+      if (workflowItems.length > 0) {
+        selectedWorkflowIndex = Math.max(0, Math.min(selectedWorkflowIndex, workflowItems.length - 1));
+      }
+      return;
+    }
+    target.lastUsed = Date.now();
+    workflowItems.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
+    selectedWorkflowIndex = Math.max(0, workflowItems.indexOf(target));
+    _saveRecipesToStore(workflowItems);
+  };
+
   const applyRefreshedShots = (newShots) => {
     shots = Array.isArray(newShots) ? newShots : [];
 
     _runPostShotActions(newShots[0]);
 
-    if (workflowItems[selectedWorkflowIndex]) {
-      workflowItems[selectedWorkflowIndex].lastUsed = Date.now();
-      workflowItems.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
-      selectedWorkflowIndex = 0;
-      _saveRecipesToStore(workflowItems);
-    } else if (workflowItems.length > 0) {
-      selectedWorkflowIndex = Math.max(0, Math.min(selectedWorkflowIndex, workflowItems.length - 1));
-    }
-    renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
-    if (workflowItems.length > 0) {
-      setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
-      plotWorkflowShot(workflowItems[selectedWorkflowIndex], 0);
+    _stampRecipeUsed(_capturedWorkflowId);
+    _renderWorkflowList();
+    const _brewed = getSelectedWorkflow();
+    if (_brewed) {
+      setCurrentWorkflow(_brewed);
+      plotWorkflowShot(_brewed, 0);
     }
     renderHistory();
     _updateScaleIndicatorVisibility();
@@ -1269,9 +1396,18 @@ async function endLiveShotSession() {
 
     if (Date.now() - pollStart < POLL_TIMEOUT) {
       setTimeout(pollForNewShot, POLL_INTERVAL);
-    } else {
-      _hideLiveWidget();
+      return;
     }
+
+    // Timed out: the shot record never surfaced. It was still brewed, so the
+    // recipe is credited anyway — otherwise a gateway hiccup silently drops it
+    // out of "Recent". Post-shot actions are skipped: there is no shot to
+    // annotate. Say so rather than failing quietly.
+    _stampRecipeUsed(_capturedWorkflowId);
+    _renderWorkflowList();
+    setCurrentWorkflow(getSelectedWorkflow());
+    showToast(t('shot.notRecorded'), 6000);
+    _hideLiveWidget();
   };
 
   pollForNewShot();
@@ -1467,12 +1603,13 @@ async function loadApiData() {
       if (stored >= 0) selectedWorkflowIndex = stored;
     }
 
-    renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+    _renderWorkflowList();
     renderHomeRecentRecipes();
     renderHistory();
-    if (workflowItems.length > 0) {
-      setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
-      plotWorkflowShot(workflowItems[selectedWorkflowIndex]);
+    const _booted = getSelectedWorkflow();
+    if (_booted) {
+      setCurrentWorkflow(_booted);
+      plotWorkflowShot(_booted);
       if (canExecuteOperation('setWorkflow')) {
         _schedulePushCurrentSkinState();
       }
@@ -1492,7 +1629,7 @@ async function loadApiData() {
 function tick() {
   const clockEl = document.getElementById("clock");
   if (clockEl) {
-    clockEl.textContent = new Date().toLocaleTimeString("de-DE", {
+    clockEl.textContent = new Date().toLocaleTimeString(getLocale(), {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -1537,14 +1674,26 @@ async function _silentRevalidate(getFn, loadFn, renderFn) {
 // user's current selection (by id). Display-only — it never auto-pushes to the
 // machine on a background refresh.
 function _rebuildWorkflowsFromRecipes(storedRecipes) {
-  const keepId = workflowItems[selectedWorkflowIndex]?.id ?? _lastRecipeId;
+  const keepId = getSelectedWorkflow()?.id ?? _lastRecipeId;
   workflowItems = Array.isArray(storedRecipes) ? [...storedRecipes] : [];
   workflowItems.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
   const idx = keepId ? workflowItems.findIndex(w => w.id === keepId) : -1;
-  selectedWorkflowIndex = idx >= 0 ? idx : 0;
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  if (idx >= 0) {
+    selectedWorkflowIndex = idx;
+  } else {
+    // The selected recipe is not in the refreshed list. Falling back to index 0
+    // here used to substitute a DIFFERENT recipe silently — and since a queued
+    // push resolves against the selection, the machine could then be loaded
+    // with a recipe the user never chose. Drop to "nothing selected", cancel
+    // any queued push, and say so instead.
+    selectedWorkflowIndex = -1;
+    _cancelPendingPush();
+    setWorkflowSyncState?.('');
+    if (keepId) showToast(t('toast.recipeSelectionLost'), 8000);
+  }
+  _renderWorkflowList();
   renderHomeRecentRecipes();
-  setCurrentWorkflow(workflowItems.length > 0 ? workflowItems[selectedWorkflowIndex] : null);
+  setCurrentWorkflow(getSelectedWorkflow());
 }
 
 let _lastShotsResponse = null;
@@ -2142,6 +2291,10 @@ workflowListEl.addEventListener("click", (event) => {
     return;
   }
 
+  // Bind to the recipe, not its position — the 120ms press animation defers
+  // the selection and a background refresh can reorder workflowItems meanwhile.
+  const tappedId = workflowItems[nextIndex]?.id ?? null;
+
   cardEl.style.transition = 'transform 100ms ease, opacity 100ms ease';
   cardEl.style.transform = 'scale(0.98)';
   cardEl.style.opacity = '0.75';
@@ -2151,7 +2304,9 @@ workflowListEl.addEventListener("click", (event) => {
     cardEl.style.transform = '';
     cardEl.style.opacity = '';
     cardEl.style.transition = '';
-    selectWorkflow(nextIndex);
+    const nowIdx = tappedId != null ? workflowItems.findIndex(w => w.id === tappedId) : -1;
+    if (nowIdx < 0) return;
+    selectWorkflow(nowIdx);
   }, 120);
 });
 
@@ -2159,9 +2314,26 @@ recipeListScrollEl.addEventListener("scroll", updateRecipeListFade, { passive: t
 
 /* ── Workflow Search ──────────────────────────────────── */
 const workflowSearchEl = document.querySelector('.workflows-search');
+const workflowSearchClearEl = document.getElementById('btn-workflow-search-clear');
+
+// Shown only with something to clear. Clears the SEARCH only — the filter
+// chips have their own reset, and wiping both from here would silently undo a
+// filter the user set separately.
+function _updateWorkflowSearchClear() {
+  if (workflowSearchClearEl) workflowSearchClearEl.hidden = !workflowSearchEl?.value;
+}
+
 workflowSearchEl?.addEventListener('input', () => {
   workflowSearchQuery = workflowSearchEl.value.trim();
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _updateWorkflowSearchClear();
+  _renderWorkflowList();
+});
+
+workflowSearchClearEl?.addEventListener('click', () => {
+  if (workflowSearchEl) workflowSearchEl.value = '';
+  workflowSearchQuery = '';
+  _updateWorkflowSearchClear();
+  _renderWorkflowList();
 });
 
 
@@ -2627,6 +2799,7 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
   const cleaningStep2El       = document.getElementById('cleaning-step-2');
   const cleaningStep3El       = document.getElementById('cleaning-step-3');
   const cleaningStep4El       = document.getElementById('cleaning-step-4');
+  const cleaningStepRinseEl   = document.getElementById('cleaning-step-rinse');
   const cleaningProfileListEl = document.getElementById('cleaning-profile-list');
   const cleaningStep3IdleEl   = document.getElementById('cleaning-step3-idle');
   const cleaningGraphEl       = document.getElementById('cleaning-live-graph');
@@ -2683,6 +2856,12 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
   let _cleaningRunStartedAt    = 0;
   let _cleaningProfileHint     = null;
   let _cleaningWasEspresso     = false;
+  // The forward-flush profile is a backflush, so it wants two passes (with
+  // powder, then without) and a hand rinse afterwards. Every other cleaning
+  // profile — Weber Spring Clean carries its own rinse frames — keeps the
+  // single-pass flow, since running it repeatedly would just be more chemical.
+  let _cleaningMultiPass       = false;
+  let _cleaningPass            = 1;
   let _cleaningStateHandler    = null;
   let _cleaningSnapshotHandler = null;
 
@@ -2728,7 +2907,7 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
   async function _refreshShotsFromApi(limit = 80) {
     const fresh = await _fetchRecentShots(limit);
     shots = fresh;
-    renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+    _renderWorkflowList();
     renderHistory();
   }
 
@@ -2781,9 +2960,20 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
     return candidates[0] || null;
   }
 
+  // Steps are addressed by name rather than index since the x5 flow inserts one
+  // between the run and the finish.
+  const _cleaningSteps = {
+    1: cleaningStep1El,
+    2: cleaningStep2El,
+    3: cleaningStep3El,
+    4: cleaningStep4El,
+    rinse: cleaningStepRinseEl,
+  };
+
   function _cleaningShowStep(n) {
-    [cleaningStep1El, cleaningStep2El, cleaningStep3El, cleaningStep4El]
-      .forEach((el, i) => { if (el) el.hidden = (i + 1) !== n; });
+    for (const [key, el] of Object.entries(_cleaningSteps)) {
+      if (el) el.hidden = String(key) !== String(n);
+    }
   }
 
   function _cleaningStopGraph() {
@@ -2809,6 +2999,8 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
     _cleaningRunStartedAt = 0;
     _cleaningProfileHint  = null;
     _cleaningWasEspresso = false;
+    _cleaningMultiPass   = false;
+    _cleaningPass        = 1;
     const hadCleaningProfile = !!_forcedLiveWorkflow;
     _forcedLiveWorkflow  = null;
     if (_cleaningStateHandler) {
@@ -2833,6 +3025,10 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
   document.getElementById('btn-cleaning-cancel')?.addEventListener('click', _cleaningClose);
   document.getElementById('btn-cleaning-step3-abort')?.addEventListener('click', _cleaningClose);
   document.getElementById('btn-cleaning-step2-back')?.addEventListener('click', () => _cleaningShowStep(1));
+  document.getElementById('btn-cleaning-rinse-abort')?.addEventListener('click', _cleaningClose);
+  // Second pass: the profile is already loaded on the machine from the first,
+  // so this only waits for the GHC button again.
+  document.getElementById('btn-cleaning-rinse-ready')?.addEventListener('click', () => _cleaningArmRun());
 
   // Schritt 1 → 2: Profile laden und filtern
   document.getElementById('btn-cleaning-ready')?.addEventListener('click', async () => {
@@ -2894,6 +3090,11 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
       cleaningProfile.target_weight = 0;
       cleaningProfile.target_volume = 0;
       _cleaningProfileHint = String(cleaningProfile?.title || '').trim() || null;
+      // Title match, deliberately: the frames alone do not say whether a
+      // profile expects a blind basket. Renaming the profile falls back to
+      // the single-pass flow rather than guessing.
+      _cleaningMultiPass = /forward\s*flush/i.test(_cleaningProfileHint || '');
+      _cleaningPass = 1;
 
       const cleaningContext = {
         ...(currentWf?.context || {}),
@@ -2935,9 +3136,18 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
       return;
     }
 
-    _cleaningShowStep(3);
+    _cleaningArmRun();
+  }
 
-    // Auf Espresso-Zyklus warten: espresso → idle = fertig
+  // Show step 3 and wait for one espresso cycle (the user presses the GHC
+  // button — the skin cannot start a run). Called once per pass, since the
+  // handler removes itself when the cycle ends.
+  function _cleaningArmRun() {
+    _cleaningShowStep(3);
+    if (cleaningStep3IdleEl)  cleaningStep3IdleEl.hidden  = false;
+    if (cleaningGraphEl)      cleaningGraphEl.hidden      = true;
+    if (cleaningStep3TitleEl) cleaningStep3TitleEl.textContent = t('cleaning.running.title');
+
     _cleaningWasEspresso = false;
     _cleaningStateHandler = ({ detail }) => {
       const state = detail?.state || 'idle';
@@ -2969,10 +3179,32 @@ homeWorkflowWidget?.addEventListener('keydown', e => {
         _cleaningStateHandler = null;
         _cleaningWasEspresso  = false;
         _cleaningStopGraph();
-        _cleaningShowStep(4);
+        _cleaningFinishPass();
       }
     };
     window.addEventListener('gateway:machineState', _cleaningStateHandler);
+  }
+
+  // One pass of the profile has finished. The x5 backflush is run twice — with
+  // powder, then without — and closes on an instruction to rinse the group by
+  // hand, which the skin cannot drive: the flush button is on the machine.
+  function _cleaningFinishPass() {
+    if (_cleaningMultiPass && _cleaningPass === 1) {
+      _cleaningPass = 2;
+      _cleaningShowStep('rinse');
+      return;
+    }
+    _cleaningApplyDoneText();
+    _cleaningShowStep(4);
+  }
+
+  function _cleaningApplyDoneText() {
+    const titleEl = cleaningStep4El?.querySelector('.modal-title');
+    const textEl  = cleaningStep4El?.querySelector('.cleaning-instruction-text');
+    if (titleEl) titleEl.textContent = _cleaningMultiPass
+      ? t('cleaning.finalFlush.title') : t('cleaning.done.title');
+    if (textEl) textEl.textContent = _cleaningMultiPass
+      ? t('cleaning.finalFlush.text') : t('cleaning.done.text');
   }
 
   // Schritt 4: Fertig — Shot behalten, zurück zu Home
@@ -3209,7 +3441,8 @@ steamSettingsModalEl?.querySelectorAll('.steam-settings-preset').forEach(presetE
 });
 
 steamSettingsModalEl?.querySelectorAll('.steam-settings-name-input').forEach(input => {
-  input.addEventListener('click', () => {
+  input.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     window._openTextPicker(input.value, val => { input.value = val || input.placeholder; });
   });
 });
@@ -3369,6 +3602,11 @@ document.getElementById('calib-steam-time')?.addEventListener('input', e => {
   }
 });
 
+document.getElementById('calib-steam-time')?.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  openFieldPicker(e.currentTarget, [], { inputMode: 'numeric', unit: 's' });
+});
+
 /* ── Pitcher Presets ─────────────────────────────────── */
 
 let _pitcherDraft = null;
@@ -3379,7 +3617,17 @@ function _renderPitcherPresetCards() {
     const p = _pitcherDraft?.[idx] ?? NSXCore.getPitcherPresets()[idx];
     if (!p) return;
 
-    card.querySelector('.pitcher-preset-name').value = p.name ?? `Pitcher ${idx + 1}`;
+    const nameEl = card.querySelector('.pitcher-preset-name');
+    nameEl.value = p.name ?? `Pitcher ${idx + 1}`;
+    if (!nameEl.dataset.kbBound) {
+      nameEl.dataset.kbBound = '1';
+      nameEl.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        window._openTextPicker(nameEl.value, (val) => {
+          nameEl.value = val || nameEl.placeholder;
+        });
+      });
+    }
 
     const weightEl = card.querySelector('.pitcher-weight-value');
     weightEl.textContent = p.pitcherWeight != null ? p.pitcherWeight.toFixed(1) + ' g' : '— g';
@@ -3546,7 +3794,8 @@ hotwaterSettingsModalEl?.querySelectorAll('.hotwater-settings-preset').forEach(p
 });
 
 hotwaterSettingsModalEl?.querySelectorAll('.steam-settings-name-input').forEach(input => {
-  input.addEventListener('click', () => {
+  input.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     window._openTextPicker(input.value, val => { input.value = val || input.placeholder; });
   });
 });
@@ -3676,7 +3925,8 @@ flushSettingsModalEl?.querySelectorAll('.flush-settings-preset').forEach(presetE
       _renderFlushSettingsValues(presetEl, p);
     });
   });
-  presetEl.querySelector('.steam-settings-name-input')?.addEventListener('click', function() {
+  presetEl.querySelector('.steam-settings-name-input')?.addEventListener('pointerdown', function(e) {
+    e.preventDefault();
     window._openTextPicker(this.value, val => { this.value = val || this.placeholder; });
   });
   presetEl.querySelectorAll('.flush-settings-value').forEach(span => {
@@ -4158,17 +4408,14 @@ async function deleteWorkflowShots(workflowIndex) {
   await _saveRecipesToStore(workflowItems);
   selectedWorkflowIndex = Math.max(0, Math.min(selectedWorkflowIndex, Math.max(0, workflowItems.length - 1)));
   historySelectedRecipeIndex = Math.min(historySelectedRecipeIndex, workflowItems.length - 1);
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
   renderHomeRecentRecipes();
   renderHistory();
-  if (workflowItems.length > 0) {
-    setCurrentWorkflow(workflowItems[selectedWorkflowIndex]);
-    plotWorkflowShot(workflowItems[selectedWorkflowIndex]);
-    setWorkflowSyncState?.('pending');
-    clearTimeout(_pushDebounceTimer);
-    _pushDebounceTimer = setTimeout(() => {
-      pushSelectedWorkflowToMachine(workflowItems[selectedWorkflowIndex]);
-    }, 400);
+  const _afterDelete = getSelectedWorkflow();
+  if (_afterDelete) {
+    setCurrentWorkflow(_afterDelete);
+    plotWorkflowShot(_afterDelete);
+    _schedulePushForRecipe(_afterDelete);
   }
 
   showToast(t('toast.recipeDeleted'));
@@ -4442,7 +4689,7 @@ document.getElementById('history-accordion-list')?.addEventListener('click', e =
         _recipeRatingCache.clear();
         historySelectedRecipeIndex = -1;
         renderHistory();
-        renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+        _renderWorkflowList();
         showToast(t('toast.shotsDeleted').replace('{count}', recipeShotIds.length));
       } catch {
         showToast(t('toast.shotsDeleteFailed'));
@@ -4494,7 +4741,7 @@ async function _deleteHistoryShot(shotId) {
       historySelectedRecipeIndex = workflowItems.length > 0 ? 0 : -1;
     }
     renderHistory();
-    renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+    _renderWorkflowList();
     showToast(t('toast.shotDeleted'));
   } catch {
     showToast(t('toast.shotDeleteFailed'));
@@ -4776,8 +5023,8 @@ window.addEventListener('router:tabchange', e => {
       const wfGraphEl = document.getElementById('workflow-shot-graph');
       if (wfGraphEl && !wfGraphEl._liveMode) initLiveShotChart?.(wfGraphEl);
       if (wfGraphEl?._liveMode) updateLiveShotChart?.(wfGraphEl, liveShot);
-    } else if (workflowItems.length > 0) {
-      plotWorkflowShot(workflowItems[selectedWorkflowIndex]);
+    } else {
+      plotWorkflowShot(getSelectedWorkflow());
     }
   }
   if (idx === 2) renderHistory();
@@ -4807,10 +5054,14 @@ function _getShotTags(s) {
        : [];
 }
 
+// Most recently used tag first. Shots carry no createdAt, but `shots` is
+// newest-first throughout the skin (shots[0] is treated as the latest
+// everywhere), so Set insertion order already gives the wanted ordering —
+// sorting it alphabetically was what buried the tags actually in use.
 function _getAllUsedTags() {
   const set = new Set();
   for (const s of shots) _getShotTags(s).forEach(t => set.add(t));
-  return [...set].sort();
+  return [...set];
 }
 
 function _renderReviewTags() {
@@ -4871,9 +5122,9 @@ function _renderReviewMeta() {
   const d = _reviewDraft || {};
   const date = _reviewMetaDate;
   const valid = date instanceof Date && !Number.isNaN(date.getTime());
-  const day  = valid ? new Intl.DateTimeFormat('de-DE', { weekday: 'short' }).format(date) : '--';
-  const dstr = valid ? new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(date) : '--.--.';
-  const time = valid ? new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(date) : '--:--';
+  const day  = valid ? new Intl.DateTimeFormat(getLocale(), { weekday: 'short' }).format(date) : '--';
+  const dstr = valid ? new Intl.DateTimeFormat(getLocale(), { day: '2-digit', month: '2-digit' }).format(date) : '--.--.';
+  const time = valid ? new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(date) : '--:--';
   const durTxt = Number.isFinite(d.durationSec) ? `${d.durationSec.toFixed(1)}s` : '--.-s';
   if (mainEl) mainEl.textContent = `${day} ${dstr} | ${time} | ${durTxt}`;
 
@@ -4931,7 +5182,7 @@ async function _navigateReview(delta) {
   if (nextShot?.id) openShotReview(nextShot.id, list);
 }
 
-function _srTile(field, label, value, { editable = true, inputMode = 'text' } = {}) {
+function _srTile(field, label, value, { editable = true, inputMode = 'text', unit = '' } = {}) {
   const isEmpty = value === '' || value === null || value === undefined;
   const display = isEmpty
     ? `<span class="bean-manager-prop-empty">—</span>`
@@ -4941,7 +5192,7 @@ function _srTile(field, label, value, { editable = true, inputMode = 'text' } = 
   if (!editable) {
     return `<div class="bean-manager-prop-tile bean-manager-prop-tile--static">${inner}</div>`;
   }
-  return `<button type="button" class="bean-manager-prop-tile" data-sr-field="${field}" data-sr-value="${_escapeHtml(String(value ?? ''))}" data-sr-inputmode="${inputMode}">${inner}</button>`;
+  return `<button type="button" class="bean-manager-prop-tile" data-sr-field="${field}" data-sr-value="${_escapeHtml(String(value ?? ''))}" data-sr-inputmode="${inputMode}" data-sr-unit="${_escapeHtml(unit)}">${inner}</button>`;
 }
 
 function _renderShotReviewFields() {
@@ -4954,7 +5205,7 @@ function _renderShotReviewFields() {
         _srTile('coffeeRoaster',    t('shotReview.roaster'),   d.coffeeRoaster) +
         _srTile('coffeeName',       t('shotReview.bean'),      d.coffeeName) +
         _srTile('roastDate',        t('shotReview.roastDate'), d.dispRoastDate, { editable: false }) +
-        _srTile('actualDoseWeight', t('shotReview.dose'),      d.actualDoseWeight, { inputMode: 'numeric' })
+        _srTile('actualDoseWeight', t('shotReview.dose'),      d.actualDoseWeight, { inputMode: 'numeric', unit: 'g' })
       ) +
       sub(
         _srTile('grinderModel',   t('shotReview.grinder'),   d.grinderModel) +
@@ -4963,7 +5214,7 @@ function _renderShotReviewFields() {
       sub(
         _srTile('profile',     t('shotReview.profile'),      d.dispProfile, { editable: false }) +
         _srTile('temperature', t('shotReview.temperature'),  d.dispTemp, { editable: false }) +
-        _srTile('targetYield', t('shotReview.targetWeight'), d.targetYield, { inputMode: 'numeric' })
+        _srTile('targetYield', t('shotReview.targetWeight'), d.targetYield, { inputMode: 'numeric', unit: 'g' })
       );
   }
   if (shotReviewResultsGridEl) {
@@ -4982,8 +5233,8 @@ function _renderShotReviewFields() {
     let html =
       _srTile('time',     t('shotReview.time'),  d.dispDuration, { editable: false }) +
       _srTile('yield',    t('shotReview.yield'), yieldDisp, { editable: false }) +
-      _srTile('drinkTds', 'TDS %', d.drinkTds, { inputMode: 'numeric' }) +
-      _srTile('drinkEy',  'EY %',  d.drinkEy,  { inputMode: 'numeric' });
+      _srTile('drinkTds', 'TDS %', d.drinkTds, { inputMode: 'numeric', unit: '%' }) +
+      _srTile('drinkEy',  'EY %',  d.drinkEy,  { inputMode: 'numeric', unit: '%' });
     for (const r of _reviewAnalysisRows) {
       html += _srTile(null, r.label, r.value, { editable: false });
     }
@@ -5111,7 +5362,7 @@ function openShotReview(shotId, navList = null) {
         if (rd) {
           const d = new Date(rd);
           const dateStr = isNaN(d.getTime()) ? rd
-            : d.toLocaleDateString(getLang?.() === 'en' ? 'en-US' : 'de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            : d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
           _reviewDraft.dispRoastDate = `${dateStr} · ${formatBatchAge(rd)}`;
         } else {
           _reviewDraft.dispRoastDate = '—';
@@ -5220,6 +5471,7 @@ shotReviewFavBtn?.addEventListener('click', () => {
     const current   = tile.dataset.srValue || '';
     openFieldPicker(null, [], {
       inputMode,
+      unit: tile.dataset.srUnit || '',
       initialValue: current,
       onConfirm: (val) => {
         const trimmed = (val ?? '').trim();
@@ -7161,10 +7413,9 @@ function _peditorRenderFrames() {
   const countEl = document.getElementById('peditor-phasen-count');
   if (countEl) countEl.textContent = _peditorFrames.length ? t('profileEditor.phasesCount').replace('{count}', _peditorFrames.length) : t('profileEditor.phasesLabel');
 
-  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const allFrameNames = () => {
     const all = Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : (NSXCore.getProfiles() || []);
-    return uniq(all.flatMap(r => (r.profile?.steps ?? r.profile?.frames ?? []).map(s => s.name)));
+    return NSXCore.uniqueFieldValuesByRecency(all, r => (r.profile?.steps ?? r.profile?.frames ?? []).map(s => s.name));
   };
 
   if (!_peditorFrames.length) {
@@ -7550,6 +7801,25 @@ document.getElementById('profile-editor-notes')?.addEventListener('input', (e) =
   _peditorNotes = e.target.value;
   _autoResizeNotes(e.target);
   _peditorRefreshDirtyState();
+});
+
+// Route these three through our own keyboards instead of letting the tablet's
+// Android IME take over. The 'input' handlers above still do the work — both
+// pickers write the value and dispatch 'input' on the target.
+['profile-editor-title', 'profile-editor-author'].forEach(id => {
+  document.getElementById(id)?.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    openFieldPicker(e.currentTarget, []);
+  });
+});
+
+document.getElementById('profile-editor-notes')?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  const el = e.currentTarget;
+  openTextEditorModal(el.value ?? '', (val) => {
+    el.value = val;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 });
 
 document.getElementById('profile-editor-stop-weight-enabled')?.addEventListener('change', e => {
@@ -8586,7 +8856,13 @@ document.getElementById('btn-profile-picker-import-visualizer')?.addEventListene
   if (!modal || !input) return;
   input.value = '';
   modal.hidden = false;
-  setTimeout(() => input.focus(), 50);
+  // Deliberately not focused: focusing a plain input opens Android's keyboard.
+  // Tapping the field opens ours instead (handler below).
+});
+
+document.getElementById('visualizer-import-input')?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  openFieldPicker(e.currentTarget, []);
 });
 
 document.getElementById('profile-import-file-input')?.addEventListener('change', async (e) => {
@@ -8819,7 +9095,7 @@ document.getElementById('btn-edit-save')?.addEventListener('click', async () => 
 
   await _saveRecipesToStore(workflowItems);
 
-  renderWorkflows(getDisplayWorkflows(), selectedWorkflowIndex);
+  _renderWorkflowList();
   renderHomeRecentRecipes();
   const activeIndex = isCreate ? 0 : index;
   if (activeIndex === selectedWorkflowIndex) {
@@ -8896,6 +9172,15 @@ function _addTag(value) {
 (function () {
   const input = document.getElementById('edit-tags-input');
   if (!input) return;
+  // Same treatment as the shot-review tag field: the field picker supplies the
+  // keyboard plus a filterable list of tags already in use.
+  input.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const options = _getAllUsedTags().filter(tag => !_editTags.includes(tag));
+    openFieldPicker(null, options, {
+      onConfirm: (val) => _addTag(val ?? ''),
+    });
+  });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
@@ -9002,7 +9287,7 @@ function _refreshEditBeanRoastDate() {
   if (!_editPickedBatchRoastDate) { el.textContent = '—'; return; }
   const d = new Date(_editPickedBatchRoastDate);
   if (Number.isNaN(d.getTime())) { el.textContent = '—'; return; }
-  const locale = getLang?.() === 'en' ? 'en-US' : 'de-DE';
+  const locale = getLocale();
   const dateStr = d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
   el.textContent = `${dateStr} (${formatBatchAge(_editPickedBatchRoastDate)})`;
 }
@@ -9179,7 +9464,7 @@ document.getElementById('btn-edit-pick-grinder')?.addEventListener('click', open
 const batchAddModalEl = document.getElementById('batch-add-modal');
 const batchDatePickerModalEl = document.getElementById('batch-date-picker-modal');
 const _getMonthName = (month1Based) =>
-  new Intl.DateTimeFormat(getLang?.() === 'en' ? 'en-US' : 'de-DE', { month: 'long' })
+  new Intl.DateTimeFormat(getLocale(), { month: 'long' })
     .format(new Date(2000, month1Based - 1));
 let _editingBean = null;
 let _editingBatch = null;
@@ -9328,12 +9613,12 @@ let _fieldPickerAllOptions = [];
 let _fieldPickerOnConfirm = null;
 
 function _beanPickerOptions() {
-  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+  const beans = NSXCore.getBeans();
   return {
-    'bean-roaster':    uniq(NSXCore.getBeans().map(b => b.roaster)),
-    'bean-country':    uniq(NSXCore.getBeans().map(b => b.country)),
-    'bean-processing': uniq(NSXCore.getBeans().map(b => b.processing)),
-    'bean-variety':    uniq(NSXCore.getBeans().flatMap(b => Array.isArray(b.variety) ? b.variety : [])),
+    'bean-roaster':    NSXCore.uniqueFieldValuesByRecency(beans, 'roaster'),
+    'bean-country':    NSXCore.uniqueFieldValuesByRecency(beans, 'country'),
+    'bean-processing': NSXCore.uniqueFieldValuesByRecency(beans, 'processing'),
+    'bean-variety':    NSXCore.uniqueFieldValuesByRecency(beans, 'variety'),
   };
 }
 
@@ -9341,12 +9626,17 @@ function _renderFieldPickerList(filter) {
   const list = document.getElementById('field-picker-list');
   const pickerInput = document.getElementById('field-picker-input');
   if (!list) return;
-  const q = filter.toLowerCase().trim();
   const current = pickerInput?.value ?? '';
-  const filtered = q ? _fieldPickerAllOptions.filter(o => o.toLowerCase().includes(q)) : _fieldPickerAllOptions;
+  const all = Array.isArray(_fieldPickerAllOptions) ? _fieldPickerAllOptions : [];
+  // Prefix matches first, then word-start, then merely-contains — people type
+  // the start of a name. Ties keep `all`'s order, which is newest-first.
+  const filtered = NSXCore.rankSuggestions(all, filter);
   list.innerHTML = filtered.map(o =>
     `<button type="button" class="field-picker-option${o === current ? ' is-selected' : ''}" data-value="${o.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">${o.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</button>`
   ).join('');
+  // Back to the start on every re-filter, so the closest match is the one in
+  // view rather than wherever the strip happened to be scrolled to.
+  list.scrollLeft = 0;
   list.querySelectorAll('.field-picker-option').forEach(btn => {
     btn.addEventListener('click', () => {
       if (pickerInput) {
@@ -9359,7 +9649,6 @@ function _renderFieldPickerList(filter) {
 
 /* ── Shared Keyboard Logic ───────────────────────────── */
 let _fpKbShift = false;
-let _fpKbActiveTarget = null;
 let _fpKbBsTimer = null;
 let _fpKbBsInterval = null;
 
@@ -9374,8 +9663,7 @@ function _fpKbSetShift(on) {
   });
 }
 
-function _fpKbInsert(char) {
-  const input = _fpKbActiveTarget;
+function _fpKbInsert(char, input) {
   if (!input) return;
   const start = input.selectionStart ?? input.value.length;
   const end   = input.selectionEnd   ?? input.value.length;
@@ -9388,8 +9676,7 @@ function _fpKbInsert(char) {
   if (_fpKbShift && isLetter) _fpKbSetShift(false);
 }
 
-function _fpKbBackspace() {
-  const input = _fpKbActiveTarget;
+function _fpKbBackspace(input) {
   if (!input) return;
   const start = input.selectionStart ?? input.value.length;
   const end   = input.selectionEnd   ?? input.value.length;
@@ -9410,29 +9697,36 @@ function _fpKbStopBackspace() {
   _fpKbBsInterval = null;
 }
 
-function _setupKeyboard(keyboardId, shiftBtnId, bsBtnId) {
+// Each keyboard resolves ITS OWN field when a key is pressed. This used to be
+// one shared `_fpKbActiveTarget`, set when a modal opened and cleared when one
+// closed — so closing either modal while the other was open left the visible
+// keyboard writing into null, and every key press silently did nothing.
+function _setupKeyboard(keyboardId, shiftBtnId, bsBtnId, targetInputId) {
   const kb = document.getElementById(keyboardId);
   if (!kb) return;
+  const target = () => document.getElementById(targetInputId);
   kb.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const key = e.target.closest('.fp-key');
     if (!key) return;
     if (key.id === shiftBtnId) { _fpKbSetShift(!_fpKbShift); return; }
     if (key.id === bsBtnId || key.classList.contains('fp-key--bs')) {
-      _fpKbBackspace();
-      _fpKbBsTimer = setTimeout(() => { _fpKbBsInterval = setInterval(_fpKbBackspace, 80); }, 400);
+      _fpKbBackspace(target());
+      _fpKbBsTimer = setTimeout(() => {
+        _fpKbBsInterval = setInterval(() => _fpKbBackspace(target()), 80);
+      }, 400);
       return;
     }
     const char = key.dataset.key;
-    if (char !== undefined) _fpKbInsert(char);
+    if (char !== undefined) _fpKbInsert(char, target());
   });
   kb.addEventListener('pointerup',     _fpKbStopBackspace);
   kb.addEventListener('pointercancel', _fpKbStopBackspace);
   kb.addEventListener('pointerleave',  _fpKbStopBackspace);
 }
 
-_setupKeyboard('field-picker-keyboard', 'fp-kb-shift', 'fp-kb-backspace');
-_setupKeyboard('text-editor-keyboard',  'te-kb-shift', 'te-kb-backspace');
+_setupKeyboard('field-picker-keyboard', 'fp-kb-shift', 'fp-kb-backspace', 'field-picker-input');
+_setupKeyboard('text-editor-keyboard',  'te-kb-shift', 'te-kb-backspace', 'text-editor-textarea');
 
 /* ── Text Editor Modal (multiline notes) ─────────────── */
 let _textEditorOnConfirm = null;
@@ -9443,7 +9737,6 @@ function openTextEditorModal(currentValue, onConfirm) {
   const ta    = document.getElementById('text-editor-textarea');
   if (!modal || !ta) return;
   ta.value = currentValue ?? '';
-  _fpKbActiveTarget = ta;
   _fpKbSetShift(false);
   modal.hidden = false;
   setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 60);
@@ -9455,7 +9748,6 @@ function closeTextEditorModal(confirm) {
   if (confirm && _textEditorOnConfirm && ta) _textEditorOnConfirm(ta.value);
   if (modal) modal.hidden = true;
   _textEditorOnConfirm = null;
-  _fpKbActiveTarget = null;
 }
 
 document.getElementById('btn-text-editor-cancel')?.addEventListener('click',  () => closeTextEditorModal(false));
@@ -9467,22 +9759,50 @@ document.getElementById('shot-review-notes')?.addEventListener('click', () => {
   });
 });
 
-function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = null, initialValue = null } = {}) {
-  _fieldPickerTarget = inputEl;
-  _fieldPickerOnConfirm = onConfirm;
-  _fieldPickerAllOptions = options;
+function openFieldPicker(inputEl, options, { inputMode = 'text', onConfirm = null, initialValue = null, unit = '' } = {}) {
   const modal = document.getElementById('field-picker-modal');
   const pickerInput = document.getElementById('field-picker-input');
-  if (!modal || !pickerInput) return;
-  // Numeric fields (inputMode 'numeric') swap the QWERTY layout for the numpad.
+  if (!modal || !pickerInput) {
+    _reportRuntimeError('openFieldPicker', new Error('field picker markup missing'));
+    return;
+  }
+  _fieldPickerTarget = inputEl;
+  _fieldPickerOnConfirm = onConfirm;
+  // Options come from many callers (bean/grinder/tag/frame lists). Coerce here
+  // so one non-string cannot throw inside the list render.
+  _fieldPickerAllOptions = (Array.isArray(options) ? options : [])
+    .filter(o => o != null).map(String);
+
+  // Numeric fields swap the QWERTY layout for the numpad. 'decimal' counts as
+  // numeric: it was declared on the batch weight/price/score fields but never
+  // matched here, so those opened the full keyboard. The numpad has a decimal
+  // point, so both modes share it.
   document.getElementById('field-picker-keyboard')
-    ?.classList.toggle('fp-keyboard--numeric', inputMode === 'numeric');
+    ?.classList.toggle('fp-keyboard--numeric', inputMode === 'numeric' || inputMode === 'decimal');
+
+  const unitEl = document.getElementById('field-picker-unit');
+  if (unitEl) {
+    unitEl.textContent = unit;
+    unitEl.hidden = !unit;
+  }
+  // Decided once per open, never while typing: the sheet's height must not
+  // change as the suggestion list filters down, or the keyboard moves.
+  modal.querySelector('.field-picker-sheet')
+    ?.classList.toggle('has-suggestions', _fieldPickerAllOptions.length > 0);
   pickerInput.value = initialValue !== null ? String(initialValue) : (inputEl?.value || '');
-  _renderFieldPickerList(pickerInput.value);
-  _fpKbActiveTarget = pickerInput;
-  _fpKbSetShift(pickerInput.value.length === 0);
+
+  // Show FIRST, then fill. This used to run the list render and shift setup
+  // before revealing the modal, so anything that threw in between left the
+  // picker permanently closed — and since every keyboard field routes through
+  // here, the whole skin looked like it had lost its keyboard until reload.
   modal.hidden = false;
   setTimeout(() => { pickerInput.focus(); pickerInput.select(); }, 60);
+  try {
+    _renderFieldPickerList(pickerInput.value);
+    _fpKbSetShift(pickerInput.value.length === 0);
+  } catch (err) {
+    _reportRuntimeError('field picker list', err);
+  }
 }
 
 function closeFieldPicker(confirm) {
@@ -9510,11 +9830,16 @@ document.getElementById('profile-picker-search')?.addEventListener('pointerdown'
   openFieldPicker(e.target, []);
 });
 
-document.querySelector('.workflows-search')?.addEventListener('click', (e) => {
+// pointerdown + preventDefault, not click: 'click' fires AFTER the input has
+// already taken focus, so Android opens its own keyboard first and the layout
+// reflows twice before the field picker settles on top.
+document.querySelector('.workflows-search')?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
   openFieldPicker(e.target, []);
 });
 
-document.getElementById('history-search')?.addEventListener('click', (e) => {
+document.getElementById('history-search')?.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
   openFieldPicker(e.target, []);
 });
 
@@ -9628,36 +9953,16 @@ function _npMomentum(velocityPxPerMs) {
 }
 
 /* ── Text Picker ─────────────────────────────────────── */
-{
-  let _textPickerCallback = null;
-  const _textPickerModal = document.getElementById('text-picker-modal');
-  const _textPickerInput = document.getElementById('text-picker-input');
-
-  window._openTextPicker = function(currentValue, onConfirm) {
-    if (!_textPickerModal || !_textPickerInput) return;
-    _textPickerCallback = onConfirm;
-    _textPickerInput.value = currentValue ?? '';
-    _textPickerModal.hidden = false;
-    setTimeout(() => { _textPickerInput.focus(); _textPickerInput.select(); }, 80);
-  };
-
-  document.getElementById('btn-text-picker-cancel')?.addEventListener('click', () => {
-    _textPickerModal.hidden = true;
-    _textPickerCallback = null;
+// Kept as an API (preset-name fields call it) but backed by the field picker,
+// which owns the on-screen keyboard. The old standalone modal focused a plain
+// input, so every preset rename summoned Android's keyboard inside what looked
+// like one of our own dialogs.
+window._openTextPicker = function(currentValue, onConfirm) {
+  openFieldPicker(null, [], {
+    initialValue: currentValue ?? '',
+    onConfirm: (val) => onConfirm?.((val ?? '').trim()),
   });
-
-  document.getElementById('btn-text-picker-confirm')?.addEventListener('click', () => {
-    const val = _textPickerInput.value.trim();
-    _textPickerModal.hidden = true;
-    if (_textPickerCallback) _textPickerCallback(val);
-    _textPickerCallback = null;
-  });
-
-  _textPickerInput?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('btn-text-picker-confirm')?.click();
-    if (e.key === 'Escape') document.getElementById('btn-text-picker-cancel')?.click();
-  });
-}
+};
 
 function openNumberPicker(values, currentValue, onConfirm, decimalPlaces = 0, formatter = null) {
   _npValues = values;
@@ -9752,10 +10057,9 @@ window.closeNumberPicker = closeNumberPicker;
 }
 
 {
-  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const grinderTextInputs = {
-    'grinder-model':          () => uniq(NSXCore.getGrinders().map(g => g.model)),
-    'grinder-burrs':          () => uniq(NSXCore.getGrinders().map(g => g.burrs)),
+    'grinder-model':          () => NSXCore.uniqueFieldValuesByRecency(NSXCore.getGrinders(), 'model'),
+    'grinder-burrs':          () => NSXCore.uniqueFieldValuesByRecency(NSXCore.getGrinders(), 'burrs'),
     'grinder-setting-values': () => [],
   };
   Object.entries(grinderTextInputs).forEach(([id, getOptions]) => {
@@ -9769,11 +10073,10 @@ window.closeNumberPicker = closeNumberPicker;
 }
 
 {
-  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   const allProfiles = () => Array.isArray(NSXCore.getProfilesAll()) ? NSXCore.getProfilesAll() : (NSXCore.getProfiles() || []);
   const profileEditorTextInputs = {
-    'profile-editor-title':  () => uniq(allProfiles().map(r => r.profile?.title)),
-    'profile-editor-author': () => uniq(allProfiles().map(r => r.profile?.author)),
+    'profile-editor-title':  () => NSXCore.uniqueFieldValuesByRecency(allProfiles(), 'profile.title'),
+    'profile-editor-author': () => NSXCore.uniqueFieldValuesByRecency(allProfiles(), 'profile.author'),
   };
   Object.entries(profileEditorTextInputs).forEach(([id, getOptions]) => {
     const el = document.getElementById(id);
@@ -9811,7 +10114,7 @@ function formatBatchDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(getLang?.() === 'en' ? 'en-US' : 'de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+  return new Intl.DateTimeFormat(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
 }
 
 function _parseBatchDateValue(value) {
@@ -9940,7 +10243,7 @@ function formatBatchDateBadge(iso) {
   if (!iso) return { day: '—', month: '', age: '' };
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return { day: '—', month: '', age: '' };
-  const locale = getLang?.() === 'en' ? 'en-US' : 'de-DE';
+  const locale = getLocale();
   return {
     day: String(d.getUTCDate()).padStart(2, '0'),
     month: new Intl.DateTimeFormat(locale, { month: 'short' }).format(d).replace('.', ''),
@@ -10069,16 +10372,19 @@ document.getElementById('batch-roast-date')?.addEventListener('click', () => ope
 const _batchTextFields = [
   { id: 'batch-roast-level',    inputMode: 'text' },
   { id: 'batch-quality-score',  inputMode: 'decimal' },
-  { id: 'batch-weight',         inputMode: 'decimal' },
-  { id: 'batch-price',          inputMode: 'decimal' },
+  { id: 'batch-weight',         inputMode: 'decimal', unit: 'g' },
+  // The bag's currency is its own field next to this one, so read it rather
+  // than hardcoding a symbol.
+  { id: 'batch-price',          inputMode: 'decimal', unit: () => document.getElementById('batch-currency')?.value?.trim() || '' },
   { id: 'batch-currency',       inputMode: 'text' },
   { id: 'batch-notes',          inputMode: 'text' },
 ];
-_batchTextFields.forEach(({ id, inputMode }) => {
+_batchTextFields.forEach(({ id, inputMode, unit }) => {
   document.getElementById(id)?.addEventListener('click', () => {
     const el = document.getElementById(id);
     openFieldPicker(null, [], {
       inputMode,
+      unit: typeof unit === 'function' ? unit() : (unit || ''),
       initialValue: el?.value ?? '',
       onConfirm: (val) => { if (el) el.value = val.trim(); },
     });
@@ -10223,13 +10529,21 @@ function _persistBeanManagerCollapsedRoasters() {
   patchStoreSettings({ nsx_bean_manager_collapsed_roasters: [..._beanManagerCollapsedRoasters] });
 }
 
+// One definition of what text a bean is searchable by, shared by the list
+// filter and the search field's suggestions — otherwise confirming a suggestion
+// like "Roaster Bean" matches neither field on its own and the list comes back
+// empty. Roaster and name are each substrings of it, so searching either alone
+// still works.
+function _beanSearchLabel(bean) {
+  return [bean?.roaster, bean?.name].filter(Boolean).join(' ');
+}
+
 function _beanManagerFilteredBeans() {
   const q = _beanManagerSearchQuery.toLowerCase().trim();
   return NSXCore.getBeans().filter(b => {
     if (!_beanManagerShowArchived && b.archived) return false;
     if (!q) return true;
-    return (b.name || '').toLowerCase().includes(q)
-      || (b.roaster || '').toLowerCase().includes(q)
+    return _beanSearchLabel(b).toLowerCase().includes(q)
       || (b.country || '').toLowerCase().includes(q);
   });
 }
@@ -10321,11 +10635,10 @@ function _beanManagerSuggestions(field) {
   // (e.g. "Schokoladig, Nussig, Beerig") that practically never repeat verbatim,
   // so suggestions add no value there — open a plain text field instead.
   if (field === 'name' || field === 'notes') return [];
-  const fromBeans = (key) => [...new Set(NSXCore.getBeans().map(b => b[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
-  if (field === 'variety') {
-    return [...new Set(NSXCore.getBeans().flatMap(b => Array.isArray(b.variety) ? b.variety : []).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
-  }
-  return fromBeans(field);
+  // Newest first (by the bean's createdAt), so the roaster you just entered is
+  // the first chip rather than whichever one starts with an early letter.
+  // 'variety' is an array field; uniqueFieldValuesByRecency handles both.
+  return NSXCore.uniqueFieldValuesByRecency(NSXCore.getBeans(), field);
 }
 
 function _beanManagerApplyField(target, field, value) {
@@ -10447,12 +10760,12 @@ function _beanManagerRenderDetail(bean) {
       <div class="bean-manager-prop-tile bean-manager-prop-tile--split">
         <span class="bean-manager-prop-label">${_esc(t('beanEditor.altitude'))}</span>
         <div class="bean-manager-prop-split-row">
-          <button type="button" class="bean-manager-prop-split-half" data-bm-field="altMin" data-bm-value="${_esc(String(altMin))}" data-bm-inputmode="numeric">
+          <button type="button" class="bean-manager-prop-split-half" data-bm-field="altMin" data-bm-value="${_esc(String(altMin))}" data-bm-inputmode="numeric" data-bm-unit="m">
             <span class="bean-manager-prop-split-label">${_esc(t('beanEditor.altFrom'))}</span>
             <span class="bean-manager-prop-value">${val(altMin)}</span>
           </button>
           <div class="bean-manager-prop-split-divider"></div>
-          <button type="button" class="bean-manager-prop-split-half" data-bm-field="altMax" data-bm-value="${_esc(String(altMax))}" data-bm-inputmode="numeric">
+          <button type="button" class="bean-manager-prop-split-half" data-bm-field="altMax" data-bm-value="${_esc(String(altMax))}" data-bm-inputmode="numeric" data-bm-unit="m">
             <span class="bean-manager-prop-split-label">${_esc(t('beanEditor.altTo'))}</span>
             <span class="bean-manager-prop-value">${val(altMax)}</span>
           </button>
@@ -10636,9 +10949,15 @@ beanManagerModalEl?.addEventListener('click', (e) => {
 
 document.getElementById('bean-manager-search')?.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  const current = _beanManagerSearchQuery;
-  openFieldPicker(null, [], {
-    initialValue: current,
+  // Offer the beans themselves as suggestions, so the strip narrows as you
+  // type. Filtering the list live instead would be invisible: the picker
+  // covers it with a dimmed, blurred backdrop.
+  const beans = _beanManagerShowArchived
+    ? NSXCore.getBeans()
+    : NSXCore.getBeans().filter(b => !b.archived);
+  const labels = NSXCore.uniqueFieldValuesByRecency(beans, _beanSearchLabel);
+  openFieldPicker(null, labels, {
+    initialValue: _beanManagerSearchQuery,
     onConfirm: (val) => {
       _beanManagerSearchQuery = val.trim();
       const searchEl = document.getElementById('bean-manager-search');
@@ -10688,6 +11007,7 @@ document.getElementById('bean-manager-detail')?.addEventListener('pointerdown', 
   const inputMode = target.dataset.bmInputmode || 'text';
   openFieldPicker(null, _beanManagerSuggestions(field), {
     inputMode,
+    unit: target.dataset.bmUnit || '',
     initialValue: value,
     onConfirm: (newValue) => _beanManagerSaveField(field, newValue.trim()),
   });

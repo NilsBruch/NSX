@@ -21,7 +21,27 @@
 (function () {
   const _listeners = new Map(); // event name -> Set<callback>
 
+  // The gateway key/value store namespace this skin persists into: its settings
+  // (store.js) AND its recipe library + profile favorites (workflow.js).
+  //
+  // Defaults to "NSX" so the original skin keeps its existing data untouched.
+  // A second skin MUST claim its own (setStoreNamespace) before bootstrapping,
+  // or the two silently share one store — same recipe list, same steam presets,
+  // same schedule — and each one's writes clobber the other's.
+  let _storeNamespace = "NSX";
+
   const NSXCore = {
+    /** The gateway store namespace this skin owns. */
+    getStoreNamespace: () => _storeNamespace,
+
+    /** Claim a namespace for this skin. Call BEFORE the bootstrap sequence
+     *  (migrateLegacyStore/loadStore/loadRecipes) — anything already read or
+     *  written under the previous namespace is not migrated. */
+    setStoreNamespace(ns) {
+      if (typeof ns === "string" && ns.trim()) _storeNamespace = ns.trim();
+      return _storeNamespace;
+    },
+
     /** Subscribe to a semantic core event. Returns an unsubscribe function. */
     on(name, cb) {
       if (typeof cb !== "function") return () => {};

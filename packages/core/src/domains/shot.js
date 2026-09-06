@@ -12,7 +12,8 @@
  *   Selectors: getCachedShotDetails(id) — sync, cache-only, no fetch
  *   Commands:  getShotDetails(id) — fetch-or-cache, returns Promise<shot>
  *              invalidateShotDetails(id)
- *              deleteShot(id), updateShot(id, patch), updateShotMeta(id, patch)
+ *              deleteShot(id), updateShot(id, patch),
+ *              updateShotWorkflowContext(id, ctxPatch), updateShotMeta(id, patch)
  */
 (function () {
   const NSXCore = window.NSXCore;
@@ -59,6 +60,25 @@
     return result;
   }
 
+  /**
+   * Patch fields of a stored shot's WORKFLOW CONTEXT (the recipe as it was at
+   * brew time: grinder setting, roaster/bean, targets) rather than its
+   * annotations.
+   *
+   * The gateway's PUT replaces `workflow` wholesale, so a patch built from the
+   * context alone would drop everything else the workflow carries — the
+   * embedded profile above all. This fetches the full record first and sends a
+   * MERGED workflow, which is what NSX's own shot review does inline.
+   */
+  async function updateShotWorkflowContext(id, ctxPatch) {
+    const full = await getShotDetails(id);
+    const merged = {
+      ...(full?.workflow || {}),
+      context: { ...(full?.workflow?.context || {}), ...ctxPatch },
+    };
+    return updateShot(id, { workflow: merged });
+  }
+
   async function updateShotMeta(id, patch) {
     const { updateShotMetadata: api } = window.NSXApi || {};
     if (typeof api !== "function") throw new Error("NSXApi.updateShotMetadata not available");
@@ -71,6 +91,7 @@
     invalidateShotDetails,
     deleteShot,
     updateShot,
+    updateShotWorkflowContext,
     updateShotMeta,
   });
 })();

@@ -58,3 +58,22 @@ test("saveRecipes merges against the live server list before writing", async () 
   assert.equal(written.find((r) => r.id === "r1").grind, 12, "our edit is applied");
   assert.deepEqual(ids(result), ["r1", "rB"]);
 });
+
+test("saveRecipes/loadRecipes use whatever namespace a skin has claimed, not a hardcoded 'NSX'", async () => {
+  const readNamespaces = [];
+  const writtenNamespaces = [];
+  window.NSXApi = {
+    getStoreNamespace: async (ns) => { readNamespaces.push(ns); return { recipes: [] }; },
+    setStoreValue: async (ns) => { writtenNamespaces.push(ns); },
+  };
+
+  NSXCore.setStoreNamespace("Nova");
+  try {
+    await NSXCore.loadRecipes(true);
+    await NSXCore.saveRecipes([{ id: "r1" }]);
+    assert.ok(readNamespaces.every((ns) => ns === "Nova"), `all reads used Nova's namespace (got ${readNamespaces})`);
+    assert.ok(writtenNamespaces.every((ns) => ns === "Nova"), `the write used Nova's namespace (got ${writtenNamespaces})`);
+  } finally {
+    NSXCore.setStoreNamespace("NSX"); // restore the default so it can't leak into other tests
+  }
+});

@@ -30,13 +30,15 @@
     return;
   }
 
-  const RECIPE_NS  = "NSX";
   const RECIPE_KEY = "recipes";
+  // Read per call, not captured — a skin claims its store namespace
+  // (NSXCore.setStoreNamespace) before the bootstrap sequence runs.
+  const recipeNamespace = () => NSXCore.getStoreNamespace();
 
-  // Deduped, ETag-backed cache of the whole NSX store namespace.
-  // Recipes AND profile-favorites both live under "NSX"; reading the namespace
-  // once (via GET /store/NSX?full=1) lets both consumers share a single fetch
-  // and revalidate cheaply (304 → same reference) on tab-resume — the
+  // Deduped, ETag-backed cache of the whole store namespace.
+  // Recipes AND profile-favorites both live under this one namespace; reading
+  // it once (via GET /store/<ns>?full=1) lets both consumers share a single
+  // fetch and revalidate cheaply (304 → same reference) on tab-resume — the
   // single-key GET can't (it omits ETags).
   let _nsRaw = null;    // last raw payload (for 304 reference identity)
   let _nsCache = null;  // parsed dict, e.g. { recipes: [...], "profile-favorites": [...] }
@@ -46,7 +48,7 @@
     if (typeof getStoreNamespace !== "function") return _nsCache || {};
     if (_nsCache && !force) return _nsCache;
     try {
-      const data = await getStoreNamespace(RECIPE_NS);
+      const data = await getStoreNamespace(recipeNamespace());
       if (data && data === _nsRaw && _nsCache) return _nsCache; // 304 → unchanged
       _nsRaw = data;
       _nsCache = (data && typeof data === "object") ? data : {};
@@ -95,11 +97,11 @@
       // concurrent change.
       let theirs = ours;
       if (typeof getStoreNamespace === "function") {
-        const fresh = await getStoreNamespace(RECIPE_NS);
+        const fresh = await getStoreNamespace(recipeNamespace());
         if (Array.isArray(fresh?.[RECIPE_KEY])) theirs = fresh[RECIPE_KEY];
       }
       merged = mergeRecipes(_recipesBase, ours, theirs);
-      await setStoreValue(RECIPE_NS, RECIPE_KEY, merged);
+      await setStoreValue(recipeNamespace(), RECIPE_KEY, merged);
       // Base tracks what THIS client knows (ours), not the merged superset —
       // otherwise another device's recipe (folded in via theirs but never in
       // our local list) would look "deleted" on our next save and get removed.
@@ -170,6 +172,15 @@
     let profileObj = null;
     let profileId = null;
 
+    // Recipe-owned profile: the workflow carries its own full profile JSON
+    // (Nova's embedded recipe.profile) rather than a reference into the DE1
+    // library. Use it directly — no library lookup, and profileId stays null
+    // so the workflow isn't tied to a library id it no longer matches (the
+    // embedded copy may have diverged from whatever it was copied from).
+    if (_extractFrames(workflow?.profile).length) {
+      profileObj = workflow.profile;
+    }
+
     const matchFrom = (records) => {
       const match =
         (storedProfileId && records.find(r => String(r.id || "") === storedProfileId)) ||
@@ -192,7 +203,7 @@
       return true;
     };
 
-    if (expectedProfile) {
+    if (expectedProfile && !profileObj) {
       // Resolve against the visible+hidden set: a recipe can legitimately reference a
       // profile that was later hidden, and for resolving a concrete id/title "hidden"
       // is irrelevant (only deleted profiles must be excluded). The visible-only cache
@@ -226,7 +237,35 @@
       resolvedProfile = { title };
     }
 
-    if (!scaleConnected) {
+    // Stop-mode resolution. Nova recipes carry an explicit `stopAtWeight`
+    // boolean; NSX recipes don't and fall through to the legacy virtual-scale
+    // path below (this builder is shared by both skins — see the file header).
+    //
+    //   stopAtWeight ON  + scale     -> weight stop (context.targetYield drives
+    //                                   it); any volume stop baked into the
+    //                                   profile is turned off.
+    //   stopAtWeight ON  + no scale  -> no way to weigh, so stop on VOLUME
+    //                                   instead: target_volume = the dialed
+    //                                   yield converted to ml via the recipe's
+    //                                   learned calibration factor (targetYield
+    //                                   * factor); never a weight stop.
+    //   stopAtWeight OFF             -> neither: target_weight AND target_volume
+    //                                   zeroed, and context.targetYield forced to
+    //                                   0 (below) so the gateway can't weight-stop
+    //                                   either. The user stops the shot manually.
+    if (typeof workflow.stopAtWeight === "boolean") {
+      if (!workflow.stopAtWeight) {
+        resolvedProfile = { ...resolvedProfile, target_weight: 0, target_volume: 0 };
+      } else if (scaleConnected) {
+        resolvedProfile = { ...resolvedProfile, target_volume: 0 };
+      } else {
+        const factor = workflow.volumeCalibration?.factor ?? 1.0;
+        const yield_ = Number(workflow.targetYield || 0);
+        const targetVolume = yield_ > 0 && factor > 0 ? Math.round(yield_ * factor) : 0;
+        resolvedProfile = { ...resolvedProfile, target_weight: 0, target_volume: targetVolume };
+      }
+    } else if (!scaleConnected) {
+      // Legacy virtual-scale path (NSX): estimate a volume target from yield*factor.
       if (workflow.useVolumeStopWhenNoScale) {
         const factor = workflow.volumeCalibration?.factor ?? 1.0;
         const yield_ = Number(workflow.targetYield || 0);
@@ -237,6 +276,10 @@
         resolvedProfile = { ...resolvedProfile, target_volume: 0 };
       }
     }
+
+    // Manual stop (toggle off) means no auto weight stop, which the gateway keys
+    // off context.targetYield — so push 0 there regardless of the dialed value.
+    const pushedYield = workflow.stopAtWeight === false ? 0 : Number(workflow.targetYield || 0);
 
     const tags = Array.isArray(workflow.tags) ? workflow.tags : [];
     const workflowName = [workflow.coffeeRoaster, workflow.coffeeName, resolvedProfile?.title || workflow.profileTitle]
@@ -253,16 +296,16 @@
         grinderModel: workflow.grinderModel || "—",
         grinderSetting: workflow.grinderSetting || "—",
         targetDoseWeight: Number(workflow.targetDoseWeight || 0),
-        targetYield: Number(workflow.targetYield || 0),
+        targetYield: pushedYield,
         ...(workflow.grinderId ? { grinderId: workflow.grinderId } : {}),
         ...(workflow.beanBatchId ? { beanBatchId: workflow.beanBatchId } : {}),
         extras: tags.length > 0 ? { tags } : null,
       },
       // Bundle the machine-function settings into the same atomic workflow update so the
       // gateway applies them in ONE PUT (instead of 4 racing PUTs that get "Queue Cancelled").
-      steamSettings: { targetTemperature: NSXCore.isSteamEnabled() ? NSXCore.getSteamTemp() : 0, flow: NSXCore.isSteamEnabled() ? NSXCore.getSteamFlow() : 0, duration: NSXCore.getSteamDuration() },
+      steamSettings: { targetTemperature: NSXCore.isSteamEnabled() ? NSXCore.getSteamTemp() : 0, flow: NSXCore.isSteamEnabled() ? NSXCore.getSteamFlow() : 0, duration: NSXCore.getEffectiveSteamDuration() },
       hotWaterData: { targetTemperature: NSXCore.getHotwaterTemp(), volume: NSXCore.getHotwaterVolume() },
-      rinseData: { flow: NSXCore.getFlushFlow(), duration: NSXCore.getFlushDuration() },
+      rinseData: { flow: NSXCore.getFlushFlow(), duration: NSXCore.isFlushTimerEnabled && !NSXCore.isFlushTimerEnabled() ? 0 : NSXCore.getFlushDuration() },
     };
 
     workflow._resolvedPayload = payload;

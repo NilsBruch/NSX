@@ -85,10 +85,35 @@ async function getWithEtag(endpoint) {
   const cached = _etagCache.get(url);
 
   const res = await fetch(url, {
+    // Revalidation here is OUR explicit If-None-Match logic, not the browser's
+    // own HTTP cache — without this, the browser can independently produce a
+    // 304 (e.g. from an unrelated earlier visit/session) that this in-memory
+    // _etagCache knows nothing about, landing in the unusable-304 case below.
+    cache: "no-store",
     headers: cached?.etag ? { "If-None-Match": cached.etag } : {},
   });
 
-  if (res.status === 304 && cached) return cached.payload;
+  if (res.status === 304) {
+    // The normal case: this 304 answers OUR If-None-Match, so the payload it
+    // refers to is the one we already hold. Same reference back, so callers
+    // can detect "unchanged" by identity and skip a re-render.
+    if (cached) return cached.payload;
+
+    // An unusable 304: something between us and the gateway (the browser's own
+    // cache, a proxy, or the Decent app's serving layer) answered a request we
+    // did NOT send an If-None-Match for. Its body is empty by spec, so there is
+    // nothing to return and nothing to cache — and re-requesting the same URL
+    // just reproduces it. Retry ONCE with a cache-busting param so a caller
+    // that has never successfully loaded this list can still get its data,
+    // rather than being permanently stuck with an empty one.
+    const busted = `${url}${url.includes("?") ? "&" : "?"}_cb=${Date.now()}`;
+    const retry = await fetch(busted, { cache: "no-store" });
+    if (!retry.ok) throw new Error(`HTTP ${retry.status} (after unusable 304 for ${endpoint})`);
+    const retryPayload = await retry.json().catch(() => null);
+    // Deliberately NOT cached: the ETag would be keyed to the cache-busted URL,
+    // not the real one, so caching it would poison the next real revalidation.
+    return retryPayload;
+  }
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
@@ -244,6 +269,12 @@ async function releaseWakeLockOverride() {
 
 async function updateReaSettings(payload) {
   return request('/api/v1/settings', 'POST', payload);
+}
+
+/** GET /api/v1/settings — app/gateway settings (charging mode, night mode, flow
+ *  multipliers, gateway mode, log level, …). Pairs with updateReaSettings above. */
+async function fetchSettings() {
+  return request('/api/v1/settings');
 }
 
 function connectWaterLevels() {
@@ -535,6 +566,31 @@ async function fetchMachineInfo() {
 }
 
 /**
+ * GET /api/v1/info
+ * The GATEWAY's own build, not the machine's — the version string the Decent
+ * app shows about itself.
+ * @returns {Promise<{version: string, buildNumber: string, fullVersion: string, commitShort: string, buildTime: string}>}
+ */
+async function fetchGatewayInfo() {
+  return request("/api/v1/info");
+}
+
+/**
+ * GET /api/v1/update
+ * Whether a newer gateway build exists. `phase` is an open set the gateway
+ * defines ("available" and "upToDate" are the two observed); treat anything
+ * else as "nothing to report" rather than mapping it.
+ *
+ * READ-ONLY on purpose: the bridge exposes no documented way to START an
+ * update, and guessing a write endpoint would risk kicking off a real
+ * download on someone's machine. Installing stays in the Decent app.
+ * @returns {Promise<{phase: string, currentVersion: string, latestVersion: string, releaseNotes: string}>}
+ */
+async function fetchAppUpdate() {
+  return request("/api/v1/update");
+}
+
+/**
  * PUT/POST /api/v1/scale/tare
  * Some bridge versions expose either PUT or POST.
  * @throws {Error} on non-OK HTTP response for both methods
@@ -613,6 +669,16 @@ async function fetchMachineSettings() {
 /** POST /api/v1/machine/settings */
 async function updateMachineSettings(payload) {
   return request('/api/v1/machine/settings', 'POST', payload);
+}
+
+/** GET /api/v1/machine/settings/advanced — heater/flow calibration. */
+async function fetchMachineSettingsAdvanced() {
+  return request('/api/v1/machine/settings/advanced');
+}
+
+/** POST /api/v1/machine/settings/advanced */
+async function updateMachineSettingsAdvanced(payload) {
+  return request('/api/v1/machine/settings/advanced', 'POST', payload);
 }
 
 /** GET /api/v1/presence/schedules */
@@ -822,6 +888,47 @@ async function deleteGrinder(id) {
   }
 }
 
+/** GET /api/v1/devices — every known machine/scale, connected or not. */
+async function fetchDevices() {
+  return request("/api/v1/devices");
+}
+
+/** GET /api/v1/devices/scan — start a BLE scan (fire-and-forget on the gateway). */
+async function scanDevices() {
+  return request("/api/v1/devices/scan");
+}
+
+/** PUT /api/v1/devices/connect?deviceId={id} */
+async function connectDevice(deviceId) {
+  return request(`/api/v1/devices/connect?deviceId=${encodeURIComponent(deviceId)}`, "PUT");
+}
+
+/** PUT /api/v1/devices/disconnect?deviceId={id} — symmetric with connect.
+ *  (The old DELETE /api/v1/devices/{id} route does not exist — it 404s.) */
+async function disconnectDevice(deviceId) {
+  return request(`/api/v1/devices/disconnect?deviceId=${encodeURIComponent(deviceId)}`, "PUT");
+}
+
+/** GET /api/v1/plugins */
+async function fetchPlugins() {
+  return request("/api/v1/plugins");
+}
+
+/** POST /api/v1/plugins/{id}/enable | /disable */
+async function setPluginEnabled(id, enabled) {
+  return request(`/api/v1/plugins/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`, "POST");
+}
+
+/** GET /api/v1/plugins/{id}/settings */
+async function fetchPluginSettings(id) {
+  return request(`/api/v1/plugins/${encodeURIComponent(id)}/settings`);
+}
+
+/** POST /api/v1/plugins/{id}/settings */
+async function updatePluginSettings(id, payload) {
+  return request(`/api/v1/plugins/${encodeURIComponent(id)}/settings`, "POST", payload);
+}
+
 /** GET /api/v1/store/{namespace}/{key} */
 async function getStoreValue(namespace, key) {
   return request(pathWithId(`/api/v1/store/${encodeURIComponent(namespace)}`, key));
@@ -851,6 +958,8 @@ window.NSXApi = {
   setMachineState,
   fetchCurrentWorkflow,
   fetchMachineInfo,
+  fetchGatewayInfo,
+  fetchAppUpdate,
   pushWorkflow,
   pushSteamSettings,
   pushHotwaterSettings,
@@ -876,6 +985,17 @@ window.NSXApi = {
   requestWakeLockOverride,
   releaseWakeLockOverride,
   updateReaSettings,
+  fetchSettings,
+  fetchMachineSettingsAdvanced,
+  updateMachineSettingsAdvanced,
+  fetchDevices,
+  scanDevices,
+  connectDevice,
+  disconnectDevice,
+  fetchPlugins,
+  setPluginEnabled,
+  fetchPluginSettings,
+  updatePluginSettings,
   deleteShotById,
   updateShotRecord,
   updateShotMetadata,

@@ -22,7 +22,10 @@
     return;
   }
 
-  const STORE_NAMESPACE = "NSX";
+  // Read per call, never captured: a skin claims its namespace
+  // (NSXCore.setStoreNamespace) before the bootstrap sequence runs, so a
+  // module-load-time const would freeze the default in place.
+  const ns = () => NSXCore.getStoreNamespace();
   // Settings used to live in one opaque "ui-settings" blob. That made every
   // write a full-blob replace, so a stale tab writing any single field (e.g.
   // nsx_last_recipe_id as a side effect of selecting a recipe) silently
@@ -32,8 +35,14 @@
   // distinguishes them from the namespace's other keys (recipes,
   // profile-favorites) when reading the whole namespace back.
   const LEGACY_BLOB_KEY = "ui-settings";
-  const SETTINGS_PREFIX = "nsx_";
-  const isSettingKey = (k) => typeof k === "string" && k.startsWith(SETTINGS_PREFIX);
+  // Settings keys carry a skin prefix so a whole-namespace read can tell them
+  // apart from the namespace's other keys (recipes, profile-favorites): nsx_
+  // for NSX, nova_ for Nova. BOTH are recognized because the one shared core
+  // round-trips whichever skin's settings live in the store — without nova_,
+  // Nova's skin settings (nova_wakelock, nova_start_tab, …) were written to the
+  // gateway but dropped again by loadStore, so they never survived a reload.
+  const SETTINGS_PREFIXES = ["nsx_", "nova_"];
+  const isSettingKey = (k) => typeof k === "string" && SETTINGS_PREFIXES.some((p) => k.startsWith(p));
   const LEGACY_STORAGE_KEYS = [
     "nsx_steam_presets",
     "nsx_steam_active_preset",
@@ -92,11 +101,11 @@
     let toWrite = ours;
     if (MERGEABLE_KEYS.has(key) && isPlainObject(ours) && typeof getStoreValue === "function") {
       try {
-        const server = await getStoreValue(STORE_NAMESPACE, key); // single-key GET is always fresh
+        const server = await getStoreValue(ns(), key); // single-key GET is always fresh
         if (isPlainObject(server)) toWrite = threeWayMerge(settingsBase[key], ours, server);
       } catch { /* fall back to writing ours */ }
     }
-    await setStoreValue(STORE_NAMESPACE, key, toWrite);
+    await setStoreValue(ns(), key, toWrite);
     // Base tracks what THIS client last synced (ours), so a field we never
     // changed keeps deferring to the server on the next merge.
     settingsBase[key] = clone(ours);
@@ -122,6 +131,23 @@
       pendingKeys.add(key);
     }
     scheduleStorePersist();
+  }
+
+  /**
+   * Remove a key entirely — locally AND on the gateway via the store DELETE
+   * endpoint. Use this instead of patchStore({ key: null }) to clear a key:
+   * POSTing a null value makes the gateway store return 500 (no Allow-Origin on
+   * the error, so the browser also reports a CORS failure). Best-effort network
+   * side; the local removal always happens.
+   */
+  async function deleteStore(key) {
+    delete storeSettings[key];
+    delete settingsBase[key];
+    pendingKeys.delete(key);
+    const { deleteStoreValue } = api();
+    if (typeof deleteStoreValue === "function") {
+      try { await deleteStoreValue(ns(), key); } catch { /* best-effort */ }
+    }
   }
 
   /** Replace the store's contents with `data` in place (no persist, no reassign). */
@@ -209,7 +235,7 @@
     try {
       let blob = null;
       try {
-        const stored = await getStoreValue(STORE_NAMESPACE, LEGACY_BLOB_KEY);
+        const stored = await getStoreValue(ns(), LEGACY_BLOB_KEY);
         if (stored && typeof stored === "object") blob = stored;
       } catch {
         // missing blob is expected once migrated / on first run
@@ -224,10 +250,10 @@
       }
 
       for (const [key, value] of Object.entries(merged)) {
-        await setStoreValue(STORE_NAMESPACE, key, value);
+        await setStoreValue(ns(), key, value);
       }
       if (blob && typeof deleteStoreValue === "function") {
-        try { await deleteStoreValue(STORE_NAMESPACE, LEGACY_BLOB_KEY); } catch { /* best-effort */ }
+        try { await deleteStoreValue(ns(), LEGACY_BLOB_KEY); } catch { /* best-effort */ }
       }
       removeLegacyLocalStorageValues();
       console.debug("Store migrated to per-field keys");
@@ -245,22 +271,22 @@
   async function loadStore() {
     const { getStoreNamespace, getStoreValue } = api();
 
-    let ns = null;
+    let namespaceData = null;
     if (typeof getStoreNamespace === "function") {
-      try { ns = await getStoreNamespace(STORE_NAMESPACE); } catch { ns = null; }
+      try { namespaceData = await getStoreNamespace(ns()); } catch { namespaceData = null; }
     }
 
-    if (ns && typeof ns === "object") {
+    if (namespaceData && typeof namespaceData === "object") {
       // Legacy blob (if a pre-migration write still exists) forms the base;
       // per-field nsx_* keys win over it.
-      const merged = Object.assign({}, pickSettings(ns[LEGACY_BLOB_KEY] || {}), pickSettings(ns));
+      const merged = Object.assign({}, pickSettings(namespaceData[LEGACY_BLOB_KEY] || {}), pickSettings(namespaceData));
       if (!Object.keys(merged).length) return null;
       return replaceStore(merged);
     }
 
     // Fallback: no namespace endpoint — read the legacy blob directly.
     if (typeof getStoreValue === "function") {
-      const data = await getStoreValue(STORE_NAMESPACE, LEGACY_BLOB_KEY).catch(() => null);
+      const data = await getStoreValue(ns(), LEGACY_BLOB_KEY).catch(() => null);
       if (data && typeof data === "object") return replaceStore(pickSettings(data));
     }
     return null;
@@ -269,6 +295,7 @@
   NSXCore.register({
     getStore: () => storeSettings,
     patchStore,
+    deleteStore,
     replaceStore,
     threeWayMerge,
     saveActivePresetName,

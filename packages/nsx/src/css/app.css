@@ -3609,10 +3609,46 @@ html, body {
   pointer-events: none;
 }
 
+.workflows-search-clear {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* A 40px target on a machine you operate with wet hands. */
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--c-label-3, rgba(255, 255, 255, 0.45));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.workflows-search-clear svg {
+  width: 16px;
+  height: 16px;
+}
+
+.workflows-search-clear:active {
+  color: var(--c-label);
+}
+
+/* The history toolbar's field is shorter than the recipe one. */
+.history-search-wrap .workflows-search-clear {
+  width: 34px;
+  height: 34px;
+  right: 2px;
+}
+
+/* Right padding leaves room for the clear button, which overlays the field's
+   trailing edge. Kept reserved whether or not the button is showing, so the
+   text does not reflow the moment a query is typed. */
 .workflows-search {
   flex: 1;
   min-width: 0;
-  padding: 12px 14px 12px 40px;
+  padding: 12px 44px 12px 40px;
   border: 0.5px solid rgba(255, 255, 255, 0.09);
   border-radius: 10px;
   background: rgba(28, 28, 30, 0.92);
@@ -3775,6 +3811,28 @@ html, body {
 
 .recipe-list-shell {
   position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workflow-filter-notice {
+  flex: none;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--accent, #c98a4b);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent, #c98a4b);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recipe-list-shell > .recipe-list-scroll {
   flex: 1;
   min-height: 0;
 }
@@ -8599,10 +8657,12 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   flex-shrink: 0;
 }
 
+/* Trailing room reserved for the clear button (see .workflows-search-clear,
+   reused here), whether or not it is currently showing. */
 .history-search-input {
   width: 100%;
   height: 36px;
-  padding: 0 12px 0 34px;
+  padding: 0 38px 0 34px;
   background: rgba(255, 255, 255, 0.07);
   border: 0.5px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
@@ -10472,6 +10532,20 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 .field-picker-input-wrap {
   padding: 10px 14px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Unit next to the value, so a numeric field says what it wants (grams,
+   seconds) instead of leaving the user to guess from the label behind the
+   sheet. Sized to sit level with the input's own text. */
+.field-picker-unit {
+  flex: none;
+  font-size: var(--fs-input);
+  color: var(--c-label-secondary, rgba(255, 255, 255, 0.55));
+  white-space: nowrap;
 }
 
 .field-picker-input {
@@ -10494,39 +10568,63 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
   color: var(--c-label-3);
 }
 
+/* Suggestions sit in ONE horizontal row that scrolls sideways, like a phone
+   keyboard's suggestion strip. As a vertical list its height tracked the number
+   of matches, so filtering from two entries to one to none resized the sheet —
+   and since the sheet is bottom-anchored, the keyboard moved under the user's
+   fingers mid-word. A single row cannot change height, shows more candidates at
+   once, and leaves room the 5-row keyboard needs on the DE1's 630px screen. */
 .field-picker-list {
-  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 8px;
-  max-height: 108px;
-  width: 50%;
-  margin: 0 auto;
+  scrollbar-width: none;
+  padding: 0 12px 8px;
+}
+
+.field-picker-list::-webkit-scrollbar {
+  display: none;
 }
 
 .field-picker-list:empty {
   display: none;
 }
 
+/* Height is reserved for as long as the picker is open, decided once when it
+   opens — so a filter that matches nothing still cannot move the keyboard.
+   Pickers opened without suggestions stay compact (their list is always empty). */
+.field-picker-sheet.has-suggestions .field-picker-list,
+.field-picker-sheet.has-suggestions .field-picker-list:empty {
+  display: flex;
+  height: 56px;
+}
+
 .field-picker-option {
-  display: block;
-  width: 100%;
-  padding: 14px 16px;
-  text-align: center;
+  flex: none;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 10px 16px;
+  border-radius: 999px;
   font-size: var(--fs-input);
   color: var(--c-label);
-  background: none;
+  background: rgba(255, 255, 255, 0.1);
   border: none;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.06);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 .field-picker-option:active {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .field-picker-option.is-selected {
-  color: var(--c-accent, #0a84ff);
+  color: #fff;
+  background: var(--c-accent, #0a84ff);
   font-weight: 600;
 }
 
@@ -11345,33 +11443,6 @@ body.hide-recipe-card-rating #workflow-list .recipe-rating {
 .pwa-standalone .home-screen {
   padding-top: max(calc(env(safe-area-inset-top) + 16px), 60px);
   padding-bottom: calc(max(env(safe-area-inset-bottom, 8px), 8px) + 200px);
-}
-
-/* ─── Text Picker Modal ──────────────────────────────── */
-.text-picker-sheet {
-  width: min(320px, 90vw);
-}
-
-.text-picker-body {
-  padding: 20px 16px 24px;
-}
-
-.text-picker-input {
-  width: 100%;
-  background: var(--c-fill-2, rgba(255,255,255,0.12));
-  border: none;
-  border-radius: 10px;
-  padding: 14px 16px;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--c-label);
-  text-align: center;
-  outline: none;
-  font-family: inherit;
-}
-
-.text-picker-input:focus {
-  background: var(--c-fill-3, rgba(255,255,255,0.18));
 }
 
 .flush-machine-settings {

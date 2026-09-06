@@ -85,6 +85,10 @@ export interface ScheduleState {
 
 export interface StoreSettings { [k: string]: any; }
 
+/** GET /api/v1/display -> platformSupported. A `false` means the gateway's host
+ *  cannot drive that at all, so the matching control should be hidden. */
+export interface DisplaySupport { brightness: boolean; wakeLock: boolean; }
+
 // ── Event map (NSXCore.on) ────────────────────────────────────────────────────
 
 /**
@@ -133,6 +137,10 @@ export interface NSXCoreEventMap {
   scheduleChanged: ScheduleState;
   grindersLoaded: { grinders: any[] };
   beansLoaded: { beans: any[] };
+  settingsLoaded: { app: Record<string, any>; machine: Record<string, any>; advanced: Record<string, any> };
+  devicesLoaded: { devices: any[] };
+  pluginsLoaded: { plugins: any[] };
+  displaySupportLoaded: DisplaySupport;
   toast: string;
 }
 
@@ -146,6 +154,14 @@ export interface NSXCore {
   emit<K extends keyof NSXCoreEventMap>(name: K, payload: NSXCoreEventMap[K]): void;
   emit(name: string, payload?: any): void;
   register(impl: Record<string, any>): NSXCore;
+
+  /** The gateway KV-store namespace this skin persists into (settings, recipe
+   * library, profile favorites). Defaults to "NSX". */
+  getStoreNamespace(): string;
+  /** Claim a namespace for this skin — call BEFORE migrateLegacyStore/loadStore/
+   * loadRecipes, or those read/write whatever namespace was already claimed
+   * (or the "NSX" default), silently sharing data with another skin. */
+  setStoreNamespace(ns: string): string;
 
   // store.js
   getStore(): StoreSettings;
@@ -179,6 +195,61 @@ export interface NSXCore {
   buildWorkflowItemsFromShots(shotItems: ShotRecord[], ratingCache?: Map<string, RatingResult>): DisplayWorkflow[];
   computeMaxRating(shotList: ShotRecord[]): RatingResult;
   findShotsForWorkflow(workflow: Partial<DisplayWorkflow>, source: ShotRecord[]): ShotRecord[];
+  /** 0-100 `annotations.enjoyment` (the real API scale) -> 0-5 whole stars. */
+  enjoymentToStars(enjoyment: number | null | undefined): number;
+  /** 0-5 stars -> the 0-100 `annotations.enjoyment` value the API stores. */
+  starsToEnjoyment(stars: number | null | undefined): number;
+  resolveActualDose(shot: ShotRecord | any): number | null;
+  resolveActualYield(fullShot: ShotRecord | any): { value: number | null; unit: "g" | "ml"; estimated: boolean };
+  resolveShotVolumeAndWeight(fullShot: ShotRecord | any): { volume: number | null; weight: number | null };
+  updateVolumeCalibration(existingCal: { factor: number; samples: number[] } | null | undefined, fullShot: ShotRecord | any): { factor: number; samples: number[] };
+  getBatchAge(iso: string | null | undefined): string;
+
+  // settings.js
+  getAppSettings(): Record<string, any>;
+  getMachineSettings(): Record<string, any>;
+  getAdvancedSettings(): Record<string, any>;
+  loadAppSettings(): Promise<Record<string, any>>;
+  loadMachineSettings(): Promise<Record<string, any>>;
+  loadAdvancedSettings(): Promise<Record<string, any>>;
+  saveAppSetting(key: string, value: any): Promise<any>;
+  saveMachineSetting(key: string, value: any): Promise<any>;
+  saveAdvancedSetting(key: string, value: any): Promise<any>;
+
+  // devices.js
+  getDevices(): any[];
+  loadDevices(): Promise<any[]>;
+  scanForDevices(): Promise<any>;
+  connectToDevice(deviceId: string): Promise<any>;
+  disconnectDevice(deviceId: string): Promise<any>;
+
+  // plugins.js
+  getPlugins(): any[];
+  getPluginSettings(id: string): Record<string, any>;
+  loadPlugins(): Promise<any[]>;
+  setPluginEnabled(id: string, enabled: boolean): Promise<void>;
+  loadPluginSettings(id: string): Promise<Record<string, any>>;
+  savePluginSetting(id: string, key: string, value: any): Promise<any>;
+
+  // display.js
+  getDisplaySupport(): DisplaySupport;
+  loadDisplaySupport(force?: boolean): Promise<DisplaySupport>;
+
+  // profile-render.js (pure)
+  renderProfileSpark(profile: any, opts?: {
+    theme?: "dark" | "light";
+    showXTicks?: boolean;
+    showYTicks?: boolean;
+    showStageLabels?: boolean;
+    legendFontSize?: number;
+    centerLegend?: boolean;
+    lineStrokeWidth?: number;
+    compactMargins?: boolean;
+    showLegend?: boolean;
+    selectedFrameIdx?: number;
+    tickFontSize?: number;
+    emptyLabel?: string;
+  }): string;
 
   // workflow.js
   loadRecipes(): Promise<DisplayWorkflow[]>;
@@ -193,6 +264,7 @@ export interface NSXCore {
   invalidateShotDetails(id: string): void;
   deleteShot(id: string): Promise<void>;
   updateShot(id: string, patch: any): Promise<any>;
+  updateShotWorkflowContext(id: string, ctxPatch: Record<string, any>): Promise<any>;
   updateShotMeta(id: string, patch: any): Promise<any>;
 
   // profile.js
@@ -222,6 +294,15 @@ export interface NSXCore {
   createBean(payload: any): Promise<any>;
   updateBean(id: string, payload: any): Promise<any>;
   deleteBean(id: string): Promise<any>;
+  /** Day-granular roast date ("2026-06-20T09:31:00Z" -> "2026-06-20"); falsy -> null. */
+  normalizeRoastDate(value: string | null | undefined): string | null;
+  /** The non-archived batch roasted on this day (null roastDate = the bean's undated bag). Pure. */
+  findBatchForRoastDate(batches: any[], roastDate: string | null | undefined): any | null;
+  /** Find-or-create the bean with this roaster+name (case-insensitive). */
+  resolveBean(roaster: string, name: string): Promise<any>;
+  /** Find-or-create the bag of `beanId` roasted on `roastDate`. Identity is
+   *  (beanId, roastDate) — the same bag is REUSED across shots, never re-created. */
+  resolveBatch(beanId: string, roastDate: string | null | undefined): Promise<any>;
 
   // schedule.js
   getScheduleState(): ScheduleState;
@@ -326,6 +407,20 @@ export interface NSXApi {
   getStoreValue(namespace: string, key: string): Promise<any>;
   setStoreValue(namespace: string, key: string, value: any): Promise<any>;
   setDisplayBrightness(level: number): Promise<any>;
+  fetchSettings(): Promise<Record<string, any>>;
+  updateReaSettings(payload: Record<string, any>): Promise<any>;
+  fetchMachineSettings(): Promise<Record<string, any>>;
+  updateMachineSettings(payload: Record<string, any>): Promise<any>;
+  fetchMachineSettingsAdvanced(): Promise<Record<string, any>>;
+  updateMachineSettingsAdvanced(payload: Record<string, any>): Promise<any>;
+  fetchDevices(): Promise<any[]>;
+  scanDevices(): Promise<any>;
+  connectDevice(deviceId: string): Promise<any>;
+  disconnectDevice(deviceId: string): Promise<any>;
+  fetchPlugins(): Promise<any[]>;
+  setPluginEnabled(id: string, enabled: boolean): Promise<any>;
+  fetchPluginSettings(id: string): Promise<Record<string, any>>;
+  updatePluginSettings(id: string, payload: Record<string, any>): Promise<any>;
   // …other REST helpers exist; see api.js
   [key: string]: any;
 }

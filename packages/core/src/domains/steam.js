@@ -7,16 +7,20 @@
  * Persists through the core store; pushes steamSettings to the machine.
  *
  * Registered on NSXCore:
- *   Selectors: getSteamTemp(), getSteamFlow(), getSteamDuration(), getSteamPresets(),
- *              getActiveSteamPreset(), isSteamEnabled(), getSteamCalibration(),
+ *   Selectors: getSteamTemp(), getSteamFlow(), getSteamDuration(),
+ *              getEffectiveSteamDuration() ← dialed value, or STEAM_SAFETY_MAX when timer off,
+ *              getSteamPresets(),
+ *              getActiveSteamPreset(), isSteamEnabled(), isSteamTimerEnabled(),
+ *              getSteamCalibration(),
  *              getPitcherPresets(), getActivePitcherIndex(), getSbwCalibFactor()
  *   Commands:  selectSteamPreset(name), deactivateSteamPreset(),
  *              setSteamTemp(v), setSteamFlow(v), setSteamDuration(v),
  *              setSteamDurationRaw(v),   ← SBW override: no deactivate, no push
- *              setSteamEnabled(enabled), setSteamPresets(next),
+ *              setSteamEnabled(enabled), setSteamTimerEnabled(enabled),
+ *              setSteamPresets(next),
  *              setSteamCalibration(calib), setPitcherPresets(next),
  *              setActivePitcher(idx), applySteamSnapshot(snap), hydrateSteam()
- *   Events:    'steamChanged'   -> { temp, flow, duration, active, presets, enabled }
+ *   Events:    'steamChanged'   -> { temp, flow, duration, active, presets, enabled, timerEnabled }
  *              'pitcherChanged' -> { pitcherPresets, activePitcherIndex }
  */
 (function () {
@@ -49,18 +53,35 @@
   let temp              = presets[active].temp;
   let flow              = presets[active].flow;
   let duration          = presets[active].duration ?? 60;
-  let enabled           = true;
+  let enabled           = true;   // MASTER steam power (off -> temp/flow 0, no steam at all)
+  // Independent of `enabled`: the auto-stop TIMER. Off means "steam until the
+  // user releases the lever" — but pushed as the STEAM_SAFETY_MAX cap, never
+  // literally unbounded, so a forgotten lever still auto-stops. The dialed
+  // seconds value is kept so toggling back on restores it. NSX has no such
+  // toggle, so it stays true there and duration is pushed unchanged.
+  let timerEnabled      = true;
   let calibration       = JSON.parse(JSON.stringify(CALIB_DEFAULTS));
   let pitcherPresets    = PITCHER_DEFAULTS.map(p => ({ ...p }));
   let activePitcherIndex = 0;
 
-  const clampTemp     = (v) => Math.min(165, Math.max(100, v));
+  // Hard safety ceiling on how long the wand ever steams. Also the duration
+  // pushed when the auto-stop timer is OFF: the machine still auto-stops here
+  // rather than running until the lever is released.
+  const STEAM_SAFETY_MAX = 90;
+
+  const clampTemp     = (v) => Math.min(170, Math.max(100, v));
   const clampFlow     = (v) => Math.round(Math.min(4.0, Math.max(0.5, v)) * 10) / 10;
-  const clampDuration = (v) => Math.min(180, Math.max(1, v));
+  const clampDuration = (v) => Math.min(STEAM_SAFETY_MAX, Math.max(1, v));
 
   function emitChanged() {
-    NSXCore.emit("steamChanged", { temp, flow, duration, active, presets, enabled });
+    NSXCore.emit("steamChanged", { temp, flow, duration, active, presets, enabled, timerEnabled });
   }
+
+  // The duration actually sent to the machine: the dialed value when the timer
+  // is on, the STEAM_SAFETY_MAX cap when it's off. Never 0/indefinite — the
+  // wand always has an auto-stop. The local `duration` is never overwritten,
+  // so the seconds the user set survive a timer off/on toggle.
+  const effectiveDuration = () => (timerEnabled ? parseFloat(duration) : STEAM_SAFETY_MAX);
 
   function emitPitcherChanged() {
     NSXCore.emit("pitcherChanged", { pitcherPresets, activePitcherIndex });
@@ -69,7 +90,7 @@
   // ── Push helpers ─────────────────────────────────────────────────────────
   function pushAll() {
     NSXCore.debounced("steam", () =>
-      NSXCore.push({ steamSettings: { targetTemperature: parseFloat(temp), flow: parseFloat(flow), duration: parseFloat(duration) } }));
+      NSXCore.push({ steamSettings: { targetTemperature: parseFloat(temp), flow: parseFloat(flow), duration: effectiveDuration() } }));
   }
   function pushTemp() {
     NSXCore.debounced("steamTemp", () =>
@@ -81,7 +102,7 @@
   }
   function pushDuration() {
     NSXCore.debounced("steamDuration", () =>
-      NSXCore.push({ steamSettings: { duration: parseFloat(duration) } }));
+      NSXCore.push({ steamSettings: { duration: effectiveDuration() } }));
   }
   function pushEnabled() {
     const pushSteamSettings = (window.NSXApi || {}).pushSteamSettings;
@@ -146,6 +167,15 @@
     NSXCore.patchStore({ nsx_steam_enabled: enabled });
     emitChanged();
     pushEnabled();
+  }
+
+  // The auto-stop timer on/off. Off pushes duration 0 (steam runs until the
+  // lever is released) without touching temp, flow, or the active preset.
+  function setSteamTimerEnabled(en) {
+    timerEnabled = Boolean(en);
+    NSXCore.patchStore({ nsx_steam_timer_enabled: timerEnabled });
+    emitChanged();
+    pushDuration();
   }
 
   function setSteamPresets(next) {
@@ -250,6 +280,7 @@
     }
 
     if (typeof s.nsx_steam_enabled === "boolean") enabled = s.nsx_steam_enabled;
+    if (typeof s.nsx_steam_timer_enabled === "boolean") timerEnabled = s.nsx_steam_timer_enabled;
 
     const state = presets[active] ?? presets.normal;
     temp     = state.temp;
@@ -262,9 +293,11 @@
     getSteamTemp:           () => temp,
     getSteamFlow:           () => flow,
     getSteamDuration:       () => duration,
+    getEffectiveSteamDuration: effectiveDuration,
     getSteamPresets:        () => presets,
     getActiveSteamPreset:   () => active,
     isSteamEnabled:         () => enabled,
+    isSteamTimerEnabled:    () => timerEnabled,
     getSteamCalibration:    () => calibration,
     getPitcherPresets:      () => pitcherPresets,
     getActivePitcherIndex:  () => activePitcherIndex,
@@ -277,6 +310,7 @@
     setSteamDuration,
     setSteamDurationRaw,
     setSteamEnabled,
+    setSteamTimerEnabled,
     setSteamPresets,
     setSteamCalibration,
     setPitcherPresets,

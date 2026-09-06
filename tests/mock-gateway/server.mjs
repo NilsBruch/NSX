@@ -11,7 +11,8 @@
  *   - GET /store/<ns>?full=1 sends an ETag
  *   - GET /store/<ns>/<key> does NOT  ← the quirk behind issue #3
  *
- * Run: npm run dev:mock   (runs sync-core first, then this)
+ * Run: npm run dev:gateway   (runs sync-core first, then this)
+ *      npm run dev:nsx       (same server, --static: skin only, no mock API)
  */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -22,7 +23,12 @@ import { WebSocketServer } from "ws";
 
 import * as fx from "./fixtures.mjs";
 
-const PORT = Number(process.env.PORT || 8080);
+// --static serves the skin only, leaving the API to whoever owns port 8080 —
+// normally the real Decent app. core/config.js derives the gateway host from
+// location.hostname but pins the port to 8080, so a skin served from :5174
+// reaches the real machine with no ?gateway= override. Mirrors dev:nova.
+const STATIC_ONLY = process.argv.includes("--static");
+const PORT = Number(process.env.PORT || (STATIC_ONLY ? 5174 : 8080));
 const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "packages", "nsx", "src");
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -60,6 +66,7 @@ const state = {
   beanBatches: structuredClone(fx.beanBatches),
   grinders: structuredClone(fx.grinders),
   shots: structuredClone(fx.shots),
+  shotDetails: structuredClone(fx.shotDetails),
   store: structuredClone(fx.store),
   workflow: structuredClone(fx.currentWorkflow),
   // Simulated shot progression
@@ -208,9 +215,13 @@ function routeApi(req, res, url, body) {
     const offset = Number(q.get("offset") ?? 0);
     return jsonEtag({ items: state.shots.slice(offset, offset + limit), total: state.shots.length });
   }
+  // Only THIS endpoint carries measurements — the list above does not, exactly
+  // as the real gateway behaves. Serving fuller shots from the list would let
+  // a skin read `measurements` off a list shot and still work here while
+  // failing against a real machine.
   if (path.startsWith("/api/v1/shots/") && method === "GET") {
     const id = decodeURIComponent(path.split("/")[4]);
-    const s = state.shots.find((x) => x.id === id);
+    const s = state.shotDetails[id];
     return s ? json(s) : json({ message: "not found" }, 404);
   }
   if (path.startsWith("/api/v1/shots/") && method === "PUT") {
@@ -218,12 +229,17 @@ function routeApi(req, res, url, body) {
     const s = state.shots.find((x) => x.id === id);
     if (!s) return json({ message: "not found" }, 404);
     // The real API merges `extras` at field level.
-    if (body?.annotations) {
-      s.annotations = {
-        ...s.annotations,
+    const merge = (target) => {
+      if (!target?.annotations && !body?.annotations) return;
+      target.annotations = {
+        ...target.annotations,
         ...body.annotations,
-        extras: { ...s.annotations?.extras, ...body.annotations?.extras },
+        extras: { ...target.annotations?.extras, ...body.annotations?.extras },
       };
+    };
+    if (body?.annotations) {
+      merge(s);
+      if (state.shotDetails[id]) merge(state.shotDetails[id]);
     }
     return json(s);
   }
@@ -231,6 +247,7 @@ function routeApi(req, res, url, body) {
     const id = decodeURIComponent(path.split("/")[4]);
     const i = state.shots.findIndex((x) => x.id === id);
     if (i >= 0) state.shots.splice(i, 1);
+    delete state.shotDetails[id];
     return noContent();
   }
 
@@ -296,7 +313,7 @@ async function serveStatic(url, res) {
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
-  if (!url.pathname.startsWith("/api/")) return void serveStatic(url, res);
+  if (STATIC_ONLY || !url.pathname.startsWith("/api/")) return void serveStatic(url, res);
 
   const chunks = [];
   req.on("data", (c) => chunks.push(c));
@@ -328,6 +345,7 @@ const WS_PATHS = [
 const wss = new Map(WS_PATHS.map((p) => [p, new WebSocketServer({ noServer: true })]));
 
 server.on("upgrade", (req, socket, head) => {
+  if (STATIC_ONLY) return void socket.destroy();
   const { pathname } = new URL(req.url, `http://localhost:${PORT}`);
   const target = wss.get(pathname);
   if (!target) return void socket.destroy();
@@ -352,18 +370,26 @@ wss.get("/ws/v1/scale/snapshot").on("connection", (ws) => ws.send(JSON.stringify
 wss.get("/ws/v1/machine/waterLevels").on("connection", (ws) => ws.send(JSON.stringify(fx.waterLevels)));
 
 // Live streams.
-setInterval(() => broadcast("/ws/v1/machine/snapshot", snapshot()), 250);
-setInterval(() => {
-  const flowing = FLOWING.has(state.machine.state) && state.shotStartedAt > 0;
-  const elapsed = flowing ? (Date.now() - state.shotStartedAt) / 1000 : 0;
-  broadcast("/ws/v1/scale/snapshot", {
-    weight: flowing ? Math.round(elapsed * 1.2 * 10) / 10 : 0,
-    weightFlow: flowing ? 1.2 : 0,
-  });
-}, 250);
-setInterval(() => broadcast("/ws/v1/machine/waterLevels", fx.waterLevels), 5000);
+if (!STATIC_ONLY) {
+  setInterval(() => broadcast("/ws/v1/machine/snapshot", snapshot()), 250);
+  setInterval(() => {
+    const flowing = FLOWING.has(state.machine.state) && state.shotStartedAt > 0;
+    const elapsed = flowing ? (Date.now() - state.shotStartedAt) / 1000 : 0;
+    broadcast("/ws/v1/scale/snapshot", {
+      weight: flowing ? Math.round(elapsed * 1.2 * 10) / 10 : 0,
+      weightFlow: flowing ? 1.2 : 0,
+    });
+  }, 250);
+  setInterval(() => broadcast("/ws/v1/machine/waterLevels", fx.waterLevels), 5000);
+}
 
 server.listen(PORT, () => {
+  if (STATIC_ONLY) {
+    console.log(`NSX skin on http://localhost:${PORT}`);
+    console.log(`  web root: ${WEB_ROOT}`);
+    console.log(`  gateway:  http://localhost:8080 (whatever owns that port)`);
+    return;
+  }
   console.log(`Mock gateway on http://localhost:${PORT}`);
   console.log(`  web root: ${WEB_ROOT}`);
   console.log(`  PUT /api/v1/machine/state/espresso to start a simulated shot`);

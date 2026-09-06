@@ -170,6 +170,8 @@ const TRANSLATIONS = {
     'recipe.filterAria':   'Filter',
     'recipe.addAria':      'Rezept hinzufügen',
     'recipe.listAria':     'Verfügbare Rezepte',
+    'recipe.filterNotice': '{shown} von {total} Rezepten · Filter aktiv — tippen zum Zurücksetzen',
+    'recipe.clearSearchAria': 'Suche löschen',
 
     // History panel
     'history.search':      'Röster, Bohne, Mühle, Profil…',
@@ -469,6 +471,7 @@ const TRANSLATIONS = {
     'datePicker.clear':    'Datum entfernen',
     'datePicker.month':    'Monat',
     'datePicker.year':     'Jahr',
+    'datePicker.calendarAria': 'Kalender',
 
     // Grinder list
     'grinderList.title':   'Mühlen',
@@ -532,6 +535,7 @@ const TRANSLATIONS = {
     'shot.stopWeight':     'Zielgewicht erreicht · {weight} g',
     'shot.stopVolume':     'Zielvolumen erreicht',
     'shot.stopProfile':    'Profil beendet',
+    'shot.notRecorded':    'Shot nicht in der Historie gefunden',
     'shot.extraction':     'Extraktion',
 
 
@@ -544,6 +548,9 @@ const TRANSLATIONS = {
     'cleaning.running.wait':  'Warte auf Maschine…',
     'cleaning.stepProgress':  'Schritt {x} von {y}',
     'cleaning.skipStep':      'Step ↷',
+    'cleaning.rinse.text':    'Blindsieb ausspülen und ohne Reinigungspulver wieder einsetzen.',
+    'cleaning.finalFlush.title': 'Klarspülen',
+    'cleaning.finalFlush.text':  'Siebträger abnehmen und so oft spülen, bis das Wasser klar ist.',
     'cleaning.done.title':    'Reinigung fertig',
     'cleaning.done.text':     'Reinigung abgeschlossen. Auf Fertig drücken wenn du bereit bist.',
 
@@ -583,6 +590,7 @@ const TRANSLATIONS = {
     'toast.shotDeleteFailed': 'Shot konnte nicht gelöscht werden',
     'toast.shotsDeleteFailed': 'Shots konnten nicht gelöscht werden',
     'toast.recipeDeleted':    'Rezept gelöscht',
+    'toast.recipeSelectionLost': 'Rezeptliste hat sich geändert — Auswahl aufgehoben, bitte neu wählen',
     'toast.deleting':         'Wird gelöscht…',
     'toast.profileDeleted':   'Profil gelöscht',
     'toast.profileApiMissing': 'Profile API nicht verfügbar',
@@ -645,6 +653,14 @@ const TRANSLATIONS = {
     'toast.profilePurged':    '„{name}" endgültig gelöscht',
     'toast.profileRestored':  '„{name}" wiederhergestellt',
     'toast.recipeStateError': 'Rezept kann im State \'{state}\' nicht gesetzt werden',
+    'toast.recipeQueued':     'Wird angewendet, sobald die Maschine aufwacht',
+    'shotStop.targetWeight':  'Shot beendet — Zielgewicht erreicht',
+    'shotStop.targetVolume':  'Shot beendet — Zielvolumen erreicht',
+    'shotStop.apiStop':       'Shot beendet — manuell gestoppt',
+    'shotStop.appStop':       'Shot beendet — von der App gestoppt',
+    'shotStop.machineEnded':  'Shot beendet — von der Maschine beendet',
+    'shotStop.error':         'Shot beendet — wegen eines Fehlers gestoppt',
+    'shotStop.generic':       'Shot beendet',
     'toast.beanUpdated':      '{roaster} · {name} aktualisiert',
     'toast.beanAdded':        '{roaster} · {name} hinzugefügt',
     'toast.beanSaveFailed':   'Bohne konnte nicht gespeichert werden',
@@ -839,6 +855,8 @@ const TRANSLATIONS = {
     'recipe.filterAria':   'Filter',
     'recipe.addAria':      'Add recipe',
     'recipe.listAria':     'Available recipes',
+    'recipe.filterNotice': '{shown} of {total} recipes · filter active — tap to clear',
+    'recipe.clearSearchAria': 'Clear search',
 
     // History panel
     'history.search':      'Roaster, bean, grinder, profile…',
@@ -1138,6 +1156,7 @@ const TRANSLATIONS = {
     'datePicker.clear':    'Remove date',
     'datePicker.month':    'Month',
     'datePicker.year':     'Year',
+    'datePicker.calendarAria': 'Calendar',
 
     // Grinder list
     'grinderList.title':   'Grinders',
@@ -1201,6 +1220,7 @@ const TRANSLATIONS = {
     'shot.stopWeight':     'Target weight reached · {weight} g',
     'shot.stopVolume':     'Target volume reached',
     'shot.stopProfile':    'Profile finished',
+    'shot.notRecorded':    'Shot not found in history',
     'shot.extraction':     'Extraction',
 
 
@@ -1213,6 +1233,9 @@ const TRANSLATIONS = {
     'cleaning.running.wait':  'Waiting for machine…',
     'cleaning.stepProgress':  'Step {x} of {y}',
     'cleaning.skipStep':      'Step ↷',
+    'cleaning.rinse.text':    'Rinse the blind basket and reinsert it without cleaning powder.',
+    'cleaning.finalFlush.title': 'Final rinse',
+    'cleaning.finalFlush.text':  'Remove the portafilter and flush as often as it takes until the water runs clear.',
     'cleaning.done.title':    'Cleaning done',
     'cleaning.done.text':     'Cleaning complete. Press Done when you are ready.',
 
@@ -1252,6 +1275,7 @@ const TRANSLATIONS = {
     'toast.shotDeleteFailed': 'Could not delete shot',
     'toast.shotsDeleteFailed': 'Could not delete shots',
     'toast.recipeDeleted':    'Recipe deleted',
+    'toast.recipeSelectionLost': 'Recipe list changed — selection cleared, please pick again',
     'toast.deleting':         'Deleting…',
     'toast.profileDeleted':   'Profile deleted',
     'toast.profileApiMissing': 'Profiles API not available',
@@ -1314,6 +1338,14 @@ const TRANSLATIONS = {
     'toast.profilePurged':    '"{name}" permanently deleted',
     'toast.profileRestored':  '"{name}" restored',
     'toast.recipeStateError': 'Cannot set recipe in state \'{state}\'',
+    'toast.recipeQueued':     'Will apply when the machine wakes',
+    'shotStop.targetWeight':  'Shot ended — target weight reached',
+    'shotStop.targetVolume':  'Shot ended — target volume reached',
+    'shotStop.apiStop':       'Shot ended — stopped manually',
+    'shotStop.appStop':       'Shot ended — stopped by app',
+    'shotStop.machineEnded':  'Shot ended — ended by machine',
+    'shotStop.error':         'Shot ended — stopped due to an error',
+    'shotStop.generic':       'Shot ended',
     'toast.beanUpdated':      '{roaster} · {name} updated',
     'toast.beanAdded':        '{roaster} · {name} added',
     'toast.beanSaveFailed':   'Could not save bean',
@@ -1355,8 +1387,16 @@ function getLang() {
   return _lang;
 }
 
+// BCP 47 tag for the active language, for Intl.* (dates, weekday names,
+// localeCompare). Skins used to inline `getLang() === 'en' ? 'en-US' : 'de-DE'`
+// at every call site, so any site that forgot printed German weekdays in
+// English. One mapping, one place to extend when a language is added.
+function getLocale() {
+  return _lang === 'en' ? 'en-US' : 'de-DE';
+}
+
 // NSXI18n is DOM-free: it provides the dictionary + lookup only. Applying
 // translations to `data-i18n` DOM elements is a skin concern (each skin walks
 // its own DOM / template and calls t()). NSX does this in app.js.
-window.NSXI18n = { t, setLang, getLang };
+window.NSXI18n = { t, setLang, getLang, getLocale };
 })();

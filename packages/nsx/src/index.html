@@ -460,7 +460,12 @@
                       <circle cx="11" cy="11" r="8"></circle>
                       <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input type="text" class="workflows-search" placeholder="Rezepte durchsuchen" data-i18n-placeholder="recipe.search" />
+                    <input type="text" class="workflows-search" placeholder="Rezepte durchsuchen" data-i18n-placeholder="recipe.search" inputmode="none" />
+                    <button type="button" id="btn-workflow-search-clear" class="workflows-search-clear" aria-label="Suche löschen" data-i18n-aria="recipe.clearSearchAria" hidden>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
                   </div>
                   <button class="workflows-btn workflows-btn-filter" id="btn-workflow-filter" aria-label="Filter" data-i18n-aria="recipe.filterAria">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -482,6 +487,7 @@
 
                 <div class="workflows-body">
                   <div id="recipe-list-shell" class="recipe-list-shell workflow-list-shell recipe-fade-bottom">
+                    <button type="button" id="workflow-filter-notice" class="workflow-filter-notice" hidden></button>
                     <div id="recipe-list-scroll" class="recipe-list-scroll workflow-list-scroll">
                       <ul id="workflow-list" class="recipe-list workflow-list" aria-label="Verfügbare Rezepte" data-i18n-aria="recipe.listAria"></ul>
                     </div>
@@ -502,7 +508,12 @@
                   <svg class="history-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                   </svg>
-                  <input type="search" id="history-search" class="history-search-input" placeholder="Röster, Bohne, Mühle, Profil…" data-i18n-placeholder="history.search" autocomplete="off" autocorrect="off" spellcheck="false">
+                  <input type="search" id="history-search" class="history-search-input" placeholder="Röster, Bohne, Mühle, Profil…" data-i18n-placeholder="history.search" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="none">
+                  <button type="button" id="btn-history-search-clear" class="workflows-search-clear" aria-label="Suche löschen" data-i18n-aria="recipe.clearSearchAria" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
                 </div>
                 <button type="button" id="btn-history-view-toggle" class="history-toolbar-btn" aria-label="Ansicht wechseln" data-i18n-aria="history.viewToggleAria">
                   <span id="history-view-toggle-label" data-i18n="history.orderedByRecipe">Nach Rezept sortiert</span>
@@ -858,7 +869,7 @@
       <div class="modal-sheet confirm-sheet">
         <div class="modal-handle"></div>
         <p id="visualizer-import-label" class="confirm-message" data-i18n="profilePicker.visualizerPrompt">Visualizer Share-Code eingeben</p>
-        <input type="text" id="visualizer-import-input" class="confirm-input" placeholder="z. B. abc123" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="text" id="visualizer-import-input" class="confirm-input" placeholder="z. B. abc123" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="none">
         <div class="confirm-actions">
           <button type="button" id="btn-visualizer-import-cancel" class="confirm-btn confirm-btn-cancel" data-i18n="action.cancel">Abbrechen</button>
           <button type="button" id="btn-visualizer-import-ok" class="confirm-btn confirm-btn-primary" data-i18n="action.import">Importieren</button>
@@ -875,6 +886,7 @@
         </div>
         <div class="field-picker-input-wrap">
           <input type="text" id="field-picker-input" class="field-picker-input" autocomplete="off" inputmode="none" />
+          <span id="field-picker-unit" class="field-picker-unit" hidden></span>
         </div>
         <div id="field-picker-list" class="field-picker-list"></div>
         <div id="field-picker-keyboard" class="fp-keyboard">
@@ -1030,19 +1042,6 @@
           <div class="number-picker-drum-wrap" id="number-picker-drum-wrap">
             <div class="number-picker-drum" id="number-picker-drum"></div>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Text Picker Modal -->
-    <div id="text-picker-modal" class="modal-overlay number-picker-overlay" hidden>
-      <div class="number-picker-sheet text-picker-sheet">
-        <div class="number-picker-header">
-          <button type="button" id="btn-text-picker-cancel" class="number-picker-header-btn">Cancel</button>
-          <button type="button" id="btn-text-picker-confirm" class="number-picker-header-btn number-picker-header-btn-confirm">Done</button>
-        </div>
-        <div class="text-picker-body">
-          <input type="text" id="text-picker-input" class="text-picker-input" maxlength="20" autocomplete="off" autocorrect="off" spellcheck="false">
         </div>
       </div>
     </div>
@@ -1292,7 +1291,7 @@
           <div class="recipe-edit-tags-section">
             <div class="recipe-edit-group-label" data-i18n="recipeEdit.tags">Tags</div>
             <div id="edit-tags-chips" class="recipe-edit-tags-chips"></div>
-            <input type="text" id="edit-tags-input" class="recipe-edit-tags-input" placeholder="Add tag…" data-i18n-placeholder="recipeEdit.addTag" autocomplete="off" autocorrect="off" autocapitalize="off">
+            <input type="text" id="edit-tags-input" class="recipe-edit-tags-input" placeholder="Add tag…" data-i18n-placeholder="recipeEdit.addTag" autocomplete="off" autocorrect="off" autocapitalize="off" inputmode="none">
             <div id="edit-tags-suggestions" class="recipe-edit-tags-suggestions"></div>
           </div>
           </div><!-- end recipe-edit-content -->
@@ -1321,7 +1320,7 @@
                 <option value="downloaded">Downloaded</option>
               </select>
               <button type="button" id="btn-profile-picker-back-my" class="profile-picker-add-btn" aria-label="Zurück" data-i18n-aria="profilePicker.backAria" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg></button>
-              <input id="profile-picker-search" class="modal-field-input profile-picker-search" type="text" placeholder="Durchsuchen" aria-label="Durchsuchen" data-i18n-placeholder="profilePicker.search" data-i18n-aria="profilePicker.searchAria">
+              <input id="profile-picker-search" class="modal-field-input profile-picker-search" type="text" placeholder="Durchsuchen" aria-label="Durchsuchen" data-i18n-placeholder="profilePicker.search" data-i18n-aria="profilePicker.searchAria" inputmode="none">
               <button type="button" id="btn-profile-picker-open-add" class="profile-picker-add-btn" aria-label="Profil hinzufügen" data-i18n-aria="profilePicker.addAria"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
               <button type="button" id="btn-profile-picker-toggle-hidden" class="profile-picker-add-btn" aria-label="Versteckte Presets anzeigen" aria-pressed="false" data-i18n-aria="profilePicker.hiddenAria" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
               <button type="button" id="btn-profile-picker-open-trash" class="profile-picker-add-btn" aria-label="Papierkorb" data-i18n-aria="profilePicker.trashAria"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
@@ -1383,7 +1382,7 @@
           <!-- Left panel: bean list -->
           <section class="bean-manager-left">
             <div class="bean-manager-toolbar">
-              <input id="bean-manager-search" class="modal-field-input profile-picker-search bean-manager-search" type="text" placeholder="Durchsuchen" data-i18n-placeholder="profilePicker.search" aria-label="Durchsuchen" data-i18n-aria="profilePicker.search">
+              <input id="bean-manager-search" class="modal-field-input profile-picker-search bean-manager-search" type="text" placeholder="Durchsuchen" data-i18n-placeholder="profilePicker.search" aria-label="Durchsuchen" data-i18n-aria="profilePicker.search" inputmode="none">
               <label class="bean-archive-toggle bean-archive-toggle--inline" aria-label="Archivierte Bohnen anzeigen">
                 <span class="bean-archive-toggle-label">Archived</span>
                 <input type="checkbox" id="chk-bean-manager-toggle-archive" class="power-toggle-input" role="switch" />
@@ -1599,15 +1598,15 @@
             </div>
           </div>
           <div class="batch-date-picker-weekdays" aria-hidden="true">
-            <span>Mo</span>
-            <span>Di</span>
-            <span>Mi</span>
-            <span>Do</span>
-            <span>Fr</span>
-            <span>Sa</span>
-            <span>So</span>
+            <span data-i18n="schedule.mon">Mo</span>
+            <span data-i18n="schedule.tue">Di</span>
+            <span data-i18n="schedule.wed">Mi</span>
+            <span data-i18n="schedule.thu">Do</span>
+            <span data-i18n="schedule.fri">Fr</span>
+            <span data-i18n="schedule.sat">Sa</span>
+            <span data-i18n="schedule.sun">So</span>
           </div>
-          <div id="batch-date-picker-days" class="batch-date-picker-days" role="grid" aria-label="Kalender"></div>
+          <div id="batch-date-picker-days" class="batch-date-picker-days" role="grid" aria-label="Kalender" data-i18n-aria="datePicker.calendarAria"></div>
           <button type="button" id="btn-batch-date-clear" class="batch-date-picker-clear" data-i18n="datePicker.clear">Datum entfernen</button>
         </div>
       </div>
@@ -1671,7 +1670,7 @@
               </div>
               <div class="shot-review-tags" id="shot-review-tags"></div>
               <div class="shot-review-tag-panel" id="shot-review-tag-panel" hidden>
-                <input type="text" id="shot-review-tag-input" class="shot-review-tag-input" placeholder="Tag eingeben..." data-i18n-placeholder="shotReview.tagPlaceholder">
+                <input type="text" id="shot-review-tag-input" class="shot-review-tag-input" placeholder="Tag eingeben..." data-i18n-placeholder="shotReview.tagPlaceholder" inputmode="none">
                 <div class="shot-review-tag-list" id="shot-review-tag-list"></div>
               </div>
             </div>
@@ -1854,7 +1853,7 @@
                   <span class="steam-settings-label">Steam Time</span>
                   <div class="calib-time-row">
                     <div class="pitcher-weight-row">
-                      <input type="number" id="calib-steam-time" class="calib-time-input" min="1" max="300" step="1" placeholder="—">
+                      <input type="number" id="calib-steam-time" class="calib-time-input" min="1" max="300" step="1" placeholder="—" inputmode="none">
                       <span class="calib-time-unit">s</span>
                     </div>
                     <span class="calib-last-hint">Last: <span id="calib-last-steam">—</span></span>
@@ -1863,7 +1862,7 @@
               </div>
             </div>
             <div class="pitcher-preset-card" data-pitcher="1">
-              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 1" maxlength="20">
+              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 1" maxlength="20" inputmode="none">
               <div class="pitcher-preset-body">
                 <div class="pitcher-preset-row">
                   <span class="steam-settings-label">Steam Preset</span>
@@ -1881,7 +1880,7 @@
               </div>
             </div>
             <div class="pitcher-preset-card" data-pitcher="2">
-              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 2" maxlength="20">
+              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 2" maxlength="20" inputmode="none">
               <div class="pitcher-preset-body">
                 <div class="pitcher-preset-row">
                   <span class="steam-settings-label">Steam Preset</span>
@@ -1899,7 +1898,7 @@
               </div>
             </div>
             <div class="pitcher-preset-card" data-pitcher="3">
-              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 3" maxlength="20">
+              <input type="text" class="steam-settings-name-input pitcher-preset-name" placeholder="Pitcher 3" maxlength="20" inputmode="none">
               <div class="pitcher-preset-body">
                 <div class="pitcher-preset-row">
                   <span class="steam-settings-label">Steam Preset</span>
@@ -2275,11 +2274,11 @@
               <div class="bean-field-list">
                 <label class="bean-field-row">
                   <span class="bean-field-label" data-i18n="profileEditor.name">Name</span>
-                  <input type="text" id="profile-editor-title" class="bean-field-input" placeholder="Profilname" autocomplete="off" />
+                  <input type="text" id="profile-editor-title" class="bean-field-input" placeholder="Profilname" autocomplete="off" inputmode="none" />
                 </label>
                 <label class="bean-field-row">
                   <span class="bean-field-label" data-i18n="profileEditor.author">Autor</span>
-                  <input type="text" id="profile-editor-author" class="bean-field-input" placeholder="Autor (optional)" autocomplete="off" />
+                  <input type="text" id="profile-editor-author" class="bean-field-input" placeholder="Autor (optional)" autocomplete="off" inputmode="none" />
                 </label>
               </div>
             </div>
@@ -2297,7 +2296,7 @@
             </div>
             <div class="bean-field-group">
               <div class="bean-field-group-title" data-i18n="profileEditor.notes">Notizen</div>
-              <textarea id="profile-editor-notes" class="profile-editor-notes" placeholder="Notizen..." data-i18n-placeholder="profileEditor.notesPlaceholder"></textarea>
+              <textarea id="profile-editor-notes" class="profile-editor-notes" placeholder="Notizen..." data-i18n-placeholder="profileEditor.notesPlaceholder" inputmode="none"></textarea>
             </div>
           </div>
 
@@ -2388,6 +2387,23 @@
           </div>
         </div>
 
+        <!-- Schritt 2b: Zwischenspuelung (nur beim x5-Ablauf) -->
+        <div id="cleaning-step-rinse" hidden>
+          <div class="modal-header">
+            <button type="button" id="btn-cleaning-rinse-abort" class="modal-btn-cancel" data-i18n="action.cancel">Abbrechen</button>
+            <span class="modal-title" data-i18n="cleaning.modal.title">Reinigung</span>
+            <span class="modal-header-spacer"></span>
+          </div>
+          <div class="modal-body cleaning-step-body">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" class="cleaning-step-icon">
+              <path d="M12 2.7S6 9.5 6 13.5a6 6 0 0 0 12 0C18 9.5 12 2.7 12 2.7z"/>
+            </svg>
+            <p class="cleaning-instruction-text" data-i18n="cleaning.rinse.text">Blindsieb ausspülen und ohne Reinigungspulver wieder einsetzen.</p>
+            <button type="button" id="btn-cleaning-rinse-ready" class="cleaning-primary-btn" data-i18n="action.ready">Bereit</button>
+          </div>
+        </div>
+
         <!-- Schritt 4: Abschluss -->
         <div id="cleaning-step-4" hidden>
           <div class="modal-header">
@@ -2460,8 +2476,14 @@
     <script src="core/domains/shot.js"></script>
     <script src="core/domains/workflow.js"></script>
     <script src="core/domains/profile.js"></script>
+    <script src="core/domains/profile-edit.js"></script>
     <script src="core/domains/machine.js"></script>
     <script src="core/domains/mapping.js"></script>
+    <script src="core/domains/settings.js"></script>
+    <script src="core/domains/devices.js"></script>
+    <script src="core/domains/plugins.js"></script>
+    <script src="core/domains/profile-simulate.js"></script>
+    <script src="core/domains/profile-render.js"></script>
     <script src="modules/router.js"></script>
     <script src="modules/ui.js"></script>
     <script src="modules/screensaver.js?v=2"></script>
