@@ -131,7 +131,19 @@ for (const s of listItems) {
   const m = full.measurements || [];
   // Even sample rather than the first N, so the curve keeps its overall shape.
   const stride = Math.max(1, Math.ceil(m.length / MAX_MEASUREMENTS));
-  fullShots.push(scrub({ ...full, measurements: m.filter((_, i) => i % stride === 0) }));
+  const shot = scrub({ ...full, measurements: m.filter((_, i) => i % stride === 0) });
+  // A workflow's `name` concatenates roaster, bean and profile title. It is not
+  // covered by FIELD_LABELS — `name` is excluded there so profile STEP names
+  // survive — so rebuild it from the already-scrubbed parts rather than letting
+  // the real one through.
+  if (shot.workflow?.name) {
+    shot.workflow.name = [
+      shot.workflow.context?.coffeeRoaster,
+      shot.workflow.context?.coffeeName,
+      shot.workflow.profile?.title,
+    ].filter(Boolean).join(" · ");
+  }
+  fullShots.push(shot);
 }
 
 const header = `// Seed data for the mock gateway. Mutated in-process by the mock's write

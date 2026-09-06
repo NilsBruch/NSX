@@ -7,7 +7,7 @@
 // Coffee-identifying text is replaced with placeholders (this repo is public);
 // field names, types, empty strings and timestamps are verbatim.
 //
-// Snapshot taken: 2026-09-05
+// Snapshot taken: 2026-09-06
 
 export const machineInfo = {
   "version": "1337",
@@ -18,7 +18,7 @@ export const machineInfo = {
 };
 
 export const machineState = {
-  "timestamp": "2026-09-05T20:08:33.062821",
+  "timestamp": "2026-09-06T14:08:15.146125",
   "state": {
     "state": "idle",
     "substate": "idle"
@@ -27,19 +27,28 @@ export const machineState = {
   "pressure": 0,
   "targetFlow": 0,
   "targetPressure": 0,
-  "mixTemperature": 83.5,
-  "groupTemperature": 83.5,
-  "targetMixTemperature": 83.5,
-  "targetGroupTemperature": 83.5,
+  "mixTemperature": 93,
+  "groupTemperature": 93,
+  "targetMixTemperature": 93,
+  "targetGroupTemperature": 93,
   "profileFrame": 0,
   "steamTemperature": 150
 };
 
 export const beans = [
   {
-    "id": "cc3ca8ba-7141-42ce-9f7c-ecebf6df4ae8",
+    "id": "47915b71-9a7f-4d7a-b907-a57f9fd55928",
     "roaster": "Roaster 1",
     "name": "Bean 1",
+    "decaf": false,
+    "archived": false,
+    "createdAt": "2026-09-06T13:54:17.505791",
+    "updatedAt": "2026-09-06T13:54:17.505791"
+  },
+  {
+    "id": "cc3ca8ba-7141-42ce-9f7c-ecebf6df4ae8",
+    "roaster": "Roaster 2",
+    "name": "Bean 2",
     "species": "",
     "decaf": false,
     "decafProcess": "",
@@ -55,8 +64,8 @@ export const beans = [
   },
   {
     "id": "9cc167e7-4d46-4705-b34a-9d9e95fa9938",
-    "roaster": "Roaster 2",
-    "name": "Bean 2",
+    "roaster": "Roaster 3",
+    "name": "Bean 3",
     "species": "",
     "decaf": false,
     "decafProcess": "",
@@ -75,15 +84,31 @@ export const beans = [
 ];
 
 export const beanBatches = {
+  "47915b71-9a7f-4d7a-b907-a57f9fd55928": [
+    {
+      "id": "ac71b6d4-e664-49cb-bdf8-5d89e73a20b0",
+      "beanId": "47915b71-9a7f-4d7a-b907-a57f9fd55928",
+      "roastDate": "2026-09-01T12:00:00.000Z",
+      "frozen": false,
+      "archived": false,
+      "createdAt": "2026-09-06T13:54:32.342573",
+      "updatedAt": "2026-09-06T13:54:32.342573"
+    }
+  ],
   "cc3ca8ba-7141-42ce-9f7c-ecebf6df4ae8": [
     {
       "id": "15c9f2ba-469a-4837-a6f6-85e9294c0c15",
       "beanId": "cc3ca8ba-7141-42ce-9f7c-ecebf6df4ae8",
-      "roastDate": "2026-08-06T00:00:00.000",
+      "roastDate": "2026-08-06T12:00:00.000Z",
+      "roastLevel": "Medium",
+      "qualityScore": 88,
+      "price": 16,
+      "currency": "Euro",
+      "weight": 250,
       "frozen": false,
       "archived": false,
       "createdAt": "2026-08-29T20:51:05.226617",
-      "updatedAt": "2026-08-29T20:51:05.226617"
+      "updatedAt": "2026-09-06T13:48:00.094910"
     },
     {
       "id": "98dcd710-e7bc-4299-b5fa-0949c90fc68a",
@@ -1651,7 +1676,7 @@ export const shotsFull = [
     ],
     "workflow": {
       "id": "ce48d2bd-5ef7-4bb8-8f31-de2291d9776c",
-      "name": "Mokuska · Brazil · A-Flow / default-dark",
+      "name": "Roaster 1 · Bean 1 · Profile 4",
       "description": "Description",
       "profile": {
         "version": "2",
@@ -2571,7 +2596,7 @@ export const shotsFull = [
     ],
     "workflow": {
       "id": "ce48d2bd-5ef7-4bb8-8f31-de2291d9776c",
-      "name": "Good Karma Coffee Roasters · Diamond · Baseline • Medium Contact • 6 Bar",
+      "name": "Roaster 2 · Bean 2 · Profile 5",
       "description": "Description",
       "profile": {
         "version": "2",
@@ -3661,7 +3686,7 @@ export const shotsFull = [
     ],
     "workflow": {
       "id": "ce48d2bd-5ef7-4bb8-8f31-de2291d9776c",
-      "name": "Good Karma Coffee Roasters · Diamond · Baseline • Medium Contact • 6 Bar",
+      "name": "Roaster 2 · Bean 2 · Profile 5",
       "description": "Description",
       "profile": {
         "version": "2",

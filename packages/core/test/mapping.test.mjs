@@ -242,26 +242,26 @@ const bean = (roaster, createdAt, extra = {}) => ({ roaster, createdAt, ...extra
 
 test("uniqueFieldValuesByRecency orders values by their newest createdAt", () => {
   const beans = [
-    bean("Aera",    "2026-01-01T10:00:00"),
-    bean("Mokuska", "2026-08-29T17:44:26"),
-    bean("Karma",   "2026-08-29T18:22:02"),
+    bean("Zulu Beans",    "2026-01-01T10:00:00"),
+    bean("Bravo Roasters", "2026-08-29T17:44:26"),
+    bean("Alpha Coffee",   "2026-08-29T18:22:02"),
   ];
   assert.deepEqual(
     NSXCore.uniqueFieldValuesByRecency(beans, "roaster"),
-    ["Karma", "Mokuska", "Aera"],
+    ["Alpha Coffee", "Bravo Roasters", "Zulu Beans"],
     "newest first, not alphabetical",
   );
 });
 
 test("uniqueFieldValuesByRecency dedupes on the newest occurrence", () => {
   const beans = [
-    bean("Aera",    "2026-01-01T10:00:00"),
-    bean("Mokuska", "2026-02-01T10:00:00"),
-    bean("Aera",    "2026-09-01T10:00:00"),
+    bean("Zulu Beans",    "2026-01-01T10:00:00"),
+    bean("Bravo Roasters", "2026-02-01T10:00:00"),
+    bean("Zulu Beans",    "2026-09-01T10:00:00"),
   ];
   assert.deepEqual(
     NSXCore.uniqueFieldValuesByRecency(beans, "roaster"),
-    ["Aera", "Mokuska"],
+    ["Zulu Beans", "Bravo Roasters"],
     "a roaster reused on a newer bean moves to the front",
   );
 });
@@ -281,12 +281,12 @@ test("uniqueFieldValuesByRecency ranks undated items behind dated ones, in order
 
 test("uniqueFieldValuesByRecency drops empty values and trims", () => {
   const beans = [
-    bean("  Karma  ", "2026-03-01T00:00:00"),
+    bean("  Alpha Coffee  ", "2026-03-01T00:00:00"),
     bean("",          "2026-04-01T00:00:00"),
     bean(null,        "2026-05-01T00:00:00"),
     bean("   ",       "2026-06-01T00:00:00"),
   ];
-  assert.deepEqual(NSXCore.uniqueFieldValuesByRecency(beans, "roaster"), ["Karma"]);
+  assert.deepEqual(NSXCore.uniqueFieldValuesByRecency(beans, "roaster"), ["Alpha Coffee"]);
 });
 
 test("uniqueFieldValuesByRecency reads dotted paths and array fields", () => {
