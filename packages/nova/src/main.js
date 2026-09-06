@@ -59,8 +59,11 @@ import { bootCore } from './composables/useCore.js';
 import { adoptCurrentWorkflowAsRecipe } from './composables/useRecipe.js';
 import { skinSettings, loadSkinSettings, loadDisplaySupport } from './composables/useSettings.js';
 import { wireRevalidateTriggers } from './composables/useRevalidate.js';
+import { installErrorReporting } from './composables/useErrorReporting.js';
 
-createApp(App).use(router).use(i18n).mount('#app');
+const app = createApp(App);
+installErrorReporting(app);
+app.use(router).use(i18n).mount('#app');
 
 // Kick off the core bootstrap. The UI mounts immediately and fills in as the
 // store/REST data arrives, so a slow or absent gateway never blocks rendering.

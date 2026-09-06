@@ -33,6 +33,7 @@
  */
 import { reactive, computed, ref, watch } from 'vue';
 import { currentWorkflow, machine, grinders, beans } from './useCore.js';
+import { reportSilentFailure } from './useErrorReporting.js';
 
 const { NSXCore, NSXApi } = window;
 
@@ -134,7 +135,15 @@ function snapshotFromCurrentRecipe(existing = {}) {
 async function persistCurrentRecipeEdits() {
   if (!recipe.id) return;
   const idx = recipes.value.findIndex((r) => r.id === recipe.id);
-  if (idx < 0) return;
+  if (idx < 0) {
+    // recipe.id is set but missing from the library — e.g. deleted on another
+    // device this one has not revalidated against yet (see useRevalidate.js).
+    // Used to return here with no trace at all; the dial edit the user just
+    // made was gone, and nothing said so.
+    const t = window.NSXI18n?.t || ((k) => k);
+    reportSilentFailure(t('toast.recipeEditLost'));
+    return;
+  }
   const snapshot = snapshotFromCurrentRecipe(recipes.value[idx]);
   const updated = recipes.value.map((r, i) => (i === idx ? snapshot : r));
   recipes.value = await NSXCore.saveRecipes(updated);
@@ -176,7 +185,15 @@ export async function deleteRecipe(id) {
 export async function bumpRecipeLastUsed(id) {
   if (!id) return;
   const idx = recipes.value.findIndex((r) => r.id === id);
-  if (idx < 0) return;
+  if (idx < 0) {
+    // The recipe a shot just finished on is missing from this device's
+    // library — e.g. deleted elsewhere. Used to drop the "Recent" credit for
+    // that shot with no trace; now at least visible, matching NSX's fix for
+    // the identical class of bug (recipes bound by id, and a miss reported).
+    const t = window.NSXI18n?.t || ((k) => k);
+    reportSilentFailure(t('toast.recipeUsageLost'));
+    return;
+  }
   const updated = recipes.value.map((r, i) => (i === idx ? { ...r, lastUsed: Date.now() } : r));
   recipes.value = await NSXCore.saveRecipes(updated);
 }
@@ -406,7 +423,15 @@ function _maybeRepushForScale() {
     if (!recipe.stopAtWeight) { _lastPushedScale = machine.scaleConnected; return; } // stop mode is scale-independent when off
     if (!recipe.id && !recipe.profile) return;               // nothing pushable loaded
     if (!NSXCore.canExecuteOperation('setWorkflow')) return;  // not idle -> wait for the idle transition below
-    pushRecipe({ silent: true }).catch((err) => console.error('[Nova] scale re-push failed', err?.message || err));
+    pushRecipe({ silent: true }).catch((err) => {
+      // Not the "machine busy" branch (that returns without throwing) — this is
+      // a genuine push failure, e.g. the gateway rejected it or is unreachable.
+      // `silent: true` only means "don't queue/toast for routine boot healing";
+      // it was never meant to hide the machine running with the wrong stop mode.
+      console.error('[Nova] scale re-push failed', err?.message || err);
+      const t = window.NSXI18n?.t || ((k) => k);
+      NSXCore.emit('toast', t('toast.recipePushFailed'));
+    });
   }, 800);
 }
 watch(() => machine.scaleConnected, _maybeRepushForScale);
@@ -419,7 +444,15 @@ watch(() => machine.state, () => { if (NSXCore.canExecuteOperation('setWorkflow'
 // so it doesn't depend on useCore.js's machineState handler having run first.
 NSXCore.on('machineState', ({ state }) => {
   if (!pendingPush || !NSXCore.canExecuteOperation('setWorkflow', state)) return;
-  pushRecipe().catch((err) => console.error('[Nova] deferred recipe push failed', err?.message || err));
+  pushRecipe().catch((err) => {
+    // pushRecipe's own non-silent "machine busy" branch already re-queues and
+    // toasts recipeQueued without throwing, so reaching here means the actual
+    // push attempt failed — the queued edit the user was told would "apply
+    // when the machine wakes" just silently didn't, until this toast.
+    console.error('[Nova] deferred recipe push failed', err?.message || err);
+    const t = window.NSXI18n?.t || ((k) => k);
+    NSXCore.emit('toast', t('toast.recipePushFailed'));
+  });
 });
 
 /**
@@ -801,7 +834,15 @@ export function beanForRecipe(entry) {
  */
 export async function patchRecipeEntry(id, patch) {
   const idx = recipes.value.findIndex((r) => r.id === id);
-  if (idx < 0) return;
+  if (idx < 0) {
+    // Called from the phone's recipe detail screen, which can open any
+    // recipe — including one another device deleted since this device last
+    // fetched the library. Used to drop the edit (a rating tap, a pin) with
+    // no trace; report it instead.
+    const t = window.NSXI18n?.t || ((k) => k);
+    reportSilentFailure(t('toast.recipeEditLost'));
+    return;
+  }
   recipes.value = await NSXCore.saveRecipes(
     recipes.value.map((r, i) => (i === idx ? { ...r, ...patch } : r))
   );
