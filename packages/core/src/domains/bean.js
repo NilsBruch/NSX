@@ -67,9 +67,43 @@
     return api(id, payload);
   }
 
+  /**
+   * Delete a bean AND the bags hanging off it — bags first, because the
+   * gateway does NOT cascade them.
+   *
+   * DELETE /beans/{id} on a bean that still has a batch fails with a raw
+   * SQLite error, HTTP 500: `FOREIGN KEY constraint failed ... DELETE FROM
+   * "beans"`. Verified against a real machine three ways: a bean with no bags
+   * deletes cleanly, the same bean with one bag 500s, and removing the bag
+   * first makes the bean deletable again. Both skins had assumed the bridge
+   * cascaded, so "delete this bean" was broken for every bean that had ever
+   * been given a roast date — which is every bean that was actually used.
+   *
+   * Archived bags count: archiving hides a bag from the list but leaves the
+   * foreign key, so this asks for them explicitly.
+   *
+   * A bag its own shots still reference cannot go either, so this cannot save
+   * every bean. That case is deliberately left to fail on the bean delete
+   * below rather than being pre-empted here: the gateway refusing is correct
+   * there, and its refusal is the thing the caller should see.
+   */
   async function deleteBean(id) {
-    const { deleteBean: api } = window.NSXApi || {};
+    const { deleteBean: api, fetchBatches, deleteBatch } = window.NSXApi || {};
     if (typeof api !== "function") throw new Error("NSXApi.deleteBean not available");
+
+    if (id && typeof fetchBatches === "function" && typeof deleteBatch === "function") {
+      try {
+        const res = await fetchBatches(id, true);
+        const list = Array.isArray(res) ? res : (res?.items ?? []);
+        for (const batch of list) {
+          if (batch?.id) await deleteBatch(batch.id);
+        }
+      } catch (err) {
+        // Don't abort: the bean delete is still worth attempting, and if a bag
+        // is what blocks it, that attempt produces the accurate error.
+        console.warn("[NSXCore.bean] could not clear every bag before the bean", err?.message);
+      }
+    }
     return api(id);
   }
 

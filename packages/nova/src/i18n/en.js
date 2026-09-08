@@ -298,6 +298,9 @@ export default {
     noRecipesYet: 'No recipes yet',
     deleteRecipeConfirm: 'Delete this recipe?',
     deleteBeanConfirm: 'Delete this bean?',
+    // Shown when the gateway refuses the delete outright. Its own message is a
+    // raw SQLite foreign-key error, so this says what that means instead.
+    deleteBeanFailed: 'This bean could not be deleted — past shots still reference it. Archive it instead.',
     deleteBeanArchiveHint: 'Its bags go too, and past shots keep their data but lose the link to this bean. Archiving hides it from the list instead.',
     // vue-i18n plural forms (zero | one | other), selected by the third
     // argument at the call site.

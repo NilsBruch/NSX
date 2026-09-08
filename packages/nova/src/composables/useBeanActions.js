@@ -2,12 +2,14 @@
  * Deleting a bean, as one function rather than one per entry point.
  *
  * It is not a one-liner: the confirmation has to say how many recipes go with
- * the bean, the recipes have to be removed BEFORE the bean (so a gateway that
- * refuses the delete never leaves recipes pointing at a bean that is still
- * there), and the bridge cascades the bean's batches on its own. Any second
- * copy of that sequence would get one of those three wrong eventually — which
- * is exactly what nearly happened when the Diary's rows grew their own delete
- * beside the editor's.
+ * the bean, and the recipes have to be removed BEFORE the bean (so a gateway
+ * that refuses the delete never leaves recipes pointing at a bean that is
+ * still there). Any second copy of that sequence would get one of those wrong
+ * eventually — which is exactly what nearly happened when the Diary's rows
+ * grew their own delete beside the editor's.
+ *
+ * This file used to claim "the bridge cascades the bean's batches on its own".
+ * It does not — see NSXCore.deleteBean, which now clears them itself.
  */
 import i18n from '../i18n/index.js';
 import { openConfirm } from './useModals.js';
@@ -53,7 +55,18 @@ export async function confirmAndDeleteBean(bean) {
   if (!ok) return false;
 
   if (affected.length) await deleteRecipesUsingBean(bean);
-  await NSXCore.deleteBean(bean.id);
+  try {
+    await NSXCore.deleteBean(bean.id);
+  } catch (err) {
+    // What the gateway says when it refuses is a raw SQLite foreign-key dump —
+    // true, and useless to the person holding the tablet. Say what it means and
+    // point at the way out the dialog already offered, keeping the original on
+    // the console for whoever is actually debugging.
+    console.error('[Nova] bean delete refused by the gateway', err);
+    NSXCore.emit('toast', t('diary.deleteBeanFailed'));
+    await NSXCore.loadBeans();
+    return false;
+  }
   await NSXCore.loadBeans();
   return true;
 }
