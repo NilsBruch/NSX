@@ -37,6 +37,40 @@ test("findBatchForRoastDate resolves the single 'undated' bag when no date is se
   assert.equal(NSXCore.findBatchForRoastDate([{ id: "dated", roastDate: "2026-06-20" }], null), null);
 });
 
+test("findCurrentBatch picks the newest ROAST, not the newest entry", () => {
+  // Typed in second, roasted earlier — the bag on the counter is still b1.
+  const batches = [
+    { id: "b1", roastDate: "2026-06-20" },
+    { id: "b2", roastDate: "2026-06-01" },
+  ];
+  assert.equal(NSXCore.findCurrentBatch(batches)?.id, "b1");
+  assert.equal(NSXCore.findCurrentBatch([...batches].reverse())?.id, "b1", "order in the list must not decide it");
+});
+
+test("findCurrentBatch ignores undated and archived bags", () => {
+  assert.equal(
+    NSXCore.findCurrentBatch([{ id: "undated" }, { id: "dated", roastDate: "2026-06-20" }])?.id,
+    "dated",
+    "an undated bag has no date to inherit, so it can never be the current one",
+  );
+  assert.equal(NSXCore.findCurrentBatch([{ id: "old", roastDate: "2026-06-20", archived: true }]), null);
+  assert.equal(NSXCore.findCurrentBatch([{ id: "undated" }]), null, "a bean with only an undated bag has no current bag");
+});
+
+test("findCurrentBatch survives a bean with no bags at all", () => {
+  assert.equal(NSXCore.findCurrentBatch([]), null);
+  assert.equal(NSXCore.findCurrentBatch(null), null);
+  assert.equal(NSXCore.findCurrentBatch(undefined), null);
+});
+
+test("findCurrentBatch compares whole days, not timestamps", () => {
+  const batches = [
+    { id: "morning", roastDate: "2026-06-20T08:00:00Z" },
+    { id: "earlier", roastDate: "2026-06-19T23:00:00Z" },
+  ];
+  assert.equal(NSXCore.findCurrentBatch(batches)?.id, "morning");
+});
+
 test("findBatchForRoastDate never reuses an archived bag", () => {
   const batches = [{ id: "old", roastDate: "2026-06-20", archived: true }];
   assert.equal(NSXCore.findBatchForRoastDate(batches, "2026-06-20"), null);

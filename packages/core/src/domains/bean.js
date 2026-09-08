@@ -21,10 +21,12 @@
  * claims its roast date was).
  *
  * Registered on NSXCore:
- *   Selectors: getBeans(), normalizeRoastDate(v), findBatchForRoastDate(batches, roastDate)
+ *   Selectors: getBeans(), normalizeRoastDate(v), findBatchForRoastDate(batches, roastDate),
+ *              findCurrentBatch(batches)
  *   Commands:  loadBeans(includeArchived?), setBeansCache(list),
  *              createBean(payload), updateBean(id, payload), deleteBean(id),
- *              resolveBean(roaster, name), resolveBatch(beanId, roastDate)
+ *              resolveBean(roaster, name), resolveBatch(beanId, roastDate),
+ *              fetchCurrentBatch(beanId)
  *   Event:     'beansLoaded' -> { beans }
  */
 (function () {
@@ -102,6 +104,39 @@
   }
 
   /**
+   * The bag a NEW recipe on this bean should join: the most recent DATED,
+   * non-archived batch, or null when the bean has none. Pure — pass the
+   * already-fetched list.
+   *
+   * "Most recent" is by roastDate, NOT by creation order: bags get entered
+   * whenever the user gets round to it, so the newest roast is the one on the
+   * counter even if an older bag was typed in after it. Undated bags never
+   * win — the point of this is to hand a new recipe a date it can inherit,
+   * and an undated bag has none to give.
+   */
+  function findCurrentBatch(batches) {
+    if (!Array.isArray(batches)) return null;
+    let best = null;
+    let bestDate = null;
+    for (const b of batches) {
+      if (!b || b.archived) continue;
+      const date = normalizeRoastDate(b.roastDate);
+      if (!date) continue;
+      // ISO 'YYYY-MM-DD' sorts lexicographically, so no Date parsing needed.
+      if (bestDate === null || date > bestDate) { best = b; bestDate = date; }
+    }
+    return best;
+  }
+
+  /** findCurrentBatch against the gateway's current list for this bean. */
+  async function fetchCurrentBatch(beanId) {
+    const { fetchBatches } = window.NSXApi || {};
+    if (!beanId || typeof fetchBatches !== "function") return null;
+    const res = await fetchBatches(beanId, false);
+    return findCurrentBatch(Array.isArray(res) ? res : (res?.items ?? []));
+  }
+
+  /**
    * Find-or-create the bean with this roaster+name (case-insensitive). A
    * workflow can reference a coffee that was never entered in the skin's own
    * bean list (brewed in another skin, or the gateway's workflow on first
@@ -148,6 +183,8 @@
     deleteBean,
     normalizeRoastDate,
     findBatchForRoastDate,
+    findCurrentBatch,
+    fetchCurrentBatch,
     resolveBean,
     resolveBatch,
   });

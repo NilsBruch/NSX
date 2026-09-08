@@ -547,8 +547,8 @@ export async function composeNewRecipe({ bean, profile, seedContext = null }) {
     // diverge from the library profile it was picked from.
     profile: cloneProfile(profile.profile),
     // The bean is already a real Diary record here (BeanChooser picked it), so
-    // ensureRecipeBatch only has the bag left to resolve — the bean's undated
-    // one until the user sets a roast date.
+    // only the bag is left to resolve — inherited just below, or left to
+    // ensureRecipeBatch (which falls back to the bean's undated bag).
     beanId: bean.id ?? null,
     beanBatchId: null,
     beanUnlinked: false,
@@ -557,7 +557,35 @@ export async function composeNewRecipe({ bean, profile, seedContext = null }) {
     volumeCalibration: { factor: 1.0, samples: [] },
     rating: 0, // a freshly composed recipe starts unrated
   });
+
+  // Join the bean's CURRENT bag if it has a dated one — same coffee, same
+  // roast, different profile is the ordinary reason to build a second recipe on
+  // a bean, and both should sit on the one bag so their shots stay together.
+  // Without this every new recipe landed on the bean's UNDATED bag regardless,
+  // which is what left so many of them with no roast date at all.
+  // Failure is not fatal: ensureRecipeBatch (inside pushRecipe) still resolves
+  // the undated bag, exactly as it did before.
+  let inheritedRoastDate = null;
+  try {
+    const current = await NSXCore.fetchCurrentBatch(recipe.beanId);
+    if (current?.id) {
+      recipe.beanBatchId = current.id;
+      recipe.roastDate = current.roastDate ?? null;
+      inheritedRoastDate = recipe.roastDate;
+    }
+  } catch (err) {
+    console.warn('[Nova] could not read the current bag for this bean', err?.message);
+  }
+
   await pushRecipe();
+
+  // Returned rather than left for the caller to read off `recipe`: pushing sets
+  // currentWorkflow, whose watcher runs syncFromWorkflow — and that blanks
+  // beanId/roastDate before restoring them from the bag in an AWAITED adoptBatch.
+  // So for a tick or two after this resolves, recipe.roastDate reads null even
+  // when the bag is dated. RecipePicker's roast step decides on this value
+  // instead, which is settled the moment it is computed.
+  return inheritedRoastDate;
 }
 
 /** Case-insensitive match on the identity a recipe carries (roaster + name +
