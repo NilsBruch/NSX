@@ -194,6 +194,24 @@ function filterShots(list, q) {
 
   return tests.length ? list.filter((s) => tests.every((t) => t(s))) : list;
 }
+
+/**
+ * Newest first by default; `order=asc` flips it. Ordering happens BEFORE the
+ * limit/offset slice, exactly as the real gateway does it, so page 0 of an
+ * ascending query is the genuinely OLDEST shots rather than the newest page
+ * turned around.
+ *
+ * Verified against the live API, including its quirks: the match is
+ * case-SENSITIVE and only 'asc' means anything. 'ASC', 'oldest', 'banana' all
+ * come back newest-first with a 200 and no complaint. Reproduced here rather
+ * than tidied up, because a mock that accepted 'ASC' would let a skin ship a
+ * sort that silently does nothing on a real machine.
+ */
+function sortShots(list, q) {
+  const asc = q.get("order") === "asc";
+  const at = (s) => Date.parse(s?.timestamp || 0) || 0;
+  return list.slice().sort((a, b) => (asc ? at(a) - at(b) : at(b) - at(a)));
+}
 /* ── REST routing ────────────────────────────────────────── */
 
 function routeApi(req, res, url, body) {
@@ -287,7 +305,7 @@ function routeApi(req, res, url, body) {
   if (path === "/api/v1/shots" && method === "GET") {
     const limit = Number(q.get("limit") ?? 20);
     const offset = Number(q.get("offset") ?? 0);
-    const filtered = filterShots(state.shots, q);
+    const filtered = sortShots(filterShots(state.shots, q), q);
     return jsonEtag({ items: filtered.slice(offset, offset + limit), total: filtered.length });
   }
   // Only THIS endpoint carries measurements — the list above does not, exactly

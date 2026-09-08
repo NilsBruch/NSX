@@ -339,11 +339,20 @@ export async function openRecipeForBeanProfile(bean, profileTitle, fallbackProfi
 const historyPage = ref([]);
 const historyTotal = ref(0);
 
+/** Which way the SERVER should sort, from the view's sort toggle. The history
+ *  is paged, so this is not cosmetic: the gateway orders before it pages, so
+ *  the direction decides WHICH shots page 0 contains. Reversing a page in the
+ *  browser instead showed the oldest of the newest 200 — the true oldest shot
+ *  was never fetched at all. */
+const historyOrder = () => (diaryState.sort === 'oldest' ? 'asc' : 'desc');
+
 /** Replace the history with a fresh page 0, optionally server-side searched.
  *  The gateway's free-text covers coffee name, roaster, profile title, grinder
  *  model and notes, so this searches the WHOLE history, not the loaded page. */
 export async function loadHistory(query = '') {
-  const { items, total } = shotsFromResponse(await NSXApi.fetchShots({ limit: 200, offset: 0, search: query }));
+  const { items, total } = shotsFromResponse(
+    await NSXApi.fetchShots({ limit: 200, offset: 0, search: query, order: historyOrder() })
+  );
   historyPage.value = items;
   historyTotal.value = total;
 }
@@ -353,7 +362,10 @@ export async function loadHistory(query = '') {
  *  cannot list the same shot twice. */
 export async function loadMoreHistory(pageSize = 20) {
   const { items, total } = shotsFromResponse(
-    await NSXApi.fetchShots({ limit: pageSize, offset: historyPage.value.length, search: diaryState.query || '' })
+    await NSXApi.fetchShots({
+      limit: pageSize, offset: historyPage.value.length,
+      search: diaryState.query || '', order: historyOrder(),
+    })
   );
   const seen = new Set(historyPage.value.map((s) => s.id));
   historyPage.value = [...historyPage.value, ...items.filter((s) => !seen.has(s.id))];
@@ -369,13 +381,12 @@ export async function refreshHistoryIfActive() {
   await loadHistory(diaryState.query || '');
 }
 
-// No client-side text filter here: the server already applied the query, so
-// results are never limited to the page in memory. Just apply the sort toggle.
-export const fullHistoryShots = computed(() => {
-  const list = historyPage.value.slice().sort(byTimestampDesc);
-  if (diaryState.sort === 'oldest') list.reverse();
-  return list;
-});
+// Neither a text filter NOR a sort here: the server applied both, so results
+// are never limited to the page in memory and the page is already in the right
+// order. Re-sorting locally is what made "Load more" append at the TOP — the
+// next page is older, and a client-side ascending sort floated it above
+// everything already on screen, away from the button that asked for it.
+export const fullHistoryShots = computed(() => historyPage.value);
 
 /** True when the server reports more shots than are currently loaded — drives
  *  the full-history "Load more" button. */
@@ -402,6 +413,21 @@ watch(
       else if (diaryState.view === 'browse' && diaryState.level === 2 && diaryState.bean) loadBeanShots(diaryState.bean, q || '');
     }, 250);
   }
+);
+
+/**
+ * The full history's sort is a SERVER query, so flipping it has to re-fetch —
+ * every other list in the Diary holds all its rows and can just re-order in
+ * place. Only that view: the browse levels and the recipes list sort what they
+ * already have, and a fetch there would be pure waste.
+ *
+ * The reload also drops back to page 0, which is the honest thing to do: the
+ * pages loaded so far were the newest N, and "oldest first" is a different set
+ * of shots, not the same set upside down.
+ */
+watch(
+  () => diaryState.sort,
+  () => { if (diaryState.view === 'full') loadHistory(diaryState.query || ''); }
 );
 
 export function enterRoaster(name) {

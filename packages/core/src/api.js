@@ -509,6 +509,11 @@ async function pushWorkflow(workflow) {
 /**
  * GET /api/v1/shots?limit={limit}&offset={offset}&search={search}&coffeeName={coffeeName}...
  * Returns paginated shot history. Supports both positional and filter object parameters.
+ *
+ * `order` flips the sort to oldest-first, and the gateway applies it BEFORE
+ * paging — so it decides which shots a page contains, not just their order
+ * within it. A skin that reverses a page client-side instead shows the oldest
+ * of the newest N, which is a different set of shots entirely.
  * @param {number|object} limit - limit or filter object
  * @param {number} offset
  * @param {string} search
@@ -532,6 +537,12 @@ async function fetchShots(limit = 20, offset = 0, search = '') {
     // one bag. The gateway resolves it through each shot's beanBatchId, so it
     // is the right key for "this bean's whole history" (Nova's Diary drill-in).
     if (filters.beanId) queryParams.append('beanId', filters.beanId);
+    // Lowercase 'asc' or nothing. The gateway defaults to newest-first and
+    // silently falls back to it for ANY value it doesn't recognise — 'ASC' and
+    // 'oldest' both come back newest-first with a 200 — so a typo here is a
+    // wrong sort with no error to notice. Normalised rather than passed
+    // through for exactly that reason.
+    if (String(filters.order).toLowerCase() === 'asc') queryParams.append('order', 'asc');
   } else {
     queryParams.append('limit', limit);
     queryParams.append('offset', offset);
