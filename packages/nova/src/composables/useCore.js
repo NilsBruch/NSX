@@ -139,6 +139,30 @@ export function formatShortDate(iso) {
 }
 
 /**
+ * The same instant split for a date RAIL — { day: '3', month: 'Sep', time:
+ * '07:04' } — where formatShortDate returns one glued string. A list of shots
+ * is mostly same-month, so a rail can shout the day and whisper the rest,
+ * which one "09/03/26" cannot.
+ *
+ * Locale-following for the same reason formatShortDate is: month abbreviations
+ * and 12- vs 24-hour clocks are not ours to hardcode. Intl decides both.
+ */
+export function formatDateParts(iso) {
+  if (!iso) return { day: '—', month: '', time: '' };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { day: '—', month: '', time: '' };
+  const locale = window.NSXI18n?.getLocale?.() ?? 'en-US';
+  return {
+    day: new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(d),
+    month: new Intl.DateTimeFormat(locale, { month: 'short' }).format(d),
+    // 'numeric' hour, not '2-digit': a 12-hour locale renders "6:46 PM"
+    // rather than "06:46 PM", and the rail is narrow enough that the two
+    // characters decide whether it fits on one line.
+    time: new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(d),
+  };
+}
+
+/**
  * A recipe's identity as dot-separated parts: roaster, bean, grinder, profile.
  * Shared by the Coffee page's title bar and the Diary's recipe rows so the two
  * can't drift — both drop parts that were never set (rather than printing "—")

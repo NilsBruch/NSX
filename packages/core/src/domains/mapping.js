@@ -17,6 +17,7 @@
  *   mapApiWorkflowToDisplay(wf), mapShotToWorkflow(shot),
  *   normalizeWorkflowKeyPart(value), getWorkflowKey(workflow),
  *   normalizeShotData(shot), getShotDurationSeconds(fullShot),
+ *   buildShotSparkline(fullShot, opts?),
  *   buildShotDiffData(currentShot, latestShot, currentDurationSec, latestDurationSec),
  *   buildWorkflowItemsFromShots(shotItems, ratingCache),
  *   findShotsForWorkflow(workflow, source),
@@ -441,6 +442,61 @@
     return `${years} ${t(years === 1 ? "time.year" : "time.years")}`;
   }
 
+  /**
+   * A shot reduced to a handful of points per series, for a thumbnail-sized
+   * plot in a list row. Pure: give it the FULL shot (the one with
+   * measurements) and it hands back plain numbers; drawing is the skin's.
+   *
+   * Values are normalised 0..1 against the SAME fixed 0-12 scale
+   * ShotStripChart.vue plots on, so a thumbnail and the full chart of one shot
+   * are the same shape, and two thumbnails are comparable at a glance — which
+   * a per-shot auto-scale would destroy (every shot would fill the box and a
+   * weak one would look identical to a strong one).
+   *
+   * Sampled by TIME, not by array index: the machine's sample spacing is only
+   * approximately regular, and a preinfusion pause can stretch it, so even
+   * index steps would quietly distort the x-axis. `points` slots are spread
+   * across the shot's own duration and each takes the nearest real sample.
+   *
+   * Returns null for a shot with no usable measurements — a list row must be
+   * able to render without a plot, since the lightweight list shot never has
+   * them (only GET /shots/{id} does).
+   */
+  const SPARK_MAX_Y = 12; // matches ShotStripChart's MAX_Y
+
+  function buildShotSparkline(fullShot, { points = 40 } = {}) {
+    const data = normalizeShotData(fullShot);
+    const elapsed = data?.elapsed;
+    if (!Array.isArray(elapsed) || elapsed.length < 2) return null;
+
+    const total = elapsed[elapsed.length - 1];
+    if (!Number.isFinite(total) || total <= 0) return null;
+
+    const norm = (v) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return 0;
+      return Math.max(0, Math.min(1, n / SPARK_MAX_Y));
+    };
+
+    // One pass with a moving cursor rather than a scan per slot: the series can
+    // be a few thousand samples and this runs once per row in a long list.
+    const pressure = [];
+    const flow = [];
+    const weightFlow = [];
+    let cursor = 0;
+    for (let i = 0; i < points; i += 1) {
+      const t = (i / (points - 1)) * total;
+      while (cursor < elapsed.length - 1 && elapsed[cursor + 1] <= t) cursor += 1;
+      // Nearest of the two samples bracketing t, not just the earlier one.
+      const next = Math.min(cursor + 1, elapsed.length - 1);
+      const idx = Math.abs(elapsed[next] - t) < Math.abs(t - elapsed[cursor]) ? next : cursor;
+      pressure.push(norm(data.pressure?.[idx]));
+      flow.push(norm(data.flow?.[idx]));
+      weightFlow.push(norm(data.scaleRate?.[idx]));
+    }
+    return { pressure, flow, weightFlow };
+  }
+
   function buildShotDiffData(currentShot, latestShot, currentDurationSec, latestDurationSec) {
     const t = window.NSXI18n?.t || ((k) => k);
     const current = mapShotToWorkflow(currentShot);
@@ -706,6 +762,7 @@
     getWorkflowKey,
     normalizeShotData,
     getShotDurationSeconds,
+    buildShotSparkline,
     buildShotDiffData,
     buildWorkflowItemsFromShots,
     computeMaxRating,

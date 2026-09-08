@@ -271,7 +271,7 @@ export function toggleEditingRecipes() {
  * Bounded concurrency keeps the flat full-history (up to 200 rows) from firing
  * a request storm on open.
  */
-export const shotMetrics = reactive(new Map()); // id -> { yield, yieldUnit, estimated, ratio, durationSec } | null
+export const shotMetrics = reactive(new Map()); // id -> { yield, yieldUnit, estimated, ratio, durationSec, spark } | null
 const _metricsQueued = new Set();
 const _metricsQueue = [];
 let _metricsActive = 0;
@@ -281,7 +281,17 @@ function _computeMetrics(full) {
   const y = NSXCore.resolveActualYield(full);
   const dose = NSXCore.resolveActualDose(full);
   const ratio = dose && y.value ? NSXCore.calcRatio(dose, y.value) : '—';
-  return { yield: y.value, yieldUnit: y.unit, estimated: y.estimated, ratio, durationSec: NSXCore.getShotDurationSeconds(full) };
+  return {
+    yield: y.value, yieldUnit: y.unit, estimated: y.estimated, ratio,
+    durationSec: NSXCore.getShotDurationSeconds(full),
+    // The row's thumbnail plot, reduced HERE rather than in the component:
+    // this full shot is already in hand for the metrics above and is the only
+    // place the measurements exist (the list endpoint omits them). Keeping the
+    // shot itself would mean holding a few thousand samples per row alive for
+    // the life of the list; forty normalised numbers per series is the whole
+    // cost of the plot, and no extra request is made for it.
+    spark: NSXCore.buildShotSparkline(full),
+  };
 }
 
 function _pumpMetrics() {

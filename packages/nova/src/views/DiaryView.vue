@@ -289,20 +289,25 @@ watch(
       </div>
     </div>
 
-    <!-- Full history: flat list across all beans -->
-    <div v-if="diaryState.view === 'full'" class="list">
-      <button
-        v-for="shot in fullHistoryShots"
-        :key="shot.id"
-        class="list-row shot-row as-btn"
-        @click="openHistoryAt(fullHistoryShots, shot)"
-      >
-        <DiaryShotRow :shot="shot" scope="history" />
-      </button>
-      <div v-if="!fullHistoryShots.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
-      <button v-if="hasMoreHistory" class="load-more" :disabled="loadingMore" @click="onLoadMore">
-        {{ loadingMore ? t('diary.loading') : t('diary.loadMore', { n: 20 }) }}
-      </button>
+    <!-- Full history: flat list across all beans. Cards, like every other
+         Diary level (see "Browse as cards" in app.css) — this was the last
+         hairline list left, and it was the one list whose rows are most worth
+         reading as separate objects. -->
+    <div v-if="diaryState.view === 'full'" v-scroll-edges class="list list-cards">
+      <div class="lc-inner">
+        <button
+          v-for="shot in fullHistoryShots"
+          :key="shot.id"
+          class="list-row shot-row as-btn"
+          @click="openHistoryAt(fullHistoryShots, shot)"
+        >
+          <DiaryShotRow :shot="shot" scope="history" />
+        </button>
+        <div v-if="!fullHistoryShots.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
+        <button v-if="hasMoreHistory" class="load-more" :disabled="loadingMore" @click="onLoadMore">
+          {{ loadingMore ? t('diary.loading') : t('diary.loadMore', { n: 20 }) }}
+        </button>
+      </div>
     </div>
 
     <!-- Recipes: the library itself, flat. Unlike Browse (which derives its
