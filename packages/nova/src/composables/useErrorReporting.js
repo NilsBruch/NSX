@@ -39,7 +39,7 @@ function reportOnce(message) {
 
 // The message is deliberately the raw error text, since its audience is
 // whoever is diagnosing, not the end user reading a friendly sentence.
-function reportRuntimeError(where, err) {
+export function reportRuntimeError(where, err) {
   const message = `${where}: ${err?.message || err}`;
   console.error('[Nova]', message, err);
   reportOnce(message);

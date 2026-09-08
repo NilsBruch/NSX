@@ -423,9 +423,12 @@ export default {
     adjustment: 'Adjustment', setting: 'Setting type', stepless: 'Stepless', positions: 'Positions',
     smallStep: 'Small step', bigStep: 'Big step', values: 'Preset values', valuesSub: 'Comma-separated',
     backfillTitle: 'Use this grinder in existing recipes?',
-    // Plural forms (zero | one | other), selected by the third argument at the
-    // call site: t('grinderEditor.backfillMessage', { n, grinder }, n).
-    backfillMessage: ' | One recipe has no grinder yet. Set it to {grinder}? | {n} recipes have no grinder yet. Set them to {grinder}?',
+    // Plural forms (one | other), selected by the third argument at the call
+    // site: t('grinderEditor.backfillMessage', { n, grinder }, n). No zero
+    // branch: the call site returns early on n === 0, and vue-i18n rejects an
+    // empty branch outright ("Plural must have messages") rather than just
+    // yielding an empty string.
+    backfillMessage: 'One recipe has no grinder yet. Set it to {grinder}? | {n} recipes have no grinder yet. Set them to {grinder}?',
   },
   systemSettings: {
     advanced: 'Advanced', gatewayMode: 'Gateway mode',

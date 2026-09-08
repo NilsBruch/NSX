@@ -5,10 +5,11 @@
  * same real gateway object: model/burrs/burrSize/burrType, then either a
  * stepless adjustment (small/big step) or a fixed set of preset positions.
  */
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { openTextField, openChooser, openNumberPad, openConfirm } from '../../composables/useModals.js';
 import { recipes, refreshRecipes, recipeHasNoGrinder, assignGrinderToRecipesWithout } from '../../composables/useRecipe.js';
+import { reportRuntimeError } from '../../composables/useErrorReporting.js';
 
 const props = defineProps({
   grinder: { type: Object, default: null }, // null = new grinder
@@ -63,15 +64,35 @@ function toPayload() {
   };
 }
 
+// Guards the window between the POST and the panel closing: without it, a save
+// that stalls or throws mid-flight leaves the button live, and every further
+// tap creates ANOTHER grinder (the exact shape of the backfill-plural bug).
+const saving = ref(false);
+
 async function save() {
-  const payload = toPayload();
-  const created = isNew ? await NSXCore.createGrinder(payload) : null;
-  if (!isNew) await NSXCore.updateGrinder(props.grinder.id, payload);
-  await NSXCore.loadGrinders();
-  // The POST response is the created record, but fall back to matching the
-  // freshly reloaded list by model in case the gateway ever answers thinner.
-  if (isNew) await offerBackfill(created?.id ? created : NSXCore.getGrinders().find((g) => g.model === payload.model));
-  emit('saved');
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    const payload = toPayload();
+    const created = isNew ? await NSXCore.createGrinder(payload) : null;
+    if (!isNew) await NSXCore.updateGrinder(props.grinder.id, payload);
+    await NSXCore.loadGrinders();
+    // The POST response is the created record, but fall back to matching the
+    // freshly reloaded list by model in case the gateway ever answers thinner.
+    // The offer is a courtesy on top of a grinder that already exists — if it
+    // fails, report it but still close, or the user is stuck on an editor whose
+    // work is in fact done.
+    if (isNew) {
+      try {
+        await offerBackfill(created?.id ? created : NSXCore.getGrinders().find((g) => g.model === payload.model));
+      } catch (err) {
+        reportRuntimeError('grinder backfill', err);
+      }
+    }
+    emit('saved');
+  } finally {
+    saving.value = false;
+  }
 }
 
 /** Recipes composed before any grinder existed carry none, and there is no
@@ -150,11 +171,11 @@ async function del() {
     <div class="bean-actions">
       <template v-if="isNew">
         <button class="act-btn grow" @click="emit('close')">{{ t('common.cancel') }}</button>
-        <button class="act-btn accent grow" @click="save">{{ t('common.save') }}</button>
+        <button class="act-btn accent grow" :disabled="saving" @click="save">{{ t('common.save') }}</button>
       </template>
       <template v-else>
         <button class="act-btn danger grow" @click="del">{{ t('common.delete') }}</button>
-        <button class="act-btn accent grow" @click="save">{{ t('common.save') }}</button>
+        <button class="act-btn accent grow" :disabled="saving" @click="save">{{ t('common.save') }}</button>
       </template>
     </div>
   </div>
