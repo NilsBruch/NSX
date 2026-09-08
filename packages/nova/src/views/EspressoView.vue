@@ -240,9 +240,10 @@ async function openRateRecipe() {
       </button>
     </div>
 
-    <!-- Title + orbs + bottom buttons, centred as a single group rather than
-         each sized against whatever vertical space happens to be left over
-         (see .espresso-body in app.css for why that mattered). -->
+    <!-- Title + orbs, centred as a single group rather than each sized against
+         whatever vertical space happens to be left over (see .espresso-body in
+         app.css for why that mattered). The bottom button row used to sit in
+         here too — see its own note below for why it doesn't any more. -->
     <div v-else class="espresso-body">
       <!-- The recipe's whole identity in one line. Tapping it opens the recipe
            browser, where this same title splits into three tappable bubbles at
@@ -336,26 +337,33 @@ async function openRateRecipe() {
         </div>
       </div>
   
-      <!-- No Browse-recipes button: the identity title above is the way into the
-           library now, so Edit profile takes the leftmost slot. -->
-      <div class="prep-bottom prep-bottom-3">
-        <button v-if="recipe.profile" class="btn" @click="showProfileEditor = true">
-          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.profile"></svg>{{ t('espresso.editProfile') }}
-        </button>
-        <!-- Once rated, the earned stars take this slot over from the "Rate"
-             label — tapping them reopens the same editor, so the rating is both
-             the display and the control. StarRating renders no nested <button>
-             in readonly mode, so the tap reaches this one. -->
-        <button class="rate-recipe-btn" :aria-label="t('rating.rate')" @click="openRateRecipe">
-          <StarRating v-if="recipe.rating > 0" :model-value="recipe.rating" readonly :size="18" />
-          <template v-else>
-            <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.star"></svg>{{ t('rating.rate') }}
-          </template>
-        </button>
-        <button class="btn" @click="loadHistoryForCurrentRecipe">
-          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.history"></svg>{{ t('espresso.history') }}
-        </button>
-      </div>
+    </div>
+
+    <!-- OUTSIDE .espresso-body on purpose: as a direct child of .page it pins to
+         the bottom exactly like Cleaning's and Steam's rows, because
+         .espresso-body absorbs the leftover height the way .dials does on those
+         pages. Inside the centred group it rode up with the orbs, so the one row
+         that is meant to be identical across every tab was the one that moved
+         when you switched tabs (and the gap under it grew with the screen).
+         No Browse-recipes button: the identity title above is the way into the
+         library now, so Edit profile takes the leftmost slot. -->
+    <div v-if="hasRecipe" class="prep-bottom prep-bottom-3">
+      <button v-if="recipe.profile" class="btn" @click="showProfileEditor = true">
+        <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.profile"></svg>{{ t('espresso.editProfile') }}
+      </button>
+      <!-- Once rated, the earned stars take this slot over from the "Rate"
+           label — tapping them reopens the same editor, so the rating is both
+           the display and the control. StarRating renders no nested <button>
+           in readonly mode, so the tap reaches this one. -->
+      <button class="rate-recipe-btn" :aria-label="t('rating.rate')" @click="openRateRecipe">
+        <StarRating v-if="recipe.rating > 0" :model-value="recipe.rating" readonly :size="18" />
+        <template v-else>
+          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.star"></svg>{{ t('rating.rate') }}
+        </template>
+      </button>
+      <button class="btn" @click="loadHistoryForCurrentRecipe">
+        <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.history"></svg>{{ t('espresso.history') }}
+      </button>
     </div>
 
     <RecipeOverlay

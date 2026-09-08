@@ -891,19 +891,25 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .chooser-item.sel { color: var(--accent); }
 
 /* ===== Espresso page: recipe title, roast chip, orbs ===== */
-/* Title + orbs + bottom buttons, centred as ONE group in the space below the
-   page title (see EspressoView.vue's espresso-body wrapper). An earlier
-   version grew .dials alone with flex:1 (top-aligned), which left a
-   viewport-dependent empty gap below the orbs that a fixed `top: -30px` on
-   the rating row tried to eat — fine on the screen it was tuned against, but
-   a shorter screen has LESS leftover space, so the same 30px overshot into
-   the orb above. Centring the whole group with real gaps removes the
-   viewport-dependent gap, so no fixed pixel value has to guess at it.
+/* Title + orbs, centred as ONE group in the space below the page title (see
+   EspressoView.vue's espresso-body wrapper). An earlier version grew .dials
+   alone with flex:1 (top-aligned), which left a viewport-dependent empty gap
+   below the orbs that a fixed `top: -30px` on the rating row tried to eat —
+   fine on the screen it was tuned against, but a shorter screen has LESS
+   leftover space, so the same 30px overshot into the orb above. Centring the
+   whole group with real gaps removes the viewport-dependent gap, so no fixed
+   pixel value has to guess at it.
+   The bottom button row is NOT in here — it is a sibling, a direct child of
+   .page. That reasoning above is entirely about SHORT screens, and on a tall
+   one it cost the opposite mistake: the centred group carried .prep-bottom up
+   with it, so the one row that is identical on every tab was the only one that
+   moved vertically when you switched tabs, floating above a growing empty band.
+   As a sibling it pins to the bottom off THIS rule's flex:1, exactly the way
+   Cleaning's and Steam's rows pin off `.dials { flex: 1 }`.
    align-items: stretch (the default — NOT center): each child needs the FULL
-   page width to do its own internal centering/distribution (.dials'
-   justify-content:center, .prep-bottom's flex:1 buttons); align-items:center
-   would shrink-wrap each to its content width instead, squeezing the bottom
-   buttons out of line with every other page's button row. */
+   page width to do its own internal centering (.dials' justify-content:center,
+   .recipe-title's full-width bar); align-items:center would shrink-wrap each to
+   its content width instead. */
 .espresso-body { flex: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 22px; min-height: 0; }
 /* The rating control, in the bottom button row's middle slot: the "Rate"
    label when unrated, the earned stars once rated. flex:1 gives it an equal
