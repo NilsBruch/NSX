@@ -95,7 +95,7 @@ const yieldText = computed(() => {
              calcRatio already returns an em dash for that, but on this line it
              lands next to the yield's own em dash ("18.0g → —g — 16s"), which
              reads as a typo rather than as missing data. Drop it instead. -->
-        <b v-if="metrics && metrics.ratio !== '—'">{{ metrics.ratio }}</b>
+        <b v-if="metrics && metrics.ratio !== '—'">({{ metrics.ratio }})</b>
         <span v-if="duration" class="sc-dur">{{ duration }}</span>
       </span>
     </span>
