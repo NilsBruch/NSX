@@ -15,10 +15,22 @@
  * (shot.workflow.context.beanBatchId -> batch.beanId -> bean) — without one, a
  * skin can only guess via roaster/name string matching.
  *
- * A batch's roastDate is treated as IMMUTABLE: changing the roast date means a
- * different bag, so callers re-resolve to another batch rather than rewriting
- * this one (which would retroactively change what every past shot on that bag
- * claims its roast date was).
+ * A batch's roastDate is treated as IMMUTABLE BY THIS DOMAIN'S OWN RESOLUTION
+ * PATH: resolveBatch()/findBatchForRoastDate() only ever find-or-create, and
+ * callers like Nova's useRecipe.setRoastDate re-resolve to another batch
+ * rather than rewriting this one — because doing so would retroactively
+ * change what every past shot on that bag claims its roast date was. Note
+ * this domain exposes no updateBatch/deleteBatch at all (a skin that needs
+ * batch CRUD calls NSXApi's /bean-batches endpoints directly, as Nova's
+ * useRecipe.js and useBeanActions.js already do), so this rule was never
+ * actually enforceable from here — it's a convention every CALLER upholds,
+ * not something this file's API surface can prevent.
+ *
+ * Nova's Settings > Beans manager is the one deliberate exception: it lets a
+ * mistyped roast date be corrected in place, surfacing the retroactive-shots
+ * caveat in its own UI rather than pretending the rule above has no cost.
+ * Guard against creating two batches with the same (beanId, roastDate) when
+ * doing this — that identity is what resolveBatch's find-or-create depends on.
  *
  * Registered on NSXCore:
  *   Selectors: getBeans(), normalizeRoastDate(v), findBatchForRoastDate(batches, roastDate),

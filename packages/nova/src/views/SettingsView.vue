@@ -14,6 +14,7 @@ import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ProfilePicker from '../components/ProfilePicker.vue';
 import GrinderPanel from '../components/settings/GrinderPanel.vue';
+import BeanPanel from '../components/settings/BeanPanel.vue';
 import MachinePanel from '../components/settings/MachinePanel.vue';
 import SkinPanel from '../components/settings/SkinPanel.vue';
 import AppPanel from '../components/settings/AppPanel.vue';
@@ -35,11 +36,14 @@ const SYSTEM_TILES = [
   { id: 'app', label: 'settingsPage.app', icon: 'M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.5-2-3.4-2.3 1a7.7 7.7 0 0 0-2.6-1.5L14 2.6h-4l-.5 2.5a7.7 7.7 0 0 0-2.6 1.5l-2.3-1-2 3.4 2 1.5a7.6 7.6 0 0 0 0 3l-2 1.5 2 3.4 2.3-1a7.7 7.7 0 0 0 2.6 1.5l.5 2.5h4l.5-2.5a7.7 7.7 0 0 0 2.6-1.5l2.3 1 2-3.4-2-1.5z' },
   { id: 'skin', label: 'settingsPage.skin', icon: 'M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2', wide: true },
 ];
-// The libraries you set up once and pick from while brewing. (Beans live in
-// the Diary, next to the shots that used them — not here.)
+// The libraries you set up once and pick from while brewing. The Diary still
+// owns browsing a bean alongside the shots that used it; this is where the
+// library itself is managed — same split Profiles already has between this
+// tile (mode="manage") and every other picker (mode="pick").
 const EQUIPMENT_TILES = [
   { id: 'profiles', label: 'settingsPage.profiles', icon: 'M4 19h16 M4 16c3 0 3-9 6-9s3 6 5 6 3-2 5-2' },
   { id: 'grinders', label: 'settingsPage.grinders', icon: 'M9 3h6l-1 5h-4L9 3z M8 8h8v6H8z M10 14v4h4v-4' },
+  { id: 'beans', label: 'settingsPage.beans', icon: 'M7 7c3-4 9-3 10 1s-3 10-8 9-5-6-2-10z M9 8c2 2 4 3 6 7', wide: true },
 ];
 
 const active = ref(null);
@@ -66,6 +70,7 @@ const active = ref(null);
 
     <ProfilePicker v-if="active === 'profiles'" mode="manage" @back="active = null" />
     <GrinderPanel v-if="active === 'grinders'" @close="active = null" />
+    <BeanPanel v-if="active === 'beans'" @close="active = null" />
     <MachinePanel v-if="active === 'machine'" @close="active = null" />
     <SkinPanel v-if="active === 'skin'" @close="active = null" />
     <AppPanel v-if="active === 'app'" @close="active = null" />

@@ -295,9 +295,71 @@ function routeApi(req, res, url, body) {
     const incl = q.get("includeArchived") === "true";
     return jsonEtag(incl ? state.beans : state.beans.filter((b) => !b.archived));
   }
+  if (path === "/api/v1/beans" && method === "POST") {
+    const now = new Date().toISOString();
+    const rec = { id: `bean:${Date.now()}`, archived: false, createdAt: now, updatedAt: now, ...body };
+    state.beans.push(rec);
+    return json(rec, 201);
+  }
+  if (path.startsWith("/api/v1/beans/") && !path.includes("/batches") && method === "PUT") {
+    const id = decodeURIComponent(path.split("/")[4]);
+    const i = state.beans.findIndex((b) => b.id === id);
+    if (i < 0) return json({ message: "not found" }, 404);
+    state.beans[i] = { ...state.beans[i], ...body, id, updatedAt: new Date().toISOString() };
+    return json(state.beans[i]);
+  }
+  if (path.startsWith("/api/v1/beans/") && !path.includes("/batches") && method === "DELETE") {
+    const id = decodeURIComponent(path.split("/")[4]);
+    const i = state.beans.findIndex((b) => b.id === id);
+    if (i >= 0) state.beans.splice(i, 1);
+    // The real gateway refuses a bean delete while it still has batches (see
+    // NSXCore.deleteBean) — the client clears them first via DELETE
+    // /bean-batches/{id}, so this route doesn't need to cascade itself.
+    delete state.beanBatches[id];
+    return noContent();
+  }
   const batchMatch = path.match(/^\/api\/v1\/beans\/([^/]+)\/batches$/);
   if (batchMatch && method === "GET") {
-    return jsonEtag(state.beanBatches[decodeURIComponent(batchMatch[1])] ?? []);
+    const beanId = decodeURIComponent(batchMatch[1]);
+    const incl = q.get("includeArchived") === "true";
+    const list = state.beanBatches[beanId] ?? [];
+    return jsonEtag(incl ? list : list.filter((b) => !b.archived));
+  }
+  if (batchMatch && method === "POST") {
+    const beanId = decodeURIComponent(batchMatch[1]);
+    const now = new Date().toISOString();
+    const rec = { id: `batch:${Date.now()}`, beanId, frozen: false, archived: false, createdAt: now, updatedAt: now, ...body };
+    if (!state.beanBatches[beanId]) state.beanBatches[beanId] = [];
+    state.beanBatches[beanId].push(rec);
+    return json(rec, 201);
+  }
+  // A bag's own id doesn't carry its beanId in the URL, so every /bean-batches/{id}
+  // route has to search across state.beanBatches — same hop beanIdOf() above makes.
+  const findBatch = (id) => {
+    for (const list of Object.values(state.beanBatches)) {
+      const b = (list || []).find((x) => x?.id === id);
+      if (b) return b;
+    }
+    return null;
+  };
+  if (path.startsWith("/api/v1/bean-batches/") && method === "GET") {
+    const rec = findBatch(decodeURIComponent(path.split("/")[4]));
+    return rec ? json(rec) : json({ message: "not found" }, 404);
+  }
+  if (path.startsWith("/api/v1/bean-batches/") && method === "PUT") {
+    const id = decodeURIComponent(path.split("/")[4]);
+    const rec = findBatch(id);
+    if (!rec) return json({ message: "not found" }, 404);
+    Object.assign(rec, body, { id, updatedAt: new Date().toISOString() });
+    return json(rec);
+  }
+  if (path.startsWith("/api/v1/bean-batches/") && method === "DELETE") {
+    const id = decodeURIComponent(path.split("/")[4]);
+    for (const list of Object.values(state.beanBatches)) {
+      const i = (list || []).findIndex((b) => b?.id === id);
+      if (i >= 0) { list.splice(i, 1); break; }
+    }
+    return noContent();
   }
   if (path === "/api/v1/grinders" && method === "GET") return jsonEtag(state.grinders);
 
