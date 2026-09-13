@@ -89,7 +89,10 @@ export default {
     confirmReplaceProfile: 'Replace the profile in the current recipe?',
     openRecipes: 'Browse recipes',
     editProfile: 'Edit profile',
+    editRecipe: 'Edit recipe',
     history: 'History',
+    olderShot: 'Older shot',
+    newerShot: 'Newer shot',
     stopAtWeight: 'Stop at weight',
     stopWeightHint: 'Stops at the target weight on the scale',
     stopVolumeHint: 'No scale — stops at the estimated volume',
@@ -418,6 +421,7 @@ export default {
     tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',
     showTargets: 'Profile targets', showTargetsSub: "Draw the profile's pressure and flow targets in the shot graph",
+    coffeeGraph: 'Show graph on coffee page', coffeeGraphSub: 'Browse recipe cards next to the selected one’s shot graph, instead of the single-recipe dial layout',
     reviewAutoCloseOff: 'Stay open', reviewAutoCloseSec: 'After {n}s',
   },
   grinderEditor: {

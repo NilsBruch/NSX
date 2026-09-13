@@ -963,6 +963,88 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .recipe-title .dot { color: var(--faint); padding: 0 0.5em; }
 .recipe-title .chev { color: var(--muted); padding-left: 0.8em; }
 
+/* ===== Espresso page, graph layout (RecipeBrowser.vue, skinSettings.coffeeGraph) =====
+   Recipe cards on the left, the selected one's shot graph + stepper on the
+   right — replaces .espresso-body as the flex:1 child of .page. Both grid
+   columns stretch to this row's full height (grid's default align-items), but
+   only the RIGHT column reserves space at its own bottom for the stepper row
+   (.browse-graph-col) — the left column's list has no such reservation, so it
+   runs the full height down to the page's bottom edge, past where the graph
+   column's own content stops, with a fade (.rp-list::after) suggesting more
+   recipes queued up just out of view. */
+.espresso-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(230px, 28%) 1fr; gap: 18px; }
+.browse-list { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
+/* Sort + Edit Recipe sit above the list — a fixed-height row, `flex: none`,
+   so it doesn't shrink as the list below it grows or shrinks. Search itself
+   lives in the graph column's own bottom row now (.browse-search-group), not
+   here — see .prep-bottom.browse-bottom below. */
+.browse-list .rp-bottom { flex: none; gap: 8px; justify-content: space-between; }
+/* Matches the search button's own height — .rbtn is a 58px circle (2 * its
+   29px radius) — so Sort and Edit read as the same weight of control as
+   Search, even though the two rows are apart now. */
+/* min-width sized to the longer of the two toggled labels ("By rating") plus
+   its icon, so cycling sort mode doesn't visibly resize the button; centered
+   so the shorter label ("By use") doesn't sit lopsided in the extra room. */
+.browse-list .rp-bottom .sort-btn { height: 58px; min-width: 132px; justify-content: center; }
+/* The non-scrolling shell that carries the bottom fade — .rp-list-scroll
+   (below) is the part that actually scrolls, exactly like NSX's own
+   recipe-list-shell/recipe-list-scroll split, so the fade stays pinned to the
+   shell's bottom edge instead of scrolling away with the cards under it. */
+.rp-list { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.rp-list::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 64px;
+  background: linear-gradient(0deg, var(--page-bg) 0%, transparent 100%);
+  pointer-events: none;
+}
+.rp-list-scroll {
+  height: 100%; display: flex; flex-direction: column; align-items: stretch;
+  gap: 8px; overflow-y: auto; overflow-x: hidden;
+  /* Same treatment as .wheel's scroller: the tablet's own touch scrolling
+     needs no OS scrollbar, and a desktop browser's default one clashed with
+     the fade mask sitting right on top of it. */
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.rp-list-scroll::-webkit-scrollbar { display: none; }
+/* RecipeOverlay's cards are sized for a wide 3-across horizontal strip; at
+   that size a vertical list shows barely two of them at once. Everything
+   below only ever selects a .rp-card INSIDE .rp-list, so the overlay's own
+   strip (and its cards' size) is untouched. */
+.rp-list .rp-card { flex: 0 0 auto; padding: 10px 14px; gap: 6px; }
+.rp-list .rp-card .rp-head { gap: 2px; }
+.rp-list .rp-card .rp-roaster { font-size: var(--fs-xs); }
+.rp-list .rp-card .rp-name { font-size: var(--fs-base); -webkit-line-clamp: 1; }
+.rp-list .rp-card .rp-rating { min-height: 0; }
+.rp-list .rp-card .rp-rows { gap: 4px; }
+.rp-list .rp-card .rp-row-duo { gap: 10px; }
+.rp-list .rp-card .rp-label { font-size: 0.65rem; }
+.rp-list .rp-card .rp-val { font-size: var(--fs-sm); }
+.rp-list .rp-card .rp-profile { margin-top: 2px; }
+.rp-list .rp-card .rp-chip { padding: 3px 10px; font-size: var(--fs-xs); }
+/* The right column: the page title (freed up from the top of .page in graph
+   mode — see EspressoView.vue), the graph, then its own stepper row below it
+   — moved off the full-width row it used to be so the left column's list is
+   free to run past it (see the block comment above). */
+.browse-graph-col { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
+.browse-graph-title { flex: none; }
+.browse-graph-col .shot-graph { max-height: none; }
+.browse-graph-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--faint); font-size: var(--fs-md); text-align: center; padding: 0 10vw;
+}
+/* Reuses .prep-bottom's pinning (see the .prep-bottom-3 rule above). Edit
+   Recipe moved up into the list's own action row, so this now holds just the
+   stepper — centred, rather than .prep-bottom's default align-items:stretch
+   which would otherwise stretch the pill to the row's full 68px height.
+   flex: none keeps the row from being squeezed by .shot-graph's flex:1
+   above it in the same column. */
+/* Search flush left, the stepper flush right — the two groups pushed to the
+   row's opposite edges rather than centred as a pair. */
+.prep-bottom.browse-bottom { flex: none; justify-content: space-between; align-items: center; }
+/* Search + its active-filter chip, kept close together as one unit so
+   space-between above only ever separates THIS group from the stepper, not
+   the chip from the button it belongs to. */
+.browse-search-group { display: flex; align-items: center; gap: 10px; }
+
 /* The overlay. A scrim that BLURS the espresso page rather than hiding it —
    the recipe you're browsing away from stays visible behind its own browser.
    `fixed`, not `absolute`, for the same reason .overlay-full documents:
@@ -1044,6 +1126,18 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   max-width: 100%;
   font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* RecipeIdentityBubbles.vue's `tall` variant (EspressoView's Edit Recipe
+   overlay only — RecipeOverlay's own identity row and RecipeCrumbs' trail
+   keep the compact default above). Taller bubbles so cut-off names have
+   somewhere to go: the bean renders as two SEPARATE .rov-bubble-name lines
+   (roaster, then name — each still single-line-ellipsis on its own, which
+   reads better than a long roaster name and the bean name sharing one
+   wrapped block), while grinder/profile keep one .rov-bubble-name but with
+   .rov-bubble-wrap letting it wrap onto a second line instead of clipping. */
+.rov-identity.tall .rov-bubble { min-height: 78px; }
+.rov-identity.tall .rov-bubble-wrap {
+  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 /* .rp-strip already carries flex:1/min-height:0 and its own scrolling — the
    .rov-strip class exists only for the pointer-events rules above. */
@@ -1615,8 +1709,47 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .date-nav .date {
   min-width: 108px; display: flex; flex-direction: column; align-items: center; gap: 1px;
   text-align: center; font-weight: 700; font-size: var(--fs-sm); font-variant-numeric: tabular-nums;
+  /* Overrides .date-nav button's 40x40 nav-button box above — LiveShotOverlay's
+     history screen uses a plain <span> here, unaffected either way, but
+     RecipeBrowser's stepper label is a <button> (tapping it opens the
+     full-screen review) and would otherwise inherit that fixed square. */
+  width: auto; height: auto; background: none; border: none; padding: 0; margin: 0;
 }
+/* Bounces the WHOLE pill, not just this label — .is-pressed is toggled by
+   RecipeBrowser.vue's pointerdown/up on the label itself (a plain :active on
+   the outer .date-nav would bubble up from any child press, including the
+   ‹ › steppers, which aren't meant to trigger it; and :has() — the other way
+   to scope this in pure CSS — is Chromium 105+, past this tablet's WebView,
+   same reason it's avoided elsewhere in this file).
+   This button jumps to a whole other screen rather than editing in place, so
+   a small spring reads better than the app's usual flat 0.09s press-scale
+   (see the shared :active block further down) — but mild: the overshoot
+   lives in the transition back to scale(1) on release, not in .is-pressed
+   itself, and both the dip and the overshoot are kept subtle. */
+.date-nav.browse-nav { transition: transform 0.26s cubic-bezier(0.34, 1.2, 0.64, 1); }
+.date-nav.browse-nav.is-pressed { transform: scale(0.96); transition-duration: 0.08s; }
 .date-nav .date-time { font-weight: 600; font-size: var(--fs-xs); color: var(--muted); }
+/* Overrides .date-nav's own base rules above — same specificity, so this has
+   to come AFTER them to win (same reason the bounce rules just above do).
+   Compact (tight padding/gaps, not the roomy layout this replaced) and
+   ALWAYS two lines rather than one row that only wraps under pressure — the
+   stepper's label carries more fields (weekday/date/time/duration on one
+   line; grind/dose->yield/temp on the other) than .date-nav .date's original
+   single-row use (LiveShotOverlay's history screen) ever needed to.
+   A FIXED width, not min-width, so it never resizes shot to shot: 1ch ~= a
+   tabular-nums digit's width, and the line that needs it most is the second
+   one — worst case "⚙ 999 · 99.9g → 999.9g (1:99.9) · 999°C" (grind <=3
+   digits, dose <=2, yield <=3, temp <=3, per the values these can actually
+   reach) comes to ~30 characters; 30ch gives that room with a little to
+   spare. flex: 0 0 <width>, not just width, is what makes it truly fixed
+   even if the row around it gets tight. */
+.date-nav.browse-nav { padding: 4px 8px; gap: 8px; }
+.date-nav.browse-nav .date {
+  flex: 0 0 30ch; width: 30ch;
+  flex-direction: column; align-items: center; gap: 2px;
+  font-weight: 600; font-size: var(--fs-sm);
+}
+.date-nav.browse-nav .date-time { font-weight: 600; font-size: var(--fs-xs); color: var(--muted); }
 
 .shot-done { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 26px; position: relative; }
 .rate-stars { display: inline-flex; gap: 8px; }

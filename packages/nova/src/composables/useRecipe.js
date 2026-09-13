@@ -200,6 +200,16 @@ export async function bumpRecipeLastUsed(id) {
 
 export const roastAge = computed(() => NSXCore.getBatchAge(recipe.roastDate));
 
+// A recipe composed while no grinder existed yet carries none (composeNewRecipe
+// falls back to '—'). "One grinder is implicit" (useCore's singleGrinder) only
+// holds once the recipe actually HAS it, so an unset grinder stays pickable
+// however many are configured — otherwise such a recipe could never be given
+// one. Shared by RecipeOverlay.vue's bubbles and RecipeIdentityBubbles.vue
+// (the same bubbles, reused in the Edit Recipe overlay's header).
+export const grinderUnset = computed(() =>
+  recipe.grinderId == null && (!recipe.grinderModel || recipe.grinderModel === '—')
+);
+
 /**
  * Upholds the bean/bag invariant: after this, the recipe has a real beanId and
  * a real beanBatchId. Called from pushRecipe(), the single choke point every
@@ -484,8 +494,14 @@ export async function applyEditedProfile(profile) {
 /** Loads an existing recipe entity from the library and pushes it — selecting
  *  a recipe is "load it onto the machine now", since starting the brew itself
  *  happens on the machine's own hardware. Does NOT touch lastUsed (matching
- *  NSX exactly — only a completed shot does, see bumpRecipeLastUsed). */
-export async function selectRecipe(entry) {
+ *  NSX exactly — only a completed shot does, see bumpRecipeLastUsed).
+ *
+ *  `push: false` skips the immediate pushRecipe() — RecipeBrowser.vue's graph
+ *  layout uses this so flicking through cards to compare their shot graphs
+ *  doesn't fire a gateway round-trip (plus ensureRecipeBatch()) per tap; it
+ *  calls schedulePushForRecipe(entry) right after instead, which debounces
+ *  that push exactly the way NSX's own recipe list does. */
+export async function selectRecipe(entry, { push = true } = {}) {
   Object.assign(recipe, {
     id: entry.id ?? null,
     coffeeRoaster: entry.coffeeRoaster || '—',
@@ -514,7 +530,24 @@ export async function selectRecipe(entry) {
     rating: Number(entry.rating) || 0,
   });
   await adoptBatch(recipe.beanBatchId);
-  await pushRecipe(); // ensureRecipeBatch heals an older, batch-less recipe here
+  if (push) await pushRecipe(); // ensureRecipeBatch heals an older, batch-less recipe here
+}
+
+/**
+ * Debounced companion to selectRecipe(entry, { push: false }) — mirrors NSX's
+ * own _schedulePushForRecipe (app.js): a single keyed 400ms timer (so
+ * flicking through several cards collapses to one push), the recipe bound by
+ * id rather than re-read from `recipe` when the timer fires, and a guard that
+ * drops the push if the selection has moved on since — pushing then would
+ * contradict what the screen shows.
+ */
+export function schedulePushForRecipe(entry) {
+  const id = entry?.id ?? null;
+  if (id == null) return;
+  NSXCore.debounced('nova:recipePush', () => {
+    if (recipe.id !== id) return;
+    pushRecipe();
+  }, 400);
 }
 
 /**

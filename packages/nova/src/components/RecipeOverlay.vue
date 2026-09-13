@@ -13,13 +13,15 @@
  *     Managing the library (deleting, reviewing shots per recipe) is the
  *     Diary's Recipes view; creating one is the Diary's "+".
  */
-import { computed, onMounted, ref } from 'vue';
+import { onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, recipes, refreshRecipes, selectRecipe, beanForRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
-import { shots, loadShots, grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
-import { openTextField, openChooser, openConfirm } from '../composables/useModals.js';
+import { refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
+import { shots, loadShots } from '../composables/useCore.js';
+import { openChooser, openConfirm } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
-import StarRating from './StarRating.vue';
+import { useRecipeList } from '../composables/useRecipeList.js';
+import RecipeCard from './RecipeCard.vue';
+import RecipeIdentityBubbles from './RecipeIdentityBubbles.vue';
 
 const emit = defineEmits(['close', 'pickBean', 'pickGrinder', 'pickProfile']);
 const { t } = useI18n();
@@ -31,73 +33,7 @@ onMounted(() => {
   if (!shots.value.length) loadShots(200).catch(() => { /* unsorted list is still usable */ });
 });
 
-const query = ref('');
-const sortMode = ref('use');
-
-const isCurrent = (entry) => entry.id != null && entry.id === recipe.id;
-
-// A recipe composed while no grinder existed yet carries none (useRecipe's
-// composeNewRecipe falls back to '—'). "One grinder is implicit" only holds
-// once the recipe actually HAS it, so an unset grinder stays pickable however
-// many are configured — otherwise such a recipe can never be given one.
-const grinderUnset = computed(() =>
-  recipe.grinderId == null && (!recipe.grinderModel || recipe.grinderModel === '—')
-);
-
-function grinderDisplay(entry) {
-  const model = entry.grinderModel;
-  if (!model || model === '—') return model;
-  const g = grinders.value.find((x) => x.id === entry.grinderId) ?? grinders.value.find((x) => x.model === model);
-  return g ? formatGrinderLabel(g) : model;
-}
-
-function cycleSort() { sortMode.value = sortMode.value === 'use' ? 'rating' : 'use'; }
-const sortLabel = computed(() => t(sortMode.value === 'rating' ? 'recipePicker.sortRating' : 'recipePicker.sortUse'));
-
-const sortedRecipes = computed(() => {
-  const byUse = window.NSXCore.sortRecipesByLastUsed(recipes.value, shots.value);
-  const sorted = sortMode.value !== 'rating' ? byUse : (() => {
-    const pos = new Map(byUse.map((r, i) => [r, i]));
-    return byUse.slice().sort((a, b) =>
-      ((Number(b.rating) || 0) - (Number(a.rating) || 0)) || (pos.get(a) - pos.get(b))
-    );
-  })();
-  // Pinned first, in whatever order the active sort gave them — a partition,
-  // not another sort key, so pinning never reshuffles anything among itself and
-  // the sort button still visibly does what it says within each half.
-  return [...sorted.filter((r) => r.pinned), ...sorted.filter((r) => !r.pinned)];
-});
-
-/**
- * Archiving a bean in the Diary is how a coffee leaves the rotation without
- * losing its history — so its recipes leave this list with it, otherwise the
- * quick-switch browser keeps offering coffees that are finished.
- *
- * The loaded recipe is the one exception: it is what the machine is holding
- * right now, and a browser that omits the thing you are actually brewing (badge
- * and all) reads as a bug. Archiving is reversible and deliberately soft —
- * unlike deletion, which takes the recipes outright.
- */
-const listedRecipes = computed(() =>
-  sortedRecipes.value.filter((entry) => isCurrent(entry) || !beanForRecipe(entry)?.archived)
-);
-
-const visibleRecipes = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  if (!q) return listedRecipes.value;
-  return listedRecipes.value.filter((entry) =>
-    [entry.coffeeRoaster, entry.coffeeName, entry.profileTitle, entry.grinderModel]
-      .some((v) => String(v || '').toLowerCase().includes(q))
-  );
-});
-
-async function openSearch() {
-  const value = await openTextField({ title: t('recipePicker.search'), value: query.value, placeholder: t('recipePicker.searchPlaceholder') });
-  if (value !== null) query.value = value;
-}
-
-const num = (v, digits = 1) => (Number.isFinite(Number(v)) ? Number(v).toFixed(digits) : '—');
-const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight) || 0, Number(entry.targetYield) || 0);
+const { query, isCurrent, cycleSort, sortLabel, listedRecipes, visibleRecipes, openSearch } = useRecipeList();
 
 async function pick(entry) {
   await selectRecipe(entry);
@@ -152,27 +88,11 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
            and split rather than being replaced by a new screen. -->
       <div class="page-title">{{ t('espresso.pageTitle') }}</div>
 
-      <div class="rov-identity">
-        <button class="rov-bubble" @click="emit('pickBean')">
-          <span class="rov-bubble-label">{{ t('espresso.bean') }}</span>
-          <span class="rov-bubble-name">{{ recipe.coffeeRoaster }} {{ recipe.coffeeName }}</span>
-        </button>
-        <!-- Nothing to switch TO with a single grinder (see useCore's
-             singleGrinder) — plain, not a button, matching layout A. Unless the
-             recipe has no grinder at all: then there IS something to set. -->
-        <button v-if="!singleGrinder || grinderUnset" class="rov-bubble" @click="emit('pickGrinder')">
-          <span class="rov-bubble-label">{{ t('espresso.grinder') }}</span>
-          <span class="rov-bubble-name">{{ grinderUnset ? '—' : recipe.grinderModel }}</span>
-        </button>
-        <div v-else class="rov-bubble plain">
-          <span class="rov-bubble-label">{{ t('espresso.grinder') }}</span>
-          <span class="rov-bubble-name">{{ recipe.grinderModel }}</span>
-        </div>
-        <button class="rov-bubble" @click="emit('pickProfile')">
-          <span class="rov-bubble-label">{{ t('espresso.profile') }}</span>
-          <span class="rov-bubble-name">{{ recipe.profileTitle }}</span>
-        </button>
-      </div>
+      <RecipeIdentityBubbles
+        @pick-bean="emit('pickBean')"
+        @pick-grinder="emit('pickGrinder')"
+        @pick-profile="emit('pickProfile')"
+      />
 
       <!-- .self: the strip fills the middle of the screen, so the empty bands
            above and below the cards are the strip itself — a tap there
@@ -182,66 +102,17 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
            touch on the tablet. A drag that scrolls never produces a click, so
            this doesn't fire at the end of a swipe. -->
       <div class="rp-strip rov-strip" @click.self="emit('close')">
-        <div
+        <RecipeCard
           v-for="entry in visibleRecipes"
           :key="entry.id"
-          class="rp-card"
-          :class="{ current: isCurrent(entry) }"
+          :entry="entry"
+          :current="isCurrent(entry)"
           @pointerdown="cardPress.down($event, entry)"
           @pointermove="cardPress.move"
           @pointerup="cardPress.up(entry)"
           @pointercancel="cardPress.cancel"
           @pointerleave="cardPress.cancel"
-        >
-          <div class="rp-head">
-            <!-- On the roaster's line and pushed to the card's right edge, where
-                 the "Current" badge used to sit and nothing else does. Inside
-                 the line rather than above it because .rp-head is a COLUMN: a
-                 sibling svg would take a row of its own and make a pinned card
-                 taller than its neighbours. Last in the row, so its presence
-                 cannot shift the roaster name — no reserved space needed. -->
-            <span class="rp-roaster">
-              <span class="rp-roaster-text">{{ entry.coffeeRoaster }}</span>
-              <svg v-if="entry.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
-              </svg>
-            </span>
-            <span class="rp-name">{{ entry.coffeeName }}</span>
-            <div class="rp-rating">
-              <StarRating v-if="Number(entry.rating) > 0" :model-value="Number(entry.rating)" readonly :size="16" />
-            </div>
-          </div>
-          <div class="rp-rows">
-            <div v-if="!singleGrinder" class="rp-row-duo">
-              <div class="rp-row">
-                <span class="rp-label">{{ t('recipePicker.lGrinder') }}</span>
-                <span class="rp-val">{{ grinderDisplay(entry) }}</span>
-              </div>
-              <div class="rp-row">
-                <span class="rp-label">{{ t('recipePicker.lGrind') }}</span>
-                <span class="rp-val">{{ entry.grinderSetting }}</span>
-              </div>
-            </div>
-            <div v-else class="rp-row">
-              <span class="rp-label">{{ t('recipePicker.lGrind') }}</span>
-              <span class="rp-val">{{ entry.grinderSetting }}</span>
-            </div>
-            <div class="rp-row-duo">
-              <div class="rp-row">
-                <span class="rp-label">{{ t('recipePicker.lBeverage') }}</span>
-                <span class="rp-val">{{ num(entry.targetDoseWeight) }} → {{ num(entry.targetYield) }} g <span class="rp-ratio">({{ ratio(entry) }})</span></span>
-              </div>
-              <div class="rp-row">
-                <span class="rp-label">{{ t('recipePicker.lTemp') }}</span>
-                <span class="rp-val">{{ num(entry.groupTemp, 0) }} °C</span>
-              </div>
-            </div>
-          </div>
-          <div class="rp-row rp-profile">
-            <span class="rp-label">{{ t('recipePicker.lProfile') }}</span>
-            <span class="rp-chip">{{ entry.profileTitle }}</span>
-          </div>
-        </div>
+        />
 
         <!-- Both read from listedRecipes, not the raw library: with every
              recipe's bean archived, "no results" would blame a search nobody

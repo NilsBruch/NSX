@@ -237,6 +237,11 @@ export const skinSettings = reactive({
   // what the machine actually did is the reading that matters, and the target
   // encodings double the ink in the plot for a question you only sometimes ask.
   showTargets: false,
+  // true = the coffee page becomes a browser: recipe cards on the left, the
+  // selected recipe's shot graph on the right, a shot stepper + Edit Recipe
+  // button at the bottom, instead of the single-recipe dial layout. OFF by
+  // default so the classic page is what everyone keeps seeing.
+  coffeeGraph: false,
 });
 const SKIN_KEYS = {
   wakeOnUnlock: 'nova_wake_on_unlock',
@@ -250,6 +255,7 @@ const SKIN_KEYS = {
   lightMode: 'nova_light_mode',
   shotReviewAutoCloseSec: 'nova_shot_review_autoclose',
   showTargets: 'nova_show_targets',
+  coffeeGraph: 'nova_coffee_graph',
 };
 export function loadSkinSettings() {
   const s = NSXCore.getStore();
@@ -269,6 +275,7 @@ export function loadSkinSettings() {
   // Default 5s; an explicit stored 0 (off) must survive, so don't `|| 5`.
   skinSettings.shotReviewAutoCloseSec = s.nova_shot_review_autoclose != null ? Number(s.nova_shot_review_autoclose) : 5;
   skinSettings.showTargets = s.nova_show_targets === true; // default off
+  skinSettings.coffeeGraph = s.nova_coffee_graph === true; // default off
 }
 export async function saveSkinSetting(key, value) {
   skinSettings[key] = value;

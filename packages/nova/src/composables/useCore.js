@@ -148,9 +148,9 @@ export function formatShortDate(iso) {
  * and 12- vs 24-hour clocks are not ours to hardcode. Intl decides both.
  */
 export function formatDateParts(iso) {
-  if (!iso) return { day: '—', month: '', time: '' };
+  if (!iso) return { day: '—', month: '', time: '', weekday: '' };
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return { day: '—', month: '', time: '' };
+  if (Number.isNaN(d.getTime())) return { day: '—', month: '', time: '', weekday: '' };
   const locale = window.NSXI18n?.getLocale?.() ?? 'en-US';
   return {
     day: new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(d),
@@ -159,6 +159,9 @@ export function formatDateParts(iso) {
     // rather than "06:46 PM", and the rail is narrow enough that the two
     // characters decide whether it fits on one line.
     time: new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(d),
+    // Added for RecipeBrowser.vue's shot stepper ("Mo 14.03. | ..."); other
+    // callers (DiaryShotRow, RecipeDetail) simply don't read this key.
+    weekday: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(d),
   };
 }
 

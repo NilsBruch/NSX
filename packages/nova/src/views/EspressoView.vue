@@ -1,56 +1,42 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { grinders, formatGrinderLabel, recipeIdentityParts, formatShortDate } from '../composables/useCore.js';
-import { recipe, roastAge, pushRecipe, setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, cloneProfile, applyEditedProfile } from '../composables/useRecipe.js';
-import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
-import { openNumberPad, openRating, openChooser, openConfirm } from '../composables/useModals.js';
-import { useDragDial, DIAL_PX_PER_STEP } from '../composables/useDragDial.js';
+import { grinders, formatGrinderLabel } from '../composables/useCore.js';
+import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, cloneProfile, applyEditedProfile } from '../composables/useRecipe.js';
+import { openChooser, openConfirm } from '../composables/useModals.js';
+import { skinSettings } from '../composables/useSettings.js';
 import RecipePicker from '../components/RecipePicker.vue';
 import RecipeOverlay from '../components/RecipeOverlay.vue';
+import RecipeBody from '../components/RecipeBody.vue';
+import RecipeBrowser from '../components/RecipeBrowser.vue';
 import ProfilePicker from '../components/ProfilePicker.vue';
 import RoastDatePicker from '../components/RoastDatePicker.vue';
 import BeanChooser from '../components/BeanChooser.vue';
 import ProfileEditor from '../components/settings/ProfileEditor.vue';
-import StarRating from '../components/StarRating.vue';
 
 const { t } = useI18n();
 const { NSXCore } = window;
 
 const ICONS = {
-  thermo: '<path d="M10 4a2 2 0 0 1 4 0v9a4.5 4.5 0 1 1-4 0V4z"/><path d="M12 9v6"/>',
   bean: '<path d="M7 7c3-4 9-3 10 1s-3 10-8 9-5-6-2-10z"/><path d="M9 8c2 2 4 3 6 7"/>',
-  cup: '<path d="M5 8h11v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V8z"/><path d="M16 9h1.5a2 2 0 0 1 0 4H16"/>',
-  // Gear = grind-size adjustment. Feather-style cog: a toothed ring around a hub.
-  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
-  history: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
   profile: '<path d="M4 19h16"/><path d="M4 16c3 0 3-9 6-9s3 6 5 6 3-2 5-2"/>',
-  // Stacked-lines "library" glyph for the Recipes button.
-  list: '<path d="M4 6h16M4 12h16M4 18h10"/>',
-  star: '<path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z"/>',
-  drop: '<path d="M12 3.5s5.5 6.3 5.5 10a5.5 5.5 0 0 1-11 0c0-3.7 5.5-10 5.5-10z"/><path d="M9.5 14.5a2.8 2.8 0 0 0 2.3 2.7"/>',
 };
 
 // Same "nothing loaded yet" signal the old title placeholder used (first
 // launch, or adoptCurrentWorkflowAsRecipe finding no roaster/name at boot —
-// see useRecipe.js). The tiles/roast-chip/history below are all meaningless
-// without a bean+profile behind them, so they're replaced by an empty state
-// rather than showing 0g/0°C and a roast-date chip with no bean to attach to.
+// see useRecipe.js). Both layouts below are meaningless without a bean+profile
+// behind them, so they're replaced by an empty state rather than showing
+// 0g/0°C and a roast-date chip with no bean to attach to.
 const hasRecipe = computed(() => {
   const roaster = recipe.coffeeRoaster;
   const name = recipe.coffeeName;
   return !!(roaster && roaster !== '—' && name && name !== '—');
 });
 
-// The combined identity title — shared with the Diary's recipe rows so the two
-// render the same recipe identically (see useCore's recipeIdentityParts).
-const titleParts = computed(() => recipeIdentityParts(recipe));
-
-const roastLabel = computed(() =>
-  recipe.roastDate ? `${t('espresso.roasted')} ${formatShortDate(recipe.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
-);
-
-// The blurred recipe browser, opened by tapping the combined identity title.
+// The blurred recipe browser, opened by tapping the combined identity title
+// (classic layout) or a recipe card's own bubbles (graph layout, via
+// RecipeBrowser -> RecipeOverlay's own "+"/edit affordances stay local to it;
+// this instance is reached only from RecipeBody's identity title).
 const showRecipeOverlay = ref(false);
 const showProfilePicker = ref(false);
 const showRoastPicker = ref(false);
@@ -58,6 +44,13 @@ const showProfileEditor = ref(false);
 const showBeanChooser = ref(false);
 // The bean->profile creation wizard — the same entry point the Diary's "+" uses.
 const showRecipeCreator = ref(false);
+// Graph layout only: RecipeBody rendered as a full-screen "Edit Recipe" overlay
+// instead of the page itself — see RecipeBrowser.vue's @edit.
+const showRecipeEditor = ref(false);
+
+// Toggling the setting can't strand the Edit Recipe overlay over the classic
+// layout it no longer belongs to.
+watch(() => skinSettings.coffeeGraph, () => { showRecipeEditor.value = false; });
 
 // Bean and grinder tiles' own pickers — see useRecipe.js's setRecipeBean/
 // setRecipeGrinder for why these swap in place (same recipe.id) rather than
@@ -121,116 +114,14 @@ async function onRoastConfirm(iso) {
   await setRoastDate(iso);
   showRoastPicker.value = false;
 }
-
-async function editDose() {
-  const v = await openNumberPad({ title: t('espresso.dose'), unit: 'g', value: recipe.targetDoseWeight.toFixed(1) });
-  if (v == null) return;
-  recipe.targetDoseWeight = parseFloat(v);
-  await pushRecipe();
-}
-async function editGrind() {
-  const v = await openNumberPad({ title: t('espresso.grindSize'), value: recipe.grinderSetting });
-  if (v == null) return;
-  recipe.grinderSetting = v;
-  await pushRecipe();
-}
-// The yield editor also shows the brew ratio (1:x) as a second, linked field
-// in the SAME modal — dose stays fixed, so editing either the yield grams or
-// the ratio's "x" keeps the other in sync live (see NumberPad.vue's `linked`
-// support). No standalone ratio display on the recipe page itself — this is
-// the only place it's surfaced, only while actually editing yield.
-async function editYield() {
-  const dose = recipe.targetDoseWeight;
-  const v = await openNumberPad({
-    title: t('espresso.targetYield'), unit: 'g', value: recipe.targetYield.toFixed(1),
-    linked: dose > 0 ? {
-      label: t('espresso.ratio'), unit: '', prefix: '1 : ',
-      value: (recipe.targetYield / dose).toFixed(1),
-      toLinked: (yieldValue) => (yieldValue / dose).toFixed(1),
-      toPrimary: (ratioValue) => (Math.round(dose * ratioValue * 10) / 10).toFixed(1),
-    } : null,
-  });
-  if (v == null) return;
-  recipe.targetYield = parseFloat(v);
-  await pushRecipe();
-}
-async function editTemp() {
-  const v = await openNumberPad({ title: t('espresso.stopAtTemp'), unit: '°C', value: String(recipe.groupTemp) });
-  if (v == null) return;
-  recipe.groupTemp = parseFloat(v);
-  await pushRecipe();
-}
-
-/**
- * Press-and-pull-to-adjust for the recipe dials (see useDragDial.js). Unlike
- * the machine-function domains (steam/hotwater), pushRecipe() has no internal
- * debounce — it's a full gateway round-trip PLUS ensureRecipeBatch() every
- * call — so it must NOT run on every pointermove pixel. useDragDial's
- * onCommit fires exactly once, on release, rather than on a trailing debounce:
- * a debounce still fires mid-drag if the finger pauses even briefly, which is
- * exactly the "pushed before I lifted my finger" bug this replaced.
- */
-// Every dial uses the same feel: DIAL_PX_PER_STEP px of drag = one step (see
-// useDragDial). pxPerUnit = DIAL_PX_PER_STEP / step converts that to px-per-unit.
-const doseDrag = useDragDial({
-  get: () => recipe.targetDoseWeight,
-  set: (v) => { recipe.targetDoseWeight = v; },
-  onCommit: () => pushRecipe(),
-  min: 5, max: 30, step: 0.1, pxPerUnit: DIAL_PX_PER_STEP / 0.1,
-});
-const onDoseClick = doseDrag.guardClick(editDose);
-
-// Grind step comes from the selected recipe's grinder (its "small step" in the
-// grinder editor) so one drag tick matches that grinder's finest real adjustment
-// — falling back to 1 when no grinder is set, it's not found, or it has no small
-// step configured.
-const grindStep = computed(() => {
-  const g = grinders.value.find((x) => x.id === recipe.grinderId);
-  const s = Number(g?.settingSmallStep);
-  return Number.isFinite(s) && s > 0 ? s : 1;
-});
-// Grind: same feel, but the step is the grinder's own small step (a 0.1-step
-// Niche needs the same finger travel per click as a 1-step grinder).
-const grindDrag = useDragDial({
-  get: () => parseFloat(recipe.grinderSetting) || 0,
-  set: (v) => { recipe.grinderSetting = String(Math.round(v * 100) / 100); },
-  onCommit: () => pushRecipe(),
-  min: 0, max: 100,
-  step: () => grindStep.value,
-  pxPerUnit: () => DIAL_PX_PER_STEP / grindStep.value,
-});
-const onGrindClick = grindDrag.guardClick(editGrind);
-
-const yieldDrag = useDragDial({
-  get: () => recipe.targetYield,
-  set: (v) => { recipe.targetYield = v; },
-  onCommit: () => pushRecipe(),
-  min: 10, max: 70, step: 0.1, pxPerUnit: DIAL_PX_PER_STEP / 0.1,
-});
-const onYieldClick = yieldDrag.guardClick(editYield);
-
-const tempDrag = useDragDial({
-  get: () => recipe.groupTemp,
-  set: (v) => { recipe.groupTemp = v; },
-  onCommit: () => pushRecipe(),
-  min: 80, max: 100, step: 1, pxPerUnit: DIAL_PX_PER_STEP / 1,
-});
-const onTempClick = tempDrag.guardClick(editTemp);
-
-async function toggleStopAtWeight() {
-  recipe.stopAtWeight = !recipe.stopAtWeight;
-  await pushRecipe();
-}
-
-async function openRateRecipe() {
-  const v = await openRating({ title: t('rating.title'), value: recipe.rating });
-  if (v !== null) await setRecipeRating(v);
-}
 </script>
 
 <template>
   <section class="page espresso-page">
-    <div class="page-title">{{ t('espresso.pageTitle') }}</div>
+    <!-- In the graph layout the title moves into the graph column itself
+         (RecipeBrowser.vue) so the list on the left can use the freed space
+         and start higher, right under the status island. -->
+    <div v-if="!hasRecipe || !skinSettings.coffeeGraph" class="page-title">{{ t('espresso.pageTitle') }}</div>
     <div v-if="!hasRecipe" class="empty-recipe">
       <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.bean"></svg>
       <span class="empty-title">{{ t('espresso.emptyTitle') }}</span>
@@ -240,131 +131,44 @@ async function openRateRecipe() {
       </button>
     </div>
 
-    <!-- Title + orbs, centred as a single group rather than each sized against
-         whatever vertical space happens to be left over (see .espresso-body in
-         app.css for why that mattered). The bottom button row used to sit in
-         here too — see its own note below for why it doesn't any more. -->
-    <div v-else class="espresso-body">
-      <!-- The recipe's whole identity in one line. Tapping it opens the recipe
-           browser, where this same title splits into three tappable bubbles at
-           the same spot — that's how bean/grinder/profile are swapped
-           individually (see RecipeOverlay.vue). -->
-      <button class="recipe-title" :aria-label="t('espresso.openRecipes')" @click="showRecipeOverlay = true">
-        <template v-for="(part, i) in titleParts" :key="i">
-          <span v-if="i > 0" class="dot">•</span>{{ part }}
-        </template>
-        <span class="chev">▾</span>
-      </button>
-  
-      <div class="dials">
-        <div class="dial-group">
-          <!-- Orbs are labelled by what they ADJUST, not by which identity they
-               belong to — that's already spelled out in the title above. -->
-          <span class="dial-label">{{ t('espresso.dose') }}</span>
-          <button
-            class="dial"
-            :class="{ dragging: doseDrag.dragging.value }"
-            @click="onDoseClick"
-            @pointerdown="doseDrag.onPointerDown"
-            @pointermove="doseDrag.onPointerMove"
-            @pointerup="doseDrag.onPointerUp"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.bean"></svg>
-            <span class="num">{{ recipe.targetDoseWeight.toFixed(1) }}</span><span class="unit">g</span>
+    <template v-else-if="skinSettings.coffeeGraph">
+      <RecipeBrowser @edit="showRecipeEditor = true" />
+      <div v-if="showRecipeEditor" class="overlay-full">
+        <!-- balanced: plain .ov-top centers .ov-title (flex:1) in whatever
+             space is LEFT after .ov-back, not the row itself, so the label
+             sits shifted right of true centre. .balanced is the app's own
+             fix for that (see AppPanel/GrinderPanel/MachinePanel/SkinPanel/
+             VisualizerPanel) — a 1fr/auto/1fr grid that balances .ov-back's
+             width with an equal empty column on the right. -->
+        <div class="ov-top balanced">
+          <button class="ov-back" @click="showRecipeEditor = false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('common.back') }}
           </button>
-          <!-- Roast-date chip: describes the bag, so it sits under the bean's
-               own orb rather than as a page-wide header. -->
-          <button class="roast-chip" @click="showRoastPicker = true">
-            <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.drop"></svg>{{ roastLabel }}
-          </button>
+          <span class="ov-title">{{ t('espresso.editRecipe') }}</span>
         </div>
-  
-        <div class="dial-group">
-          <span class="dial-label">{{ t('espresso.grindSize') }}</span>
-          <button
-            class="dial"
-            :class="{ dragging: grindDrag.dragging.value }"
-            @click="onGrindClick"
-            @pointerdown="grindDrag.onPointerDown"
-            @pointermove="grindDrag.onPointerMove"
-            @pointerup="grindDrag.onPointerUp"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.gear"></svg>
-            <span class="num">{{ recipe.grinderSetting }}</span>
-            <!-- Grind size is unitless, but an empty unit line keeps the icon/num/
-                 unit stack the same height as the dose orb (which has "g"), so both
-                 numbers centre at the same vertical position. -->
-            <span class="unit" aria-hidden="true">&nbsp;</span>
-          </button>
-        </div>
-  
-        <div class="dial-group">
-          <span class="dial-label">{{ t('espresso.stopAtTemp') }}</span>
-          <div class="dial dial-duo">
-            <div class="duo">
-              <button
-                :class="{ dragging: yieldDrag.dragging.value, faded: !recipe.stopAtWeight }"
-                @click="onYieldClick"
-                @pointerdown="yieldDrag.onPointerDown"
-                @pointermove="yieldDrag.onPointerMove"
-                @pointerup="yieldDrag.onPointerUp"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.cup"></svg><br />
-                <span class="num">{{ recipe.targetYield.toFixed(1) }}</span><br /><span class="unit">g</span>
-              </button>
-              <button
-                :class="{ dragging: tempDrag.dragging.value }"
-                @click="onTempClick"
-                @pointerdown="tempDrag.onPointerDown"
-                @pointermove="tempDrag.onPointerMove"
-                @pointerup="tempDrag.onPointerUp"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.thermo"></svg><br />
-                <span class="num">{{ recipe.groupTemp }}</span><br /><span class="unit">°C</span>
-              </button>
-            </div>
-            <!-- Stop-at-weight toggle, text-free: the dimmed yield grams are the
-                 only "off" cue now (see .faded above). -->
-            <button
-              class="switch stop-toggle"
-              :class="{ on: recipe.stopAtWeight }"
-              role="switch"
-              :aria-checked="recipe.stopAtWeight"
-              :aria-label="t('espresso.stopAtWeight')"
-              @click="toggleStopAtWeight"
-            ></button>
-          </div>
-        </div>
+        <!-- The identity title button RecipeBody normally shows here is
+             replaced (inside RecipeBody itself, when show-history is false)
+             by the same three tappable Bean/Grinder/Profile bubbles
+             <RecipeOverlay> uses — same handlers, so a pick here works
+             identically to picking it from there. -->
+        <RecipeBody
+          :show-history="false"
+          @open-recipes="showRecipeOverlay = true"
+          @open-bean="showBeanChooser = true"
+          @open-grinder="pickGrinder"
+          @open-profile="showProfilePicker = true"
+          @open-roast="showRoastPicker = true"
+          @edit-profile="showProfileEditor = true"
+        />
       </div>
-  
-    </div>
+    </template>
 
-    <!-- OUTSIDE .espresso-body on purpose: as a direct child of .page it pins to
-         the bottom exactly like Cleaning's and Steam's rows, because
-         .espresso-body absorbs the leftover height the way .dials does on those
-         pages. Inside the centred group it rode up with the orbs, so the one row
-         that is meant to be identical across every tab was the one that moved
-         when you switched tabs (and the gap under it grew with the screen).
-         No Browse-recipes button: the identity title above is the way into the
-         library now, so Edit profile takes the leftmost slot. -->
-    <div v-if="hasRecipe" class="prep-bottom prep-bottom-3">
-      <button v-if="recipe.profile" class="btn" @click="showProfileEditor = true">
-        <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.profile"></svg>{{ t('espresso.editProfile') }}
-      </button>
-      <!-- Once rated, the earned stars take this slot over from the "Rate"
-           label — tapping them reopens the same editor, so the rating is both
-           the display and the control. StarRating renders no nested <button>
-           in readonly mode, so the tap reaches this one. -->
-      <button class="rate-recipe-btn" :aria-label="t('rating.rate')" @click="openRateRecipe">
-        <StarRating v-if="recipe.rating > 0" :model-value="recipe.rating" readonly :size="18" />
-        <template v-else>
-          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.star"></svg>{{ t('rating.rate') }}
-        </template>
-      </button>
-      <button class="btn" @click="loadHistoryForCurrentRecipe">
-        <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.history"></svg>{{ t('espresso.history') }}
-      </button>
-    </div>
+    <RecipeBody
+      v-else
+      @open-recipes="showRecipeOverlay = true"
+      @open-roast="showRoastPicker = true"
+      @edit-profile="showProfileEditor = true"
+    />
 
     <RecipeOverlay
       v-if="showRecipeOverlay"
