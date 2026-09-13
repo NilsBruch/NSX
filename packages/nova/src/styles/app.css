@@ -292,6 +292,14 @@
 
 html, body {
   height: 100%;
+  /* .stage below is a fixed 100vh — nothing at the page level is meant to
+     scroll, ever; every panel that needs to scroll does it internally in its
+     own overflow-y:auto container. Without this, .stage overflowing the
+     viewport by even a stray pixel (a shadow, sub-pixel rounding, a modal)
+     gave the page itself a scrollbar — a thin pale strip right at the
+     window's edge in a desktop browser's default light theme, easy to
+     mistake for a stray border around the whole window. */
+  overflow: hidden;
   /* Base lifted from the 16px browser default: this is a fixed-size kiosk
      display viewed at arm's length, not a desktop window, so 1rem should be
      bigger than web-default. Every rem value in the scale above scales with it. */
@@ -308,6 +316,25 @@ html, body {
   /* Kill the translucent grey rectangle Android WebView paints over any tapped
      button/link — a kiosk touch UI never wants it. Inherits to every element. */
   -webkit-tap-highlight-color: transparent;
+}
+
+/* This is a touch kiosk — every scrolling panel in the skin is meant to be
+   dragged with a finger, not read off an OS scrollbar, and the DE1's own
+   WebView already auto-hides those. A desktop browser doesn't, though (its
+   default light scrollbar track was showing up as a stray pale sliver down
+   the side of these panels when viewed there), so every scrollable container
+   gets the same treatment .wheel already had. One shared rule rather than
+   repeating scrollbar-width/::-webkit-scrollbar on each container. */
+.kb-modal .text-field-textarea, .tf-tags, .tf-suggests, .chooser, .rp-list-scroll,
+.pick-items, .pd-stages-list, .pd-text, .pe-detail, .list, .bean-fields, .settings-scroll {
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.kb-modal .text-field-textarea::-webkit-scrollbar, .tf-tags::-webkit-scrollbar,
+.tf-suggests::-webkit-scrollbar, .chooser::-webkit-scrollbar, .rp-list-scroll::-webkit-scrollbar,
+.pick-items::-webkit-scrollbar, .pd-stages-list::-webkit-scrollbar, .pd-text::-webkit-scrollbar,
+.pe-detail::-webkit-scrollbar, .list::-webkit-scrollbar, .bean-fields::-webkit-scrollbar,
+.settings-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* The whole skin lives in one fixed stage: the machine's screen. */
@@ -999,12 +1026,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .rp-list-scroll {
   height: 100%; display: flex; flex-direction: column; align-items: stretch;
   gap: 8px; overflow-y: auto; overflow-x: hidden;
-  /* Same treatment as .wheel's scroller: the tablet's own touch scrolling
-     needs no OS scrollbar, and a desktop browser's default one clashed with
-     the fade mask sitting right on top of it. */
-  scrollbar-width: none; -ms-overflow-style: none;
+  /* Scrollbar hidden by the shared rule near the top of this file (every
+     scrollable panel gets it, not just this one). */
 }
-.rp-list-scroll::-webkit-scrollbar { display: none; }
 /* RecipeOverlay's cards are sized for a wide 3-across horizontal strip; at
    that size a vertical list shows barely two of them at once. Everything
    below only ever selects a .rp-card INSIDE .rp-list, so the overlay's own
