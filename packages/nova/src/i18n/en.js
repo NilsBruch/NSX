@@ -77,6 +77,7 @@ export default {
   espresso: {
     pageTitle: 'Coffee',
     bean: 'Bean',
+    bag: 'Bag',
     grinder: 'Grinder',
     profile: 'Profile',
     dose: 'Dose',

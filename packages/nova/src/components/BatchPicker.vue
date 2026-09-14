@@ -10,6 +10,11 @@
  * "Add new" opens the same RoastDatePicker and resolves through
  * NSXCore.resolveBatch (find-or-create), so confirming a date that already
  * has a bag joins it instead of creating a duplicate.
+ *
+ * Header and bottom-bar structure mirror BeanChooser.vue exactly (crumbs
+ * slot + the invisible width-reserving button so the bubbles don't shift
+ * sideways between wizard screens; "+ New ___" as a .btn in .prep-bottom,
+ * not a header icon) — same wizard, same screen language.
  */
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -44,12 +49,19 @@ async function onRoastConfirm(iso) {
   <div class="overlay-full">
     <div class="ov-top">
       <button class="ov-back" @click="emit('back')">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ bean?.name || '—' }}
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('common.back') }}
       </button>
-      <span class="ov-title">{{ t('beanManager.batches') }}</span>
-      <button class="sort-btn icon-only accent" :aria-label="t('beanManager.addBatch')" @click="openAddNew">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-      </button>
+      <!-- The wizard puts its progress bubbles here, on the header's own row —
+           same slot BeanChooser/ProfilePicker take theirs through. -->
+      <slot name="crumbs"><span class="ov-title">{{ t('beanManager.batches') }}</span></slot>
+      <!-- Reserves exactly the width of the OTHER wizard screens' trailing
+           header buttons, so the progress bubbles sit in the same place on
+           every screen instead of jumping sideways as the wizard advances —
+           this screen's own "+" moved down to .prep-bottom, so without this
+           its header would be narrower than its neighbours'. -->
+      <span v-if="$slots.crumbs" class="sort-btn lg icon-only" aria-hidden="true" style="visibility: hidden">
+        <svg viewBox="0 0 24 24"></svg>
+      </span>
     </div>
 
     <div class="pd-stages-list">
@@ -62,6 +74,12 @@ async function onRoastConfirm(iso) {
       <div v-if="loading" class="pick-empty">{{ t('diary.loading') }}</div>
       <div v-else-if="failed" class="pick-empty">{{ t('beanManager.batchesFailed') }}</div>
       <div v-else-if="!batches.length" class="pick-empty">{{ t('beanManager.noBatches') }}</div>
+    </div>
+
+    <!-- Same style and position as BeanChooser's "+ New bean" — a .btn, bottom
+         left, not the small header icon this used to be. -->
+    <div class="prep-bottom">
+      <button class="btn" @click="openAddNew">+ {{ t('beanManager.addBatch') }}</button>
     </div>
 
     <RoastDatePicker

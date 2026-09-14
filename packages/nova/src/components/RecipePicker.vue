@@ -85,7 +85,7 @@ function finish() {
 <template>
   <BeanChooser v-if="step === 'bean'" :preset-roaster="presetRoaster" @pick="onBeanPicked" @back="emit('back')">
     <template #crumbs>
-      <RecipeCrumbs :bean="chosenBean" :grinder="chosenGrinder" />
+      <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
     </template>
   </BeanChooser>
   <BatchPicker
@@ -93,7 +93,11 @@ function finish() {
     :bean="chosenBean"
     @pick="onBatchPicked"
     @back="step = 'bean'"
-  />
+  >
+    <template #crumbs>
+      <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
+    </template>
+  </BatchPicker>
   <ProfilePicker
     v-else
     mode="pick"
@@ -105,7 +109,7 @@ function finish() {
     <!-- The picker hands over whatever is highlighted, so the last bubble
          fills while browsing rather than at the moment of no return. -->
     <template #crumbs="{ selected }">
-      <RecipeCrumbs :bean="chosenBean" :grinder="chosenGrinder" :profile="selected" />
+      <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" :profile="selected" />
     </template>
   </ProfilePicker>
 </template>
