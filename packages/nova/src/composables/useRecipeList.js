@@ -28,7 +28,23 @@ export function useRecipeList() {
   const sortLabel = computed(() => t(sortMode.value === 'rating' ? 'recipePicker.sortRating' : 'recipePicker.sortUse'));
 
   const sortedRecipes = computed(() => {
-    const byUse = window.NSXCore.sortRecipesByLastUsed(recipes.value, shots.value);
+    const byRecency = window.NSXCore.sortRecipesByLastUsed(recipes.value, shots.value);
+    // A never-brewed recipe has no shot to date it, so the recency sort above
+    // leaves it in its original order at the end (see its own comment). While
+    // it's the one actually loaded on the machine — freshly created, or just
+    // reselected — surface it at the very top instead, so it isn't buried
+    // right when the user is looking for it. The moment it's no longer loaded,
+    // or it's actually been brewed (which gives it a real timestamp), this no
+    // longer applies and it falls back to plain recency order.
+    const currentIdx = byRecency.findIndex((r) =>
+      isCurrent(r) && window.NSXCore.findShotsForWorkflow(r, shots.value).length === 0
+    );
+    const byUse = currentIdx <= 0 ? byRecency : (() => {
+      const copy = byRecency.slice();
+      const [current] = copy.splice(currentIdx, 1);
+      copy.unshift(current);
+      return copy;
+    })();
     const sorted = sortMode.value !== 'rating' ? byUse : (() => {
       const pos = new Map(byUse.map((r, i) => [r, i]));
       return byUse.slice().sort((a, b) =>
