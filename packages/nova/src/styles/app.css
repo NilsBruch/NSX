@@ -1368,27 +1368,25 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .pd-actions .btn { height: 52px; padding: 0 28px; font-size: var(--fs-md); }
 
 /* BagsPanel.vue (one bean's bags, opened from the Diary's bean long-press
-   menu): a .pd-panel-label with a trailing add button, then .pd-stages-list
-   rows (reused as-is) carrying their own trailing Edit/Delete pair —
-   .pd-stage is normally a whole-row button, but a batch row can't be one (it
-   holds two REAL buttons, and a button can't nest another), so .batch-row is
-   a plain div with the identical layout. .batch-row is this file's only user
-   of that class name, so a plain selector is enough to beat .pd-stage's
-   background without needing to out-specificity it. */
-.bm-batches-head { flex: none; display: flex; align-items: center; justify-content: space-between; }
+   menu) and BatchPicker.vue (the recipe wizard's own bag step) share this
+   list. BagsPanel's own rows: tapping the bag itself edits it — same
+   "row-main is the big tap target, one real button sits beside it" pairing
+   DiaryView.vue's own rows already use (.row-main / .row-edit) — Delete is
+   the only action left, so .pd-stage-main becomes the whole-row button, and
+   Delete is its own bigger button, being the sole remaining one. .batch-row
+   is this file's only user of that class name, so a plain selector is
+   enough to beat .pd-stage's background without needing to out-specificity
+   it. */
 .batch-row { cursor: default; align-items: center; background: var(--card-hi); }
-.batch-row-actions { flex: none; margin-left: auto; display: flex; gap: 6px; }
-.batch-row-actions button {
-  width: 36px; height: 36px; border: none; border-radius: var(--r-sm);
-  background: var(--line); color: var(--text); display: flex; align-items: center; justify-content: center;
+.batch-row .pd-stage-main {
+  flex: 1; min-width: 0; background: none; border: none; padding: 0; margin: 0;
+  color: inherit; font-family: inherit; text-align: left; cursor: pointer;
 }
-.batch-row-actions button svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.batch-row-actions button.danger { color: var(--alert); }
-/* The add-bag button, sized and coloured to read as its own card-like action
-   rather than a small icon glyph — .sort-btn.icon-only's default 38px pill
-   would disappear next to the cards below it. */
-.bm-batches-head .sort-btn.icon-only { width: 48px; height: 48px; border-radius: var(--r-md); }
-.bm-batches-head .sort-btn.icon-only svg { width: 20px; height: 20px; }
+.batch-row-delete {
+  flex: none; width: 52px; height: 52px; border: none; border-radius: var(--r-md);
+  background: var(--line); color: var(--alert); display: flex; align-items: center; justify-content: center;
+}
+.batch-row-delete svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ===== Profile editor (ProfileEditor.vue) — reuses .pick-body/.pick-list/
    .pick-detail/.pick-plot/.setting-row/.settings-scroll from the picker and

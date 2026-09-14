@@ -67,30 +67,30 @@ async function deleteBatchRow(batch) {
       <span class="ov-title">{{ bean?.roaster || '—' }} – {{ bean?.name || '—' }}</span>
     </div>
 
-    <div class="bm-batches-head">
-      <span class="pd-panel-label">{{ t('beanManager.batches') }}</span>
-      <button class="sort-btn icon-only accent" :aria-label="t('beanManager.addBatch')" @click="openAddBatch">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-      </button>
-    </div>
     <div class="pd-stages-list">
       <div v-for="b in batches" :key="b.id" class="pd-stage batch-row">
-        <div class="pd-stage-main">
+        <!-- Tapping the bag edits it — the same "tap the row, no separate
+             pencil" convention the Diary's own rows use elsewhere (see
+             DiaryView.vue's .row-main / .row-edit pairing) — Delete is the
+             only action that still needs its own button, so it's the only
+             one left, and bigger for being the sole target now. -->
+        <button class="pd-stage-main" @click="openEditBatch(b)">
           <span class="pd-stage-name">{{ b.roastDate ? formatShortDate(b.roastDate) : t('diary.empty') }}</span>
           <span class="pd-stage-detail">{{ b.roastDate ? NSXCore.getBatchAge(b.roastDate) : '' }}<template v-if="b.archived"> · {{ t('diary.archive') }}</template></span>
-        </div>
-        <div class="batch-row-actions">
-          <button :aria-label="t('common.edit')" @click="openEditBatch(b)">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.5a2.121 2.121 0 0 1 3 3L6 17l-4 1 1-4 11.5-11.5z" /></svg>
-          </button>
-          <button class="danger" :aria-label="t('common.delete')" @click="deleteBatchRow(b)">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13" /></svg>
-          </button>
-        </div>
+        </button>
+        <button class="batch-row-delete" :aria-label="t('common.delete')" @click="deleteBatchRow(b)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13" /></svg>
+        </button>
       </div>
       <div v-if="batchesLoading" class="pick-empty">{{ t('diary.loading') }}</div>
       <div v-else-if="batchesFailed" class="pick-empty">{{ t('beanManager.batchesFailed') }}</div>
       <div v-else-if="!batches.length" class="pick-empty">{{ t('beanManager.noBatches') }}</div>
+    </div>
+
+    <!-- Same style and position as the wizard's BatchPicker.vue / BeanChooser's
+         "+ New ___" — a .btn, bottom left. -->
+    <div class="prep-bottom">
+      <button class="btn" @click="openAddBatch">+ {{ t('beanManager.addBatch') }}</button>
     </div>
 
     <RoastDatePicker
