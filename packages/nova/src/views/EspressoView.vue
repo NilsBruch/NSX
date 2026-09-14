@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, formatGrinderLabel, profiles, profilesAll, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
-import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile } from '../composables/useRecipe.js';
+import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile, beanForRecipe } from '../composables/useRecipe.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
 import RecipePicker from '../components/RecipePicker.vue';
@@ -10,7 +10,7 @@ import RecipeOverlay from '../components/RecipeOverlay.vue';
 import RecipeBody from '../components/RecipeBody.vue';
 import RecipeBrowser from '../components/RecipeBrowser.vue';
 import ProfilePicker from '../components/ProfilePicker.vue';
-import RoastDatePicker from '../components/RoastDatePicker.vue';
+import BatchPicker from '../components/BatchPicker.vue';
 import BeanChooser from '../components/BeanChooser.vue';
 import ProfileEditor from '../components/settings/ProfileEditor.vue';
 
@@ -39,7 +39,7 @@ const hasRecipe = computed(() => {
 // this instance is reached only from RecipeBody's identity title).
 const showRecipeOverlay = ref(false);
 const showProfilePicker = ref(false);
-const showRoastPicker = ref(false);
+const showBatchPicker = ref(false);
 const showProfileEditor = ref(false);
 const showBeanChooser = ref(false);
 // The bean->profile creation wizard — the same entry point the Diary's "+" uses.
@@ -132,9 +132,23 @@ async function onProfileEditorSaved({ profile: built, originalProfile }) {
   }
 }
 
-async function onRoastConfirm(iso) {
-  await setRoastDate(iso);
-  showRoastPicker.value = false;
+// The bean the loaded recipe stands on — null for a beanUnlinked recipe (its
+// bean was deleted and this one deliberately kept, see useRecipe.js), which
+// has no bags to browse, so the roast badge below becomes a no-op for it.
+const recipeBean = computed(() => beanForRecipe(recipe));
+
+function openBatchPicker() {
+  if (!recipeBean.value) return;
+  showBatchPicker.value = true;
+}
+
+// BatchPicker already resolved (or, for "+ Add batch", created) the batch —
+// setRoastDate's own resolution (NSXCore.resolveBatch, find-or-create) is
+// idempotent for an existing date, so this just re-attaches the SAME batch
+// to the recipe rather than re-picking a bag from scratch.
+async function onBatchPicked(batch) {
+  await setRoastDate(batch.roastDate);
+  showBatchPicker.value = false;
 }
 </script>
 
@@ -179,7 +193,7 @@ async function onRoastConfirm(iso) {
           @open-bean="showBeanChooser = true"
           @open-grinder="pickGrinder"
           @open-profile="showProfilePicker = true"
-          @open-roast="showRoastPicker = true"
+          @open-roast="openBatchPicker"
           @edit-profile="openProfileEditor"
         />
       </div>
@@ -213,11 +227,11 @@ async function onRoastConfirm(iso) {
       @select="onProfileSelected"
       @back="showProfilePicker = false"
     />
-    <RoastDatePicker
-      v-if="showRoastPicker"
-      :model-value="recipe.roastDate"
-      @confirm="onRoastConfirm"
-      @cancel="showRoastPicker = false"
+    <BatchPicker
+      v-if="showBatchPicker && recipeBean"
+      :bean="recipeBean"
+      @pick="onBatchPicked"
+      @back="showBatchPicker = false"
     />
     <ProfileEditor
       v-if="showProfileEditor"

@@ -61,6 +61,40 @@ async function pickReviewAutoClose() {
     </div>
 
     <div class="settings-scroll">
+      <span class="setting-group-label">{{ t('skinSettings.ui') }}</span>
+      <!-- A segmented control rather than a switch: "Skin theme" has two named
+           states, and a switch would force one of them to be the unlabelled
+           "off" — you'd have to know which. Same control the Diary uses for
+           Browse/History, in its compact size. -->
+      <div class="setting-row">
+        <span class="sr-name">{{ t('skinSettings.theme') }}</span>
+        <div class="seg seg-setting" :data-pos="skinSettings.lightMode ? 0 : 1">
+          <span class="seg-thumb"></span>
+          <button :class="{ on: skinSettings.lightMode }" @click="saveSkinSetting('lightMode', true)">{{ t('skinSettings.themeLight') }}</button>
+          <button :class="{ on: !skinSettings.lightMode }" @click="saveSkinSetting('lightMode', false)">{{ t('skinSettings.themeDark') }}</button>
+        </div>
+      </div>
+      <!-- Off restores the original look: one blue everywhere, untinted greys.
+           The rail's six tab colours stay either way — this is about whether
+           the PAGE takes the colour of the tab you're on. -->
+      <div class="setting-row">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('skinSettings.tabColors') }}</span>
+          <span class="sr-sub">{{ t('skinSettings.tabColorsSub') }}</span>
+        </span>
+        <button class="switch" :class="{ on: skinSettings.tabColors }" role="switch" :aria-checked="skinSettings.tabColors" @click="saveSkinSetting('tabColors', !skinSettings.tabColors)"></button>
+      </div>
+      <!-- Swaps the coffee page's single-recipe dial layout for a browser:
+           recipe cards on the left, the selected one's shot graph on the
+           right, a shot stepper + Edit Recipe at the bottom. -->
+      <div class="setting-row">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('skinSettings.coffeeGraph') }}</span>
+          <span class="sr-sub">{{ t('skinSettings.coffeeGraphSub') }}</span>
+        </span>
+        <button class="switch" :class="{ on: skinSettings.coffeeGraph }" role="switch" :aria-checked="skinSettings.coffeeGraph" @click="saveSkinSetting('coffeeGraph', !skinSettings.coffeeGraph)"></button>
+      </div>
+
       <span class="setting-group-label">{{ t('skinSettings.lockscreen') }}</span>
       <div class="setting-row">
         <span class="sr-main"><span class="sr-name">{{ t('skinSettings.wakeOnUnlock') }}</span><span class="sr-sub">{{ t('skinSettings.wakeOnUnlockSub') }}</span></span>
@@ -85,28 +119,6 @@ async function pickReviewAutoClose() {
         <span class="sr-name">{{ t('skinSettings.timeFormat') }}</span>
         <span class="sr-value">{{ optLabel(timeFormatOpts, skinSettings.timeFormat) }}<span class="sr-chev">›</span></span>
       </button>
-      <!-- A segmented control rather than a switch: "Skin theme" has two named
-           states, and a switch would force one of them to be the unlabelled
-           "off" — you'd have to know which. Same control the Diary uses for
-           Browse/History, in its compact size. -->
-      <div class="setting-row">
-        <span class="sr-name">{{ t('skinSettings.theme') }}</span>
-        <div class="seg seg-setting" :data-pos="skinSettings.lightMode ? 0 : 1">
-          <span class="seg-thumb"></span>
-          <button :class="{ on: skinSettings.lightMode }" @click="saveSkinSetting('lightMode', true)">{{ t('skinSettings.themeLight') }}</button>
-          <button :class="{ on: !skinSettings.lightMode }" @click="saveSkinSetting('lightMode', false)">{{ t('skinSettings.themeDark') }}</button>
-        </div>
-      </div>
-      <!-- Off restores the original look: one blue everywhere, untinted greys.
-           The rail's six tab colours stay either way — this is about whether
-           the PAGE takes the colour of the tab you're on. -->
-      <div class="setting-row">
-        <span class="sr-main">
-          <span class="sr-name">{{ t('skinSettings.tabColors') }}</span>
-          <span class="sr-sub">{{ t('skinSettings.tabColorsSub') }}</span>
-        </span>
-        <button class="switch" :class="{ on: skinSettings.tabColors }" role="switch" :aria-checked="skinSettings.tabColors" @click="saveSkinSetting('tabColors', !skinSettings.tabColors)"></button>
-      </div>
       <button class="setting-row as-btn" @click="pickStartTab">
         <span class="sr-name">{{ t('skinSettings.startPage') }}</span>
         <span class="sr-value">{{ optLabel(startTabOpts, skinSettings.startTab) }}<span class="sr-chev">›</span></span>
@@ -125,16 +137,6 @@ async function pickReviewAutoClose() {
           <span class="sr-sub">{{ t('skinSettings.showTargetsSub') }}</span>
         </span>
         <button class="switch" :class="{ on: skinSettings.showTargets }" role="switch" :aria-checked="skinSettings.showTargets" @click="saveSkinSetting('showTargets', !skinSettings.showTargets)"></button>
-      </div>
-      <!-- Swaps the coffee page's single-recipe dial layout for a browser:
-           recipe cards on the left, the selected one's shot graph on the
-           right, a shot stepper + Edit Recipe at the bottom. -->
-      <div class="setting-row">
-        <span class="sr-main">
-          <span class="sr-name">{{ t('skinSettings.coffeeGraph') }}</span>
-          <span class="sr-sub">{{ t('skinSettings.coffeeGraphSub') }}</span>
-        </span>
-        <button class="switch" :class="{ on: skinSettings.coffeeGraph }" role="switch" :aria-checked="skinSettings.coffeeGraph" @click="saveSkinSetting('coffeeGraph', !skinSettings.coffeeGraph)"></button>
       </div>
       <button class="setting-row as-btn" @click="pickReviewAutoClose">
         <span class="sr-main"><span class="sr-name">{{ t('skinSettings.reviewAutoClose') }}</span><span class="sr-sub">{{ t('skinSettings.reviewAutoCloseSub') }}</span></span>

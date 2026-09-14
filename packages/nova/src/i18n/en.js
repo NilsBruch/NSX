@@ -421,6 +421,7 @@ export default {
     nightSleep: 'Sleep at', nightWake: 'Wake at',
   },
   skinSettings: {
+    ui: 'UI',
     lockscreen: 'Lockscreen', wakeOnUnlock: 'Wake DE1 on unlock', wakeOnUnlockSub: 'Off: unlocking the screen leaves the machine asleep',
     tapToUnlock: 'Tap to wake',
     tapToUnlockSub: 'Off: slide to unlock, so a wipe of the screen can’t dismiss it',

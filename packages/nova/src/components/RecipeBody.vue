@@ -292,9 +292,15 @@ async function openRateRecipe() {
     </button>
     <!-- Hidden inside the Edit Recipe overlay (RecipeBrowser's graph mode) —
          the on-page graph there IS the history, so this door isn't offered
-         twice. -->
+         twice. An invisible placeholder of the same size takes its slot
+         instead of dropping it, so .prep-bottom-3's row keeps the same
+         3-button layout the classic page shows — same as BatchPicker's own
+         hidden trailing-button placeholder. -->
     <button v-if="showHistory" class="btn" @click="loadHistoryForCurrentRecipe">
       <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.history"></svg>{{ t('espresso.history') }}
     </button>
+    <span v-else class="btn" aria-hidden="true" style="visibility: hidden">
+      <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.history"></svg>{{ t('espresso.history') }}
+    </span>
   </div>
 </template>

@@ -28,11 +28,11 @@ import { useI18n } from 'vue-i18n';
 import { grinders, formatGrinderLabel, singleGrinder, recipeIdentityParts, formatShortDate } from '../../composables/useCore.js';
 import {
   recipe, recipes, pushRecipe, selectRecipe, deleteRecipe, togglePinRecipe, patchRecipeEntry,
-  setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, roastAge,
+  setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, roastAge, beanForRecipe,
 } from '../../composables/useRecipe.js';
 import { openNumberPad, openRating, openChooser, openConfirm } from '../../composables/useModals.js';
 import { showToast } from '../../composables/useToast.js';
-import RoastDatePicker from '../RoastDatePicker.vue';
+import BatchPicker from '../BatchPicker.vue';
 import BeanChooser from '../BeanChooser.vue';
 import ProfilePicker from '../ProfilePicker.vue';
 import StarRating from '../StarRating.vue';
@@ -119,10 +119,13 @@ async function openRateRow() {
   else await patchRecipeEntry(props.entry.id, { rating: Math.max(0, Math.min(5, Number(v) || 0)) });
 }
 
-const showRoastPicker = ref(false);
-async function onRoastConfirm(iso) {
-  await setRoastDate(iso);
-  showRoastPicker.value = false;
+// Roast row is loaded-only (see file header), so this always reads off the
+// live `recipe`, not `source`.
+const recipeBean = computed(() => beanForRecipe(recipe));
+const showBatchPicker = ref(false);
+async function onBatchPicked(batch) {
+  await setRoastDate(batch.roastDate);
+  showBatchPicker.value = false;
 }
 const showBeanChooser = ref(false);
 async function onBeanPicked(bean) {
@@ -222,7 +225,7 @@ async function removeThis() {
       </button>
 
       <!-- Roast date / bean: loaded-recipe only — see the file header. -->
-      <button v-if="isLoaded" class="phone-list-row" @click="showRoastPicker = true">
+      <button v-if="isLoaded" class="phone-list-row" @click="recipeBean && (showBatchPicker = true)">
         <span class="rmeta">{{ t('espresso.roasted') }}</span>
         <span class="phone-row-value">{{ roastLabel }}<span class="chev">›</span></span>
       </button>
@@ -244,11 +247,11 @@ async function removeThis() {
       <button class="btn danger" @click="removeThis">{{ t('common.delete') }}</button>
     </div>
 
-    <RoastDatePicker
-      v-if="showRoastPicker"
-      :model-value="recipe.roastDate"
-      @confirm="onRoastConfirm"
-      @cancel="showRoastPicker = false"
+    <BatchPicker
+      v-if="showBatchPicker && recipeBean"
+      :bean="recipeBean"
+      @pick="onBatchPicked"
+      @back="showBatchPicker = false"
     />
     <BeanChooser v-if="showBeanChooser" @pick="onBeanPicked" @back="showBeanChooser = false" />
     <ProfilePicker
