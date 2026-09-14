@@ -42,7 +42,11 @@ onMounted(() => {
   if (!shots.value.length) loadShots(200).catch(() => { /* unsorted list is still usable */ });
 });
 
-const { isCurrent, cycleSort, sortLabel, listedRecipes, visibleRecipes, query, openSearch } = useRecipeList();
+// No sort/search UI on this screen — always sorted by use (useRecipeList's
+// own default sortMode), and with no way to set a query, listedRecipes and
+// its old query-filtered visibleRecipes are the same list; only the former
+// is needed now.
+const { isCurrent, listedRecipes } = useRecipeList();
 
 async function pick(entry) {
   if (isCurrent(entry)) return;
@@ -211,27 +215,17 @@ const stepperDetail = computed(() => {
 
 <template>
   <div class="espresso-browse">
-    <!-- Sort/search sits above the list, then the list runs the rest of the
-         column's height flush to the page's bottom edge (see .rp-list's fade
+    <!-- No sort/search row above the list any more (always sorted by use,
+         and Edit moved to the bottom bar) — the list itself runs the full
+         column height flush to the page's bottom edge (see .rp-list's fade
          mask) — the right column keeps its own stepper row below the graph,
          so the list visibly reaches further down than the graph does, as if
          more recipes are queued up just out of view. -->
     <div class="browse-list">
-      <div class="rp-bottom">
-        <button class="sort-btn" @click="cycleSort">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>{{ sortLabel }}
-        </button>
-        <!-- Edit Recipe lives here rather than under the graph — this is the
-             row of actions ON the list, and editing acts on whichever card is
-             currently loaded (bordered .current), same as the others. -->
-        <button class="sort-btn" :aria-label="t('espresso.editRecipe')" @click="emit('edit')">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.5a2.121 2.121 0 0 1 3 3L6 17l-4 1 1-4 11.5-11.5z" /></svg>{{ t('common.edit') }}
-        </button>
-      </div>
       <div class="rp-list">
         <div class="rp-list-scroll">
           <RecipeCard
-            v-for="entry in visibleRecipes"
+            v-for="entry in listedRecipes"
             :key="entry.id"
             :entry="entry"
             :current="isCurrent(entry)"
@@ -241,7 +235,6 @@ const stepperDetail = computed(() => {
             @pointercancel="cardPress.cancel"
             @pointerleave="cardPress.cancel"
           />
-          <div v-if="listedRecipes.length && !visibleRecipes.length" class="rp-empty">{{ t('diary.noResults') }}</div>
           <div v-if="!listedRecipes.length" class="rp-empty">{{ t('recipePicker.noRecipesYet') }}</div>
         </div>
       </div>
@@ -269,16 +262,11 @@ const stepperDetail = computed(() => {
       </div>
 
       <div class="prep-bottom browse-bottom">
-        <!-- Search flush left, its active-filter chip right beside it — a
-             group, not two items the row's own spacing pushes apart. -->
-        <div class="browse-search-group">
-          <button class="rbtn" :aria-label="t('recipePicker.search')" @click="openSearch">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
-          </button>
-          <button v-if="query" class="filter-chip" @click="query = ''">
-            {{ t('diary.filteredBy', { q: query }) }}<span class="x">×</span>
-          </button>
-        </div>
+        <!-- Edit Recipe lives here now, flush left where search used to be —
+             acts on whichever card is currently loaded (bordered .current). -->
+        <button class="btn" @click="emit('edit')">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.5a2.121 2.121 0 0 1 3 3L6 17l-4 1 1-4 11.5-11.5z" /></svg>{{ t('common.edit') }}
+        </button>
         <div class="date-nav browse-nav" :class="{ 'is-pressed': datePressed }">
           <button :disabled="!canOlder" :aria-label="t('espresso.olderShot')" @click="olderShot">‹</button>
           <!-- The ‹ › buttons step through shots in place; tapping the label

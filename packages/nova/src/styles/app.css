@@ -1001,18 +1001,6 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    recipes queued up just out of view. */
 .espresso-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(230px, 28%) 1fr; gap: 18px; }
 .browse-list { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
-/* Sort + Edit Recipe sit above the list — a fixed-height row, `flex: none`,
-   so it doesn't shrink as the list below it grows or shrinks. Search itself
-   lives in the graph column's own bottom row now (.browse-search-group), not
-   here — see .prep-bottom.browse-bottom below. */
-.browse-list .rp-bottom { flex: none; gap: 8px; justify-content: space-between; }
-/* Matches the search button's own height — .rbtn is a 58px circle (2 * its
-   29px radius) — so Sort and Edit read as the same weight of control as
-   Search, even though the two rows are apart now. */
-/* min-width sized to the longer of the two toggled labels ("By rating") plus
-   its icon, so cycling sort mode doesn't visibly resize the button; centered
-   so the shorter label ("By use") doesn't sit lopsided in the extra room. */
-.browse-list .rp-bottom .sort-btn { height: 58px; min-width: 132px; justify-content: center; }
 /* The non-scrolling shell that carries the bottom fade — .rp-list-scroll
    (below) is the part that actually scrolls, exactly like NSX's own
    recipe-list-shell/recipe-list-scroll split, so the fade stays pinned to the
@@ -1056,18 +1044,11 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   color: var(--faint); font-size: var(--fs-md); text-align: center; padding: 0 10vw;
 }
 /* Reuses .prep-bottom's pinning (see the .prep-bottom-3 rule above). Edit
-   Recipe moved up into the list's own action row, so this now holds just the
-   stepper — centred, rather than .prep-bottom's default align-items:stretch
-   which would otherwise stretch the pill to the row's full 68px height.
-   flex: none keeps the row from being squeezed by .shot-graph's flex:1
-   above it in the same column. */
-/* Search flush left, the stepper flush right — the two groups pushed to the
-   row's opposite edges rather than centred as a pair. */
+   Recipe flush left, the stepper flush right — .prep-bottom's default
+   align-items:stretch stretches Edit to the row's full 68px height, matching
+   the Diary's own bottom-bar buttons; flex: none keeps the row from being
+   squeezed by .shot-graph's flex:1 above it in the same column. */
 .prep-bottom.browse-bottom { flex: none; justify-content: space-between; align-items: center; }
-/* Search + its active-filter chip, kept close together as one unit so
-   space-between above only ever separates THIS group from the stepper, not
-   the chip from the button it belongs to. */
-.browse-search-group { display: flex; align-items: center; gap: 10px; }
 
 /* The overlay. A scrim that BLURS the espresso page rather than hiding it —
    the recipe you're browsing away from stays visible behind its own browser.
