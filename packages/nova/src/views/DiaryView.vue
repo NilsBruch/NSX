@@ -489,17 +489,16 @@ watch(
         <span class="x" :aria-label="t('diary.clearFilter')">×</span>
       </button>
       <span class="spacer" style="flex: 1"></span>
-      <!-- Present in all three views, not just Browse: what it creates (a
-           recipe) is equally the thing you'd want to add while looking at the
-           shot history or the recipe list, and a button that comes and goes
-           with the segment is one the hand can't learn. -->
-      <button
-        class="rbtn accent"
-        :aria-label="t('diary.addRecipe')"
-        @click="showRecipeCreator = true"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-      </button>
+      <!-- Present in all three views, not just Browse: what these create (a
+           recipe, a bean on its own) is equally the thing you'd want to add
+           while looking at the shot history or the recipe list, and a button
+           that comes and goes with the segment is one the hand can't learn.
+           Two separate buttons, not one "+" leading to a chooser, so the
+           user decides up front whether they want a full recipe or just the
+           bean — same "+ New ___" phrasing BeanChooser's own inline add
+           already uses for this exact action. -->
+      <button class="btn accent" @click="showRecipeCreator = true">+ {{ t('diary.addRecipe') }}</button>
+      <button class="btn" @click="openEditBean(null)">+ {{ t('diary.newBean') }}</button>
       <button class="rbtn" :aria-label="t('diary.search')" @click="openSearch">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
       </button>
