@@ -497,7 +497,7 @@ watch(
            user decides up front whether they want a full recipe or just the
            bean — same "+ New ___" phrasing BeanChooser's own inline add
            already uses for this exact action. -->
-      <button class="btn accent" @click="showRecipeCreator = true">+ {{ t('diary.addRecipe') }}</button>
+      <button class="btn" @click="showRecipeCreator = true">+ {{ t('diary.addRecipe') }}</button>
       <button class="btn" @click="openEditBean(null)">+ {{ t('diary.newBean') }}</button>
       <button class="rbtn" :aria-label="t('diary.search')" @click="openSearch">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
