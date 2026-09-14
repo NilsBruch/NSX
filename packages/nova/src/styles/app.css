@@ -1732,6 +1732,20 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   letter-spacing: 0.1em; text-transform: uppercase;
   touch-action: manipulation;
 }
+/* Disabled once the shot has ended (savingShot — see LiveShotOverlay.vue):
+   skipping/stopping no longer means anything, same 0.35 dim every other
+   disabled control in this skin uses. */
+.skip-btn:disabled, .stop-btn:disabled { opacity: 0.35; }
+
+/* Balances live-top's title cell (see the template comment) and, once the
+   shot ends, hosts the saving spinner — a small corner indicator so the
+   live screen never has to give up the just-finished graph to show it. */
+.live-top-end { display: flex; justify-content: flex-end; }
+.saving-spin {
+  width: 22px; height: 22px; stroke: var(--accent); fill: none; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round; animation: spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .saving-spin { animation: none; } }
 
 .date-nav { display: inline-flex; align-items: center; gap: 6px; background: var(--card-bg); border-radius: var(--r-md); padding: 5px; }
 /* Sits inside .date-nav, which is itself var(--card-bg) — keep the original

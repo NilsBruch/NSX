@@ -16,7 +16,12 @@ import { refreshHistoryIfActive } from './useDiary.js';
 
 const { NSXCore, NSXApi } = window;
 
-export const phase = ref('hidden'); // 'hidden' | 'live' | 'saving' | 'history'
+export const phase = ref('hidden'); // 'hidden' | 'live' | 'history'
+// True while finishLive() is waiting for the just-finished shot to become
+// queryable — phase STAYS 'live' during this window (see finishLive), so the
+// just-brewed graph/metrics stay on screen; LiveShotOverlay renders this as a
+// small corner spinner instead of taking over the whole screen.
+export const savingShot = ref(false);
 export const series = reactive({ elapsed: [], pressure: [], targetPressure: [], flow: [], targetFlow: [], temperature: [], weightFlow: [] });
 
 // ── No-scale virtual weight (live volume-stop estimate) ──────────────────────
@@ -236,10 +241,12 @@ function scheduleReviewAutoClose() {
 }
 
 async function finishLive() {
-  // A brief "Saving shot…" spinner instead of jumping straight to the history
-  // screen — the gateway can lag a moment before a just-finished shot is
-  // actually queryable, and landing on history before then showed an empty
+  // A brief saving spinner (savingShot) instead of jumping straight to the
+  // history screen — the gateway can lag a moment before a just-finished shot
+  // is actually queryable, and landing on history before then showed an empty
   // (or one-shot-stale) screen. waitForFreshShot polls until it's there.
+  // phase stays 'live' throughout: the just-finished shot's graph/metrics
+  // stay on screen instead of being replaced by a full-screen takeover.
   //
   // Only wait if extraction actually started (_captureStarted): a shot
   // stopped before any pour (e.g. an immediate manual abort) never gets
@@ -247,8 +254,9 @@ async function finishLive() {
   // never arrive would turn a fast abort into a several-second stall.
   let fullShot = null;
   if (_captureStarted) {
-    phase.value = 'saving';
+    savingShot.value = true;
     fullShot = await waitForFreshShot();
+    savingShot.value = false;
   }
   // waitForFreshShot's polling refreshes the reference list; the Diary's
   // full-history page is a separate ref since the split, and would otherwise

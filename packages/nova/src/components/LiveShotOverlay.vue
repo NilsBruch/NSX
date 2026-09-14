@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { phase, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, liveFrame } from '../composables/useLiveShot.js';
+import { phase, savingShot, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, liveFrame } from '../composables/useLiveShot.js';
 import { recipe } from '../composables/useRecipe.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { machine, currentWorkflow } from '../composables/useCore.js';
@@ -191,11 +191,18 @@ async function editGrindSetting() {
     <div class="live-top">
       <span class="live-title">{{ t('liveShot.title') }}</span>
       <PhaseTicker :names="phaseNames" :index="phaseIndex" />
-      <!-- Empty third cell: it balances the title so the ticker's centre cell
-           is the centre of the SCREEN. -->
-      <span aria-hidden="true"></span>
-      <!-- No top-right timer here: the elapsed time already runs in the metrics
-           row below (liveShot.mTime), so a second one would be redundant. -->
+      <!-- Third cell balances the title so the ticker's centre cell is the
+           centre of the SCREEN — empty most of the time, but this is also
+           where the saving spinner lives once the shot ends (see savingShot
+           in useLiveShot.js): a small corner indicator instead of a full-
+           screen takeover, so the just-finished graph/metrics stay visible
+           while the shot is confirmed saved.
+           No top-right timer here: the elapsed time already runs in the
+           metrics row below (liveShot.mTime), so a second one would be
+           redundant. -->
+      <span class="live-top-end">
+        <svg v-if="savingShot" viewBox="0 0 24 24" class="saving-spin" role="status" :aria-label="t('liveShot.saving')"><path d="M12 3a9 9 0 1 0 9 9" /></svg>
+      </span>
     </div>
     <div class="shot-graph">
       <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" />
@@ -222,12 +229,14 @@ async function editGrindSetting() {
         <!-- Skip step only: it advances the profile to its next frame. On the
              tablet, stopping is deliberately NOT offered here — that's what
              the machine's own stop is for, same as starting a shot. This
-             button used to be labelled "Skip" but actually stopped the shot. -->
-        <button class="skip-btn" @click="onSkipStep">{{ t('liveShot.skipStep') }}</button>
+             button used to be labelled "Skip" but actually stopped the shot.
+             Disabled while savingShot: the shot has already ended by then,
+             so skipping/stopping no longer means anything. -->
+        <button class="skip-btn" :disabled="savingShot" @click="onSkipStep">{{ t('liveShot.skipStep') }}</button>
         <!-- Phone only — see onStop's own comment for why this is the one
              place the tablet's "the machine is right there" reasoning
              doesn't hold. -->
-        <button v-if="isPhone" class="stop-btn" @click="onStop">{{ t('common.stop') }}</button>
+        <button v-if="isPhone" class="stop-btn" :disabled="savingShot" @click="onStop">{{ t('common.stop') }}</button>
       </div>
       <div class="wbar">
         <span class="wbar-label"><b>{{ shownWeight.toFixed(0) }}</b> / {{ recipe.targetYield.toFixed(0) }} g<small v-if="virtualScaleActive" style="color: var(--muted)"> *</small></span>
@@ -235,13 +244,6 @@ async function editGrindSetting() {
           <div class="wbar-fill" :style="{ width: `${weightPct}%` }"></div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <div v-else-if="phase === 'saving'" class="overlay-full">
-    <div class="assist-body">
-      <span class="bigicon spin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg></span>
-      <div class="assist-step">{{ t('liveShot.saving') }}</div>
     </div>
   </div>
 
