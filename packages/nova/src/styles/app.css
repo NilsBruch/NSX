@@ -1775,7 +1775,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    reach) comes to ~30 characters; 30ch gives that room with a little to
    spare. flex: 0 0 <width>, not just width, is what makes it truly fixed
    even if the row around it gets tight. */
-.date-nav.browse-nav { padding: 4px 8px; gap: 8px; }
+/* height: 60px matches Edit Recipe's own explicit height (.browse-bottom
+   .btn) in the same row — the ‹ ›/date content stays centred inside it via
+   the base rule's align-items:center. */
+.date-nav.browse-nav { padding: 4px 8px; gap: 8px; height: 60px; }
 .date-nav.browse-nav .date {
   flex: 0 0 30ch; width: 30ch;
   flex-direction: column; align-items: center; gap: 2px;
