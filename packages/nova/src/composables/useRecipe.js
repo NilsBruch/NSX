@@ -47,14 +47,12 @@ export const recipe = reactive({
   targetYield: 0,
   groupTemp: 0,
   profileTitle: '—',
+  // The recipe's ONLY link to a profile: a reference into the DE1 library
+  // (see NSXCore.buildGatewayPayload's id/title/highest-version resolution).
+  // No embedded profile copy — editing the referenced profile in the library
+  // (EspressoView's "Edit profile") changes what every recipe pointing at it
+  // brews, on their next push.
   selectedProfileId: null,
-  // The recipe's OWN copy of the profile JSON — pushed embedded (see
-  // NSXCore.buildGatewayPayload's fast path), never written back to the DE1
-  // profile library. This is what lets the same base profile (e.g. Londinium)
-  // diverge slightly per recipe without spawning near-duplicate library
-  // entries. null for legacy recipes that only ever carried a reference
-  // (selectedProfileId/profileTitle); those still resolve via the library.
-  profile: null,
   // Auto-stop the shot at the target?  ON + scale -> stop at weight (targetYield);
   // ON + no scale -> stop at volume (targetYield * calibration factor);
   // OFF -> no auto-stop, the user stops manually. See NSXCore.buildGatewayPayload.
@@ -92,14 +90,6 @@ export async function refreshRecipes(force = false) {
   return recipes.value;
 }
 
-/** Deep-copies a profile JSON so a recipe's embedded copy never aliases the
- *  library record (or another recipe's copy) it was picked from — see the
- *  `recipe.profile` field note above. */
-export function cloneProfile(p) {
-  if (!p || typeof p !== 'object') return null;
-  try { return structuredClone(p); } catch { return JSON.parse(JSON.stringify(p)); }
-}
-
 function hasFrames(p) {
   const frames = p?.steps ?? p?.frames;
   return Array.isArray(frames) && frames.length > 0;
@@ -118,7 +108,11 @@ function snapshotFromCurrentRecipe(existing = {}) {
     groupTemp: recipe.groupTemp,
     profileTitle: recipe.profileTitle,
     selectedProfileId: recipe.selectedProfileId,
-    profile: recipe.profile,
+    // Explicitly dropped (not just omitted): `...existing` above would
+    // otherwise carry a pre-revert entry's embedded profile JSON forward
+    // forever. Every persist now strips it, so a recipe falls back to
+    // resolving selectedProfileId/profileTitle against the live library.
+    profile: undefined,
     stopAtWeight: recipe.stopAtWeight,
     grinderId: recipe.grinderId,
     beanId: recipe.beanId,
@@ -291,14 +285,6 @@ async function syncFromWorkflow(wf) {
     groupTemp: NSXCore.resolveProfileTemp(wf?.profile) ?? 0,
     profileTitle: display.profileTitle,
     selectedProfileId: wf?.profileId ?? null,
-    // Seed the embedded copy ONLY if this recipe doesn't already own one — the
-    // gateway workflow is the resolved, temp-adjusted PUSH payload (it may also
-    // carry target_weight/target_volume baked in for that push's scale state),
-    // so re-adopting it on every self-push echo would overwrite an already-
-    // divergent recipe.profile with stale computed fields. This path exists
-    // purely to give a recipe adopted from the machine at boot (which has no
-    // embedded copy yet) a real starting profile.
-    profile: recipe.profile ?? (hasFrames(wf?.profile) ? cloneProfile(wf.profile) : null),
     // stopAtWeight isn't recoverable from a pushed gateway workflow — keep
     // whatever the recipe already has (defaults to true) rather than guessing.
     grinderId: wf?.context?.grinderId ?? null,
@@ -388,10 +374,11 @@ export async function pushRecipe({ silent = false } = {}) {
     targetYield: recipe.targetYield,
     groupTemp: recipe.groupTemp,
     profileTitle: recipe.profileTitle,
+    // No embedded profile: buildGatewayPayload resolves this against the live
+    // library (id, falling back to title, preferring the highest version) on
+    // EVERY push — so an edit to the referenced profile takes effect on the
+    // recipe's very next push, with no extra plumbing needed here.
     selectedProfileId: recipe.selectedProfileId,
-    // Present -> buildGatewayPayload's embedded fast path (no library lookup);
-    // absent -> falls back to resolving selectedProfileId/profileTitle, as before.
-    profile: recipe.profile,
     stopAtWeight: recipe.stopAtWeight,
     // Needed for the no-scale volume stop: target_volume = targetYield * factor.
     volumeCalibration: recipe.volumeCalibration,
@@ -431,7 +418,7 @@ function _maybeRepushForScale() {
   _scaleRepushTimer = setTimeout(() => {
     if (machine.scaleConnected === _lastPushedScale) return; // machine already has the right stop mode
     if (!recipe.stopAtWeight) { _lastPushedScale = machine.scaleConnected; return; } // stop mode is scale-independent when off
-    if (!recipe.id && !recipe.profile) return;               // nothing pushable loaded
+    if (!recipe.id && !recipe.selectedProfileId) return;      // nothing pushable loaded
     if (!NSXCore.canExecuteOperation('setWorkflow')) return;  // not idle -> wait for the idle transition below
     pushRecipe({ silent: true }).catch((err) => {
       // Not the "machine busy" branch (that returns without throwing) — this is
@@ -466,8 +453,10 @@ NSXCore.on('machineState', ({ state }) => {
 });
 
 /**
- * Applies a freshly-edited profile (from ProfileEditor, mode="recipe") to the
- * current recipe and pushes it.
+ * Adopts a just-saved LIBRARY profile record onto the current recipe (its
+ * reference, never a copy — see EspressoView's "Edit profile", which now
+ * opens ProfileEditor in mode="library" for the recipe's own selectedProfileId
+ * rather than editing a recipe-owned copy) and pushes it.
  *
  * ── Why groupTemp must be rebaselined here ──────────────────────────────
  * buildGatewayPayload shifts EVERY frame by `recipe.groupTemp -
@@ -476,18 +465,15 @@ NSXCore.on('machineState', ({ state }) => {
  * baseline (from before the edit) it would silently re-shift every freshly
  * edited frame temperature again on push — e.g. edit frame 1 to 95°C and watch
  * it push as 93°C while every OTHER frame also moves by the same delta.
- * Rebaselining both the profile's own groupTemp and the recipe's dial to the
- * edited profile's natural first-frame temperature makes the delta zero, so
- * edits are literal; the dial keeps working as a bulk nudge from that new
- * baseline going forward.
+ * Rebaselining the recipe's dial to the edited profile's natural first-frame
+ * temperature makes the delta zero, so edits are literal; the dial keeps
+ * working as a bulk nudge from that new baseline going forward.
  */
-export async function applyEditedProfile(profile) {
-  const { groupTemp: _drop, ...withoutGroupTemp } = profile;
-  const naturalTemp = NSXCore.resolveProfileTemp(withoutGroupTemp) ?? recipe.groupTemp;
-  profile.groupTemp = naturalTemp;
-  recipe.groupTemp = naturalTemp;
-  recipe.profile = profile;
-  recipe.profileTitle = profile?.title || '—';
+export async function applyEditedLibraryProfile(savedRecord) {
+  const profile = savedRecord?.profile ?? null;
+  recipe.groupTemp = NSXCore.resolveProfileTemp(profile) ?? recipe.groupTemp;
+  recipe.selectedProfileId = savedRecord?.id ?? recipe.selectedProfileId;
+  recipe.profileTitle = profile?.title || recipe.profileTitle;
   await pushRecipe();
 }
 
@@ -513,9 +499,10 @@ export async function selectRecipe(entry, { push = true } = {}) {
     groupTemp: Number(entry.groupTemp) || 0,
     profileTitle: entry.profileTitle || '—',
     selectedProfileId: entry.selectedProfileId ?? null,
-    // Legacy recipes (saved before this field existed) have none — they keep
-    // resolving via the library reference (selectedProfileId/profileTitle).
-    profile: cloneProfile(entry.profile),
+    // A pre-revert entry may still carry a full embedded `profile` JSON in
+    // storage — deliberately never read into `recipe` (see snapshotFromCurrentRecipe,
+    // which strips it the moment this recipe next persists). Only the
+    // reference above is ever adopted.
     // Old recipes predate this field — default them to auto-stop (true).
     stopAtWeight: entry.stopAtWeight !== false,
     grinderId: entry.grinderId ?? null,
@@ -575,10 +562,8 @@ export async function composeNewRecipe({ bean, profile, seedContext = null, batc
     targetYield: seedContext?.targetYield || recipe.targetYield || 36,
     groupTemp: NSXCore.resolveProfileTemp(profile.profile) ?? recipe.groupTemp,
     profileTitle: profile.profile?.title || '—',
+    // Reference only — see the `selectedProfileId` note on `recipe` above.
     selectedProfileId: profile.id ?? null,
-    // Copy, not reference: this recipe now owns its own profile JSON and can
-    // diverge from the library profile it was picked from.
-    profile: cloneProfile(profile.profile),
     // The bean is already a real Diary record here (BeanChooser picked it), so
     // only the bag is left to resolve — from `batch` if the caller already
     // picked one, inherited just below if not, or left to ensureRecipeBatch
@@ -649,17 +634,20 @@ export function findRecipeForBeanProfile(bean, profileTitle) {
  * before this library existed), so "what's on the machine is always a recipe in
  * your library" holds no matter how the workflow got there.
  *
- * ── Direct path: the shot's profile snapshot IS the recipe's profile ───────
- * A recipe owns its own embedded profile JSON (`recipe.profile`), and
- * buildGatewayPayload pushes that copy directly — no library lookup. So when no
- * recipe exists yet, we just clone the shot's own profile snapshot
- * (`fallbackProfile`, the real steps that were brewed) straight into the new
- * recipe. There is deliberately no resolution against the live profile library:
- *   - We don't need a library id to brew — the embedded profile is pushed as-is.
- *   - `profileTitle` / `selectedProfileId` come best-effort from the shot. If the
- *     profile has since been renamed, the recipe keeps the shot's historic title
- *     rather than the profile's current name — an accepted trade for not doing a
- *     round-trip to the bridge on every Diary tap.
+ * ── No library match: best-effort reference from the shot's own snapshot ───
+ * The recipe never gets an embedded profile — only a reference (selectedProfileId
+ * / profileTitle), same as every other recipe. When no matching recipe exists
+ * yet, those are seeded best-effort from the shot's own profile snapshot
+ * (`fallbackProfile.id`/`.title` — the id/title the shot was actually brewed
+ * with), WITHOUT a round-trip to the bridge to confirm it still resolves.
+ * buildGatewayPayload does that resolution for real on the recipe's first push
+ * (id, falling back to title, preferring the highest version) — so this
+ * usually lands on the still-live profile (or its newest version) exactly like
+ * any other recipe. The one case this can't recover from: the shot's profile
+ * was fully deleted from the library (not just superseded) — then the created
+ * recipe has nothing to resolve, and pushRecipe (called via composeNewRecipe,
+ * below) throws. Rare, and the correct outcome under "recipes only reference
+ * library profiles": there is nothing left to brew.
  *
  * `fallbackContext` carries the shot's REAL dose/grind/yield, so the recovered
  * recipe reflects what was actually brewed instead of silently inheriting
@@ -686,9 +674,8 @@ export async function loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallb
   }
   log('  -> no existing recipe for this bean+profile; creating one from the shot snapshot');
 
-  // The shot's own profile snapshot goes straight into the recipe (its embedded
-  // profile is what buildGatewayPayload pushes — no library resolution). Without
-  // steps there is nothing to brew, so this is the one hard requirement.
+  // A shot with no profile steps at all has nothing to reference or recover
+  // from — the one hard requirement before even trying to seed a reference.
   if (!hasFrames(fallbackProfile)) {
     log('  -> shot carries no profile steps — cannot build a pushable recipe');
     throw new Error(`This shot carries no profile steps, so no recipe can be built for "${profileTitle}".`);
@@ -916,7 +903,9 @@ export async function patchRecipeEntry(id, patch) {
     return;
   }
   recipes.value = await NSXCore.saveRecipes(
-    recipes.value.map((r, i) => (i === idx ? { ...r, ...patch } : r))
+    // profile: undefined strips a pre-revert entry's embedded profile JSON on
+    // every patch, same as snapshotFromCurrentRecipe — see its comment.
+    recipes.value.map((r, i) => (i === idx ? { ...r, ...patch, profile: undefined } : r))
   );
   if (recipe.id === id) Object.assign(recipe, patch);
 }

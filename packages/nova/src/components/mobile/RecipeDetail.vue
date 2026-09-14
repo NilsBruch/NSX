@@ -28,7 +28,7 @@ import { useI18n } from 'vue-i18n';
 import { grinders, formatGrinderLabel, singleGrinder, recipeIdentityParts, formatShortDate } from '../../composables/useCore.js';
 import {
   recipe, recipes, pushRecipe, selectRecipe, deleteRecipe, togglePinRecipe, patchRecipeEntry,
-  setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, cloneProfile, roastAge,
+  setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, roastAge,
 } from '../../composables/useRecipe.js';
 import { openNumberPad, openRating, openChooser, openConfirm } from '../../composables/useModals.js';
 import { showToast } from '../../composables/useToast.js';
@@ -131,26 +131,24 @@ async function onBeanPicked(bean) {
 }
 
 // Unlike roast date/bean, swapping the profile has no batch to resolve — it's
-// the same four fields either way (EspressoView.onProfileSelected), so this
+// the same three fields either way (EspressoView.onProfileSelected), so this
 // is safe on a non-loaded entry too and doesn't need the loaded-only guard
 // those two rows carry.
 const showProfilePicker = ref(false);
 async function onProfileSelected(profile) {
   const profileTitle = profile.profile?.title || '—';
+  // Reference only — see useRecipe.js's `selectedProfileId` note on `recipe`.
   const selectedProfileId = profile.id ?? null;
-  // Copy, not reference — the recipe owns this profile from here on and can
-  // diverge from the library one it was picked from (see useRecipe.js).
-  const clonedProfile = cloneProfile(profile.profile);
   // Rebaseline the temperature dial to the NEW profile's own, same resolution
   // order as EspressoView/composeNewRecipe — otherwise a stale dial silently
   // re-shifts every frame's temperature on the next push (buildGatewayPayload
   // shifts by recipe.groupTemp minus the profile's own resolved temp).
   const groupTemp = window.NSXCore.resolveProfileTemp(profile.profile) ?? source.value.groupTemp;
   if (isLoaded.value) {
-    Object.assign(recipe, { profileTitle, selectedProfileId, profile: clonedProfile, groupTemp });
+    Object.assign(recipe, { profileTitle, selectedProfileId, groupTemp });
     await pushRecipe();
   } else {
-    await patchRecipeEntry(props.entry.id, { profileTitle, selectedProfileId, profile: clonedProfile, groupTemp });
+    await patchRecipeEntry(props.entry.id, { profileTitle, selectedProfileId, groupTemp });
   }
   showProfilePicker.value = false;
 }

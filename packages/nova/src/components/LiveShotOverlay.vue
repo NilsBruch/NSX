@@ -30,13 +30,13 @@ const liveElapsedLabel = computed(() => {
 });
 function last(arr, dec = 1) { return arr.length ? arr[arr.length - 1].toFixed(dec) : '0.0'; }
 // ── Phase ticker ──
-// The phases of the profile the machine is ACTUALLY running: the workflow
-// pushed to the gateway wins over the recipe's own copy, the same precedence
-// as the volume-count lookup in useLiveShot.js — those two must never
-// disagree about which frame number means what. `frames()` takes the wrapper
-// record, hence the {profile} envelope around the raw profile JSON.
+// The phases of the profile the machine is ACTUALLY running: the resolved
+// workflow pushed to the gateway (see buildGatewayPayload) — same source as
+// the volume-count lookup in useLiveShot.js, so those two never disagree
+// about which frame number means what. `frames()` takes the wrapper record,
+// hence the {profile} envelope around the raw profile JSON.
 const phaseNames = computed(() => {
-  const p = currentWorkflow.value?.profile ?? recipe.profile;
+  const p = currentWorkflow.value?.profile;
   return profileFrames({ profile: p }).map((f, i) => frameName(f, i, t));
 });
 // profileFrame is 0-based into that same list (core's normalizeShotData

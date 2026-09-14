@@ -277,7 +277,7 @@ async function openRateRecipe() {
        screen). No Browse-recipes button: the identity title above is the way
        into the library now, so Edit profile takes the leftmost slot. -->
   <div class="prep-bottom prep-bottom-3">
-    <button v-if="recipe.profile" class="btn" @click="emit('edit-profile')">
+    <button v-if="recipe.selectedProfileId" class="btn" @click="emit('edit-profile')">
       <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.profile"></svg>{{ t('espresso.editProfile') }}
     </button>
     <!-- Once rated, the earned stars take this slot over from the "Rate"

@@ -1,14 +1,13 @@
 <script setup>
 /**
  * Profile editor — modeled on the stock DE1 app's own editor (Steps + Limits
- * tabs), not NSX's. Two independent save paths:
- *   "recipe"  — editing a recipe's OWN profile copy. Never touches the DE1
- *               library; the caller assigns the built profile to
- *               recipe.profile and pushes it.
- *   "library" — Settings' profile manager. The caller (ProfilePicker) does
- *               the actual create/update/soft-delete dance; this component
- *               just emits the built profile + the change classification it
- *               needs to pick a save branch (see `saved` payload below).
+ * tabs), not NSX's. Always edits a DE1 LIBRARY profile: the caller (ProfilePicker's
+ * Settings manager, or EspressoView's per-recipe "Edit profile" — which edits
+ * the recipe's REFERENCED library profile, not a private copy — see
+ * useRecipe.js) does the actual create/update/soft-delete dance via
+ * useCore.js's saveLibraryProfile; this component just emits the built
+ * profile + the original it started from (see `saved` payload below), which
+ * is what saveLibraryProfile needs to pick a save branch.
  *
  * All normalize/serialize logic is pure core (NSXCore.normalizeProfileFrame,
  * .normalizeProfileLimits, .buildProfileFromDraft, .makeDefaultFrame) — this
@@ -24,15 +23,13 @@ import { isPhone } from '../../composables/useLayout.js';
 import SettingSlider from './SettingSlider.vue';
 
 const props = defineProps({
-  mode: { type: String, required: true }, // 'recipe' | 'library'
-  profile: { type: Object, default: null },  // recipe mode: raw profile JSON, or null = new
-  record: { type: Object, default: null },   // library mode: profile record, or null = new
+  record: { type: Object, default: null }, // profile record being edited, or null = new
 });
 const emit = defineEmits(['close', 'saved']);
 const { t } = useI18n();
 const { NSXCore } = window;
 
-const sourceProfile = props.mode === 'library' ? (props.record?.profile ?? null) : props.profile;
+const sourceProfile = props.record?.profile ?? null;
 // Deep clone: buildProfileFromDraft's key-shape preservation reads this, and
 // it must never alias the live record/recipe the editor was opened from.
 const originalProfile = sourceProfile ? JSON.parse(JSON.stringify(sourceProfile)) : null;

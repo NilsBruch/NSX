@@ -1,8 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { grinders, formatGrinderLabel } from '../composables/useCore.js';
-import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, cloneProfile, applyEditedProfile } from '../composables/useRecipe.js';
+import { grinders, formatGrinderLabel, profiles, profilesAll, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
+import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile } from '../composables/useRecipe.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
 import RecipePicker from '../components/RecipePicker.vue';
@@ -89,12 +89,10 @@ async function onProfileSelected(profile) {
   const ok = await openConfirm({ title: t('espresso.confirmReplaceProfile'), confirmLabel: t('common.replace') });
   if (!ok) { showProfilePicker.value = false; return; }
   recipe.profileTitle = profile.profile?.title || '—';
+  // Reference only — see useRecipe.js's `selectedProfileId` note on `recipe`.
   recipe.selectedProfileId = profile.id ?? null;
-  // Copy, not reference: the recipe now owns this profile and can diverge
-  // from the library one it was picked from (see useRecipe.js's recipe.profile).
-  recipe.profile = cloneProfile(profile.profile);
   // Rebaseline the temperature dial to the NEW profile's own — same resolution
-  // order as composeNewRecipe/applyEditedProfile (groupTemp, else first frame's
+  // order as composeNewRecipe/applyEditedLibraryProfile (groupTemp, else first frame's
   // temperature, else tank_temperature). Without this the dial kept showing
   // whatever the PREVIOUS profile was brewed at, and buildGatewayPayload shifts
   // every frame by (recipe.groupTemp - resolveProfileTemp(profile)) — so a stale
@@ -105,9 +103,33 @@ async function onProfileSelected(profile) {
   showRecipeOverlay.value = false; // see onBeanPicked
 }
 
-async function onProfileEditorSaved({ profile }) {
-  await applyEditedProfile(profile);
-  showProfileEditor.value = false;
+// The recipe's REFERENCED library profile — resolved from the visible cache
+// first, falling back to visible+hidden (a recipe can point at a hidden one,
+// e.g. a superseded version still in flight — see buildGatewayPayload), and
+// finally by title (mirrors buildGatewayPayload's own id-then-title fallback,
+// for the rare case a stored id no longer exists at all).
+const editingProfileRecord = computed(() => {
+  const byId = (id) => profiles.value.find((p) => p.id === id) ?? profilesAll.value.find((p) => p.id === id);
+  const byTitle = (title) => profiles.value.find((p) => p.profile?.title === title) ?? profilesAll.value.find((p) => p.profile?.title === title);
+  return byId(recipe.selectedProfileId) ?? byTitle(recipe.profileTitle) ?? null;
+});
+
+async function openProfileEditor() {
+  // Lazily fill the hidden cache so a recipe pointing at a hidden/superseded
+  // profile can still be found above — matches ProfilePicker's own convention.
+  if (!profilesAll.value.length) await refreshProfilesAll();
+  showProfileEditor.value = true;
+}
+
+async function onProfileEditorSaved({ profile: built, originalProfile }) {
+  try {
+    const savedRecord = await saveLibraryProfile({ record: editingProfileRecord.value, built, originalProfile });
+    await applyEditedLibraryProfile(savedRecord);
+  } catch (err) {
+    console.error('[Nova] failed to save profile', err?.message);
+  } finally {
+    showProfileEditor.value = false;
+  }
 }
 
 async function onRoastConfirm(iso) {
@@ -158,7 +180,7 @@ async function onRoastConfirm(iso) {
           @open-grinder="pickGrinder"
           @open-profile="showProfilePicker = true"
           @open-roast="showRoastPicker = true"
-          @edit-profile="showProfileEditor = true"
+          @edit-profile="openProfileEditor"
         />
       </div>
     </template>
@@ -199,8 +221,7 @@ async function onRoastConfirm(iso) {
     />
     <ProfileEditor
       v-if="showProfileEditor"
-      mode="recipe"
-      :profile="recipe.profile"
+      :record="editingProfileRecord"
       @close="showProfileEditor = false"
       @saved="onProfileEditorSaved"
     />

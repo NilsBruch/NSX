@@ -172,15 +172,10 @@
     let profileObj = null;
     let profileId = null;
 
-    // Recipe-owned profile: the workflow carries its own full profile JSON
-    // (Nova's embedded recipe.profile) rather than a reference into the DE1
-    // library. Use it directly — no library lookup, and profileId stays null
-    // so the workflow isn't tied to a library id it no longer matches (the
-    // embedded copy may have diverged from whatever it was copied from).
-    if (_extractFrames(workflow?.profile).length) {
-      profileObj = workflow.profile;
-    }
-
+    // Recipes only ever carry a REFERENCE into the DE1 library (selectedProfileId,
+    // falling back to profileTitle) — never their own profile copy. Resolving
+    // it fresh from the live library on every push (below) is what makes an
+    // edit to the referenced profile take effect on the recipe's next push.
     const matchFrom = (records) => {
       const match =
         (storedProfileId && records.find(r => String(r.id || "") === storedProfileId)) ||
@@ -203,7 +198,7 @@
       return true;
     };
 
-    if (expectedProfile && !profileObj) {
+    if (expectedProfile) {
       // Resolve against the visible+hidden set: a recipe can legitimately reference a
       // profile that was later hidden, and for resolving a concrete id/title "hidden"
       // is irrelevant (only deleted profiles must be excluded). The visible-only cache

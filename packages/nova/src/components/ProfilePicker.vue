@@ -9,7 +9,7 @@
  */
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { profiles, profilesAll, refreshProfiles, refreshProfilesAll } from '../composables/useCore.js';
+import { profiles, profilesAll, refreshProfiles, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
 import { frames, frameDetailText, frameName } from '../composables/useProfileDisplay.js';
 import { openConfirm, openChooser } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
@@ -293,48 +293,21 @@ function openEditProfile() {
   showEditor.value = true;
 }
 
-/**
- * Four save branches (see the profile-editor plan) — the bridge derives
- * profile ids from step content, which is why an execution change can't PUT:
- *   - seeded from a preset (presetSourceId set) -> always create, linked to
- *     that preset via parentId. Covers both "New -> From preset" and the old
- *     "Edit a Decent default" case, which is now just that flow's shortcut.
- *   - new, blank -> always create, no parent.
- *   - user-owned + execution changed -> create the new version, retire the old.
- *   - user-owned + metadata only (title/author/notes) -> PUT in place, same id.
- */
+// Save-branch logic (New/Edit here, and EspressoView's per-recipe "Edit
+// profile") lives in useCore.js's saveLibraryProfile — see its docstring.
 async function onEditorSaved({ profile: built, originalProfile }) {
   const record = editingRecord.value;
   const fromPreset = presetSourceId.value != null;
-  const originalId = record?.id ?? null;
 
   try {
-    let saved;
-    if (fromPreset || !record) {
-      saved = await NSXApi.createProfile({
-        profile: built,
-        parentId: fromPreset ? presetSourceId.value : null,
-        metadata: { source: 'user' },
-      });
-    } else if (NSXCore.profileHasExecutionChanges(built, originalProfile)) {
-      saved = await NSXApi.createProfile({ profile: built, parentId: originalId, metadata: { source: 'user' } });
-      try { await NSXApi.deleteProfile(originalId); } catch (err) {
-        console.error('[Nova] could not retire the previous profile version', err?.message);
-      }
-    } else {
-      saved = await NSXApi.saveProfile(originalId, { profile: built, metadata: { source: 'user' } });
-    }
-
-    NSXCore.invalidateProfiles();
-    NSXCore.invalidateProfilesAll();
-    NSXCore.invalidateDeletedProfiles();
-    await refreshProfiles(true);
+    const savedRecord = await saveLibraryProfile({
+      record, built, originalProfile, fromPreset, presetSourceId: presetSourceId.value,
+    });
     if (hiddenLoaded.value) await refreshProfilesAll(true);
 
     // Land on the saved profile — always user-owned now, even if it started
     // as a Decent copy, so the Custom tab is where it actually lives.
     activeGroup.value = 'user';
-    const savedRecord = NSXCore.normalizeProfileRecord(saved);
     selectedId.value = savedRecord?.id ?? null;
   } catch (err) {
     console.error('[Nova] failed to save profile', err?.message);
@@ -485,7 +458,6 @@ async function onEditorSaved({ profile: built, originalProfile }) {
 
     <ProfileEditor
       v-if="showEditor"
-      mode="library"
       :record="editingRecord"
       @close="showEditor = false; editingRecord = null"
       @saved="onEditorSaved"

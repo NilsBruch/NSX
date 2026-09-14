@@ -109,6 +109,51 @@ export async function refreshProfilesAll(force = false) {
 }
 
 /**
+ * The one place a profile edit is written to the DE1 library — shared by
+ * ProfilePicker.vue's manage mode (Settings) and EspressoView's per-recipe
+ * "Edit profile" (which now edits the recipe's REFERENCED library profile,
+ * not a copy — see useRecipe.js; that means `record` can be a Decent DEFAULT
+ * here, unlike ProfilePicker's own Edit button, which hides itself for one —
+ * so the isDefault guard below is load-bearing, not just defensive). Save
+ * branches (the bridge derives profile ids from step content, which is why
+ * an execution change can't PUT):
+ *   - seeded from a preset (presetSourceId set), OR editing a Decent DEFAULT
+ *     (never mutated in place, not even metadata) -> always create, linked
+ *     via parentId.
+ *   - new, blank (no record) -> always create, no parent.
+ *   - user-owned + execution changed -> create the new version, retire the old.
+ *   - user-owned + metadata only (title/author/notes) -> PUT in place, same id.
+ * Returns the saved, normalized record so callers can adopt its (possibly new) id.
+ */
+export async function saveLibraryProfile({ record, built, originalProfile, fromPreset = false, presetSourceId = null }) {
+  const originalId = record?.id ?? null;
+  const forceNewCopy = fromPreset || record?.isDefault === true;
+  let saved;
+  if (forceNewCopy || !record) {
+    saved = await NSXApi.createProfile({
+      profile: built,
+      parentId: forceNewCopy ? (fromPreset ? presetSourceId : originalId) : null,
+      metadata: { source: 'user' },
+    });
+  } else if (NSXCore.profileHasExecutionChanges(built, originalProfile)) {
+    saved = await NSXApi.createProfile({ profile: built, parentId: originalId, metadata: { source: 'user' } });
+    try { await NSXApi.deleteProfile(originalId); } catch (err) {
+      console.error('[Nova] could not retire the previous profile version', err?.message);
+    }
+  } else {
+    saved = await NSXApi.saveProfile(originalId, { profile: built, metadata: { source: 'user' } });
+  }
+
+  NSXCore.invalidateProfiles();
+  NSXCore.invalidateProfilesAll();
+  NSXCore.invalidateDeletedProfiles();
+  await refreshProfiles(true);
+  if (profilesAll.value.length) await refreshProfilesAll(true);
+
+  return NSXCore.normalizeProfileRecord(saved);
+}
+
+/**
  * Grinder identity in the recipe title/picker (see the design log): while only
  * one grinder is configured, it is implicit and drops out — a recipe is just
  * bean + profile. Add a second grinder and it reappears automatically, no skin

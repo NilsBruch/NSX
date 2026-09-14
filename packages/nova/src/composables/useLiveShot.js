@@ -44,8 +44,10 @@ let _lastSnapMs = 0;
 // rebased to the FIRST extraction sample, not the espresso-state transition.
 let _captureStarted = false;
 function _volumeCountStart() {
-  // Prefer the profile actually pushed to the gateway; fall back to the recipe's copy.
-  const p = currentWorkflow.value?.profile ?? recipe.profile;
+  // The profile actually pushed to the gateway (the resolved payload — see
+  // buildGatewayPayload); a live shot only starts after a push, so this is
+  // always populated by then.
+  const p = currentWorkflow.value?.profile;
   return Number(p?.target_volume_count_start) || 0;
 }
 export const historyShots = ref([]); // this recipe's shots, newest first

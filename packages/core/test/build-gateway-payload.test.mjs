@@ -157,57 +157,25 @@ test("steam timer off: duration pushed as the 90s safety cap, temp/flow untouche
   assert.deepEqual(payload.steamSettings, { targetTemperature: 150, flow: 1.5, duration: 90 });
 });
 
-// --- Nova's embedded recipe.profile (recipe-owned profile, no library lookup) ---
+// --- Recipes only ever carry a library REFERENCE, never their own profile
+// copy (reverted: a recipe used to be able to own a diverged profile copy,
+// pushed embedded with no library lookup — see the git history around
+// buildGatewayPayload). A stray `workflow.profile` field (e.g. leftover data
+// from a recipe saved before the revert) must be ignored entirely; only
+// selectedProfileId/profileTitle, resolved fresh against the live library on
+// every push, decide what gets pushed. ---
 
-test("embedded workflow.profile is used directly, without consulting the profile caches", async () => {
-  NSXCore.register({
-    loadProfiles: async () => { throw new Error("must not be called"); },
-    loadProfilesWithHidden: async () => { throw new Error("must not be called"); },
-    isSteamEnabled: () => true,
-    isSteamTimerEnabled: () => true,
-    getSteamTemp: () => 150,
-    getSteamFlow: () => 1.5,
-    getSteamDuration: () => 30,
-    getHotwaterTemp: () => 90,
-    getHotwaterVolume: () => 200,
-    getFlushFlow: () => 6,
-    getFlushDuration: () => 5,
-  });
-
-  const embedded = { title: "My Londinium Copy", steps: [{ temperature: 92 }, { temperature: 94 }] };
+test("a stray workflow.profile field is ignored — resolution always goes through the library", async () => {
+  stubCore();
+  const stray = { title: "Stale Embedded Copy", steps: [{ temperature: 92 }, { temperature: 94 }] };
   const payload = await NSXCore.buildGatewayPayload(
-    { profile: embedded, profileTitle: "My Londinium Copy", selectedProfileId: "some-stale-id", coffeeRoaster: "R", coffeeName: "C" },
+    { profile: stray, profileTitle: "Hidden One", selectedProfileId: "p-hidden", coffeeRoaster: "R", coffeeName: "C" },
     { scaleConnected: true },
   );
 
   assert.notEqual(payload, null);
-  assert.equal(payload.profileId, null, "embedded profiles don't carry a library id");
-  assert.equal(payload.profile.title, "My Londinium Copy");
-  assert.equal(payload.profile.steps.length, 2);
-});
-
-test("embedded workflow.profile: temp-delta adjustment still applies", async () => {
-  NSXCore.register({
-    loadProfiles: async () => { throw new Error("must not be called"); },
-    loadProfilesWithHidden: async () => { throw new Error("must not be called"); },
-    isSteamEnabled: () => true,
-    isSteamTimerEnabled: () => true,
-    getSteamTemp: () => 150,
-    getSteamFlow: () => 1.5,
-    getSteamDuration: () => 30,
-    getHotwaterTemp: () => 90,
-    getHotwaterVolume: () => 200,
-    getFlushFlow: () => 6,
-    getFlushDuration: () => 5,
-  });
-
-  const embedded = { title: "Embedded", steps: [{ temperature: 92 }, { temperature: 94 }] };
-  const payload = await NSXCore.buildGatewayPayload(
-    { profile: embedded, groupTemp: 95 },
-    { scaleConnected: true },
-  );
-  assert.deepEqual(payload.profile.steps.map((s) => s.temperature), [95, 97]);
-  assert.equal(payload.profile.groupTemp, 95);
+  assert.equal(payload.profileId, "p-hidden", "resolved against the library, not the stray embedded copy");
+  assert.equal(payload.profile.title, "Hidden One");
 });
 
 test("reference-only workflow (no embedded profile) still resolves via the library — unchanged", async () => {
