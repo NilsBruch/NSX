@@ -18,6 +18,7 @@ import { confirmAndDeleteBean, toggleArchiveBean } from '../composables/useBeanA
 import { recipeIdentityParts } from '../composables/useCore.js';
 import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
+import BagsPanel from '../components/BagsPanel.vue';
 import RecipePicker from '../components/RecipePicker.vue';
 import DiaryShotRow from '../components/DiaryShotRow.vue';
 import StarRating from '../components/StarRating.vue';
@@ -125,11 +126,13 @@ async function openBeanMenu(bean) {
     title: bean.name || '—',
     options: [
       ['edit', t('diary.editBean')],
+      ['bags', t('beanManager.batches')],
       ['archive', bean.archived ? t('diary.unarchive') : t('diary.archive')],
       ['delete', t('common.delete')],
     ],
   });
   if (choice === 'edit') openEditBean(bean);
+  else if (choice === 'bags') openBags(bean);
   else if (choice === 'archive') await toggleArchiveBean(bean);
   else if (choice === 'delete') await confirmAndDeleteBean(bean);
 }
@@ -214,6 +217,16 @@ function openEditBean(bean) {
   showEditor.value = true;
 }
 function closeEditor() { showEditor.value = false; }
+
+// Bags (BagsPanel.vue) — mounted fresh per bean via v-if, so it needs no
+// close-and-clear step of its own the way the editor's does.
+const bagsBean = ref(null);
+const showBags = ref(false);
+function openBags(bean) {
+  bagsBean.value = bean;
+  showBags.value = true;
+}
+function closeBags() { showBags.value = false; }
 
 // Rendering one shot (facts, measured metrics, stars) lives in DiaryShotRow —
 // all three lists here show the same row, so it has one implementation.
@@ -500,6 +513,7 @@ watch(
       @saved="closeEditor"
       @deleted="closeEditor"
     />
+    <BagsPanel v-if="showBags" :bean="bagsBean" @close="closeBags" />
 
     <!-- Seeded from the current browse position: inside a roaster it opens
          there, and on a bean's own page the bean step is already answered. -->

@@ -355,7 +355,7 @@ export default {
     recipeCreateFailed: 'Could not create recipe',
   },
   settingsPage: {
-    profiles: 'Profiles', grinders: 'Grinder', beans: 'Beans', machine: 'Machine',
+    profiles: 'Profiles', grinders: 'Grinder', machine: 'Machine',
     skin: 'Skin & Display', schedule: 'Schedule', app: 'App',
     back: 'Settings', connected: 'Connected', disconnected: 'Disconnected',
     energy: 'Energy', display: 'Display brightness',
@@ -364,12 +364,10 @@ export default {
     updateAvailable: '{version} available',
   },
   beanManager: {
-    noBeans: 'No beans yet',
     batches: 'Bags',
     noBatches: 'No bags for this bean',
     batchesFailed: 'Could not load bags',
     addBatch: 'Add bag',
-    editBatchTitle: 'Roast date',
     roastDateWarning: 'Shots already pulled from this bag will report the new roast date.',
     roastDateClash: 'This bean already has a bag roasted on that date',
     deleteBatchConfirm: 'Delete this bag?',

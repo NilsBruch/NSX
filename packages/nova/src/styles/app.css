@@ -1367,16 +1367,16 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    via flex-stretch) — give this row's buttons real height explicitly. */
 .pd-actions .btn { height: 52px; padding: 0 28px; font-size: var(--fs-md); }
 
-/* BeanPanel.vue's "Bags" section: a .pd-panel-label with a trailing add
-   button, then .pd-stages-list rows (reused as-is) carrying their own
-   trailing Edit/Delete pair — .pd-stage is normally a whole-row button, but a
-   batch row can't be one (it holds two REAL buttons, and a button can't
-   nest another), so .batch-row is a plain div with the identical layout. */
+/* BagsPanel.vue (one bean's bags, opened from the Diary's bean long-press
+   menu): a .pd-panel-label with a trailing add button, then .pd-stages-list
+   rows (reused as-is) carrying their own trailing Edit/Delete pair —
+   .pd-stage is normally a whole-row button, but a batch row can't be one (it
+   holds two REAL buttons, and a button can't nest another), so .batch-row is
+   a plain div with the identical layout. .batch-row is this file's only user
+   of that class name, so a plain selector is enough to beat .pd-stage's
+   background without needing to out-specificity it. */
 .bm-batches-head { flex: none; display: flex; align-items: center; justify-content: space-between; }
-/* .pick-detail .batch-row (2 classes) beats plain .pd-stage (1 class) outright,
-   so — unlike a same-specificity tie — this doesn't depend on staying below
-   .pd-stage in the file. */
-.pick-detail .batch-row { cursor: default; align-items: center; background: var(--card-hi); }
+.batch-row { cursor: default; align-items: center; background: var(--card-hi); }
 .batch-row-actions { flex: none; margin-left: auto; display: flex; gap: 6px; }
 .batch-row-actions button {
   width: 36px; height: 36px; border: none; border-radius: var(--r-sm);
@@ -1389,17 +1389,6 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    would disappear next to the cards below it. */
 .bm-batches-head .sort-btn.icon-only { width: 48px; height: 48px; border-radius: var(--r-md); }
 .bm-batches-head .sort-btn.icon-only svg { width: 20px; height: 20px; }
-
-/* BeanPanel.vue's own list/detail: .pick-list and .pick-detail are both
-   --card-bg, so a bean row or a property/bag card in the SAME shade read as
-   flat text rather than cards sitting on top of that surface — --card-hi is
-   the token this app already uses for exactly that relationship ("a step up
-   from a card"). Scoped to .bean-list-items / .pick-detail so ProfilePicker's
-   own list and stage rows (same base classes, different screen) are untouched. */
-.bean-list-items .pick-group-label { color: var(--muted); }
-.bean-list-items .pick-item { background: var(--card-hi); }
-.bean-list-items .pick-item.sel { border: 1px solid var(--accent); }
-.pick-detail .bfield { background: var(--card-hi); }
 
 /* ===== Profile editor (ProfileEditor.vue) — reuses .pick-body/.pick-list/
    .pick-detail/.pick-plot/.setting-row/.settings-scroll from the picker and

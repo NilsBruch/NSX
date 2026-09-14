@@ -15,7 +15,7 @@
  * The batch functions call NSXApi directly rather than through NSXCore: core
  * exposes no batch mutators at all (`packages/core/src/domains/bean.js`
  * documents a batch's roastDate as immutable, by design — see setBatchRoastDate
- * below for why the Bean Manager is a deliberate, called-out exception to
+ * below for why the Diary's Bags panel is a deliberate, called-out exception to
  * that), and nova already reaches NSXApi's batch endpoints directly elsewhere
  * (useRecipe.js's gcBatchIfUnused/adoptBatch). Adding core wrappers that would
  * only forward to NSXApi buys no shared logic — NSX has its own bean-manager
@@ -82,9 +82,9 @@ export async function confirmAndDeleteBean(bean) {
 }
 
 /**
- * A new bag for a bean already in the library — the Bean Manager's own "Add
- * bag" (useRecipe.js's ensureRecipeBatch/resolveBatch cover the OTHER way a
- * bag gets created, implicitly, off a recipe's roast date). The caller
+ * A new bag for a bean already in the library — the Diary Bags panel's own
+ * "Add bag" (useRecipe.js's ensureRecipeBatch/resolveBatch cover the OTHER way
+ * a bag gets created, implicitly, off a recipe's roast date). The caller
  * reloads the batch list; this function only writes.
  */
 export async function addBatch(beanId, roastDateIso) {
@@ -97,10 +97,10 @@ export async function addBatch(beanId, roastDateIso) {
  * bean.js's documented rule that a batch's roastDate is immutable. That rule
  * exists because every past shot pulled from a bag reports the bag's
  * roastDate at read time, so rewriting it retroactively changes what those
- * shots say. The Bean Manager offers this anyway, as a correction tool for a
- * mistyped date, with the caveat surfaced in its own UI
- * (beanManager.roastDateWarning) rather than hidden behind a plain-looking
- * date field.
+ * shots say. The Bags panel offers this anyway, as a correction tool for a
+ * mistyped date — it surfaces the caveat itself (a toast,
+ * beanManager.roastDateWarning, right as the date picker for an EXISTING bag
+ * opens) rather than hiding it behind a plain-looking date field.
  *
  * Sends the batch's OTHER fields back unchanged (weight/price/roastLevel/…) —
  * whether the gateway's batch PUT merges or replaces is unverified either way

@@ -27,6 +27,7 @@ import { useLongPress } from '../../../composables/useLongPress.js';
 import { goPhoneTab } from '../../../composables/usePhoneNav.js';
 import RecipePicker from '../../RecipePicker.vue';
 import BeanEditor from '../../BeanEditor.vue';
+import BagsPanel from '../../BagsPanel.vue';
 
 const { t } = useI18n();
 
@@ -68,16 +69,29 @@ function openEditBean(bean) {
   showBeanEditor.value = true;
 }
 function closeBeanEditor() { showBeanEditor.value = false; }
+
+// Bags (BagsPanel.vue) — mounted fresh per bean via v-if, so it needs no
+// close-and-clear step of its own the way the editor's does.
+const bagsBean = ref(null);
+const showBags = ref(false);
+function openBags(bean) {
+  bagsBean.value = bean;
+  showBags.value = true;
+}
+function closeBags() { showBags.value = false; }
+
 async function openBeanMenu(bean) {
   const choice = await openChooser({
     title: bean.name || '—',
     options: [
       ['edit', t('diary.editBean')],
+      ['bags', t('beanManager.batches')],
       ['archive', bean.archived ? t('diary.unarchive') : t('diary.archive')],
       ['delete', t('common.delete')],
     ],
   });
   if (choice === 'edit') openEditBean(bean);
+  else if (choice === 'bags') openBags(bean);
   else if (choice === 'archive') await toggleArchiveBean(bean);
   else if (choice === 'delete') await confirmAndDeleteBean(bean);
 }
@@ -302,5 +316,6 @@ async function onRecipeCreated() {
       @saved="closeBeanEditor"
       @deleted="closeBeanEditor"
     />
+    <BagsPanel v-if="showBags" :bean="bagsBean" @close="closeBags" />
   </section>
 </template>

@@ -26,9 +26,10 @@
  * actually enforceable from here — it's a convention every CALLER upholds,
  * not something this file's API surface can prevent.
  *
- * Nova's Settings > Beans manager is the one deliberate exception: it lets a
- * mistyped roast date be corrected in place, surfacing the retroactive-shots
- * caveat in its own UI rather than pretending the rule above has no cost.
+ * Nova's Diary Bags panel (a bean row's long-press menu -> "Bags") is the one
+ * deliberate exception: it lets a mistyped roast date be corrected in place,
+ * surfacing the retroactive-shots caveat in its own UI rather than pretending
+ * the rule above has no cost.
  * Guard against creating two batches with the same (beanId, roastDate) when
  * doing this — that identity is what resolveBatch's find-or-create depends on.
  *

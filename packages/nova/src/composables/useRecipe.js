@@ -777,8 +777,8 @@ export async function adoptCurrentWorkflowAsRecipe() {
  * different batch (find-or-create for that date) instead of editing the current
  * batch's date. Editing it in place is what the old implementation did, and it
  * silently rewrote history: every past shot pulled from the old bag would
- * retroactively report the new roast date. (The Bean Manager's own batch editor
- * — useBeanActions.js's setBatchRoastDate — is a deliberate, called-out
+ * retroactively report the new roast date. (The Diary's Bags panel —
+ * useBeanActions.js's setBatchRoastDate — is a deliberate, called-out
  * exception to this for correcting a mistyped date; this function's job is
  * "the recipe just moved to a different bag", which is a different action and
  * still shouldn't rewrite either bag's date.)
