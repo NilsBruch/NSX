@@ -9,9 +9,10 @@
  * batchId -> beanId map (useDiary.js's loadBatchMap) used purely for shot
  * attribution.
  */
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { formatShortDate } from '../composables/useCore.js';
+import { useBeanBatches } from '../composables/useBeanBatches.js';
 import { addBatch, setBatchRoastDate, confirmAndDeleteBatch } from '../composables/useBeanActions.js';
 import RoastDatePicker from './RoastDatePicker.vue';
 
@@ -20,40 +21,12 @@ const props = defineProps({
 });
 defineEmits(['close']);
 const { t } = useI18n();
-const { NSXCore, NSXApi } = window;
+const { NSXCore } = window;
 
-// ── Batches: fetched for this one bean. No reactive store for these
-// anywhere in nova, and fetchBatches carries no ETag layer, so this is
-// always a real round trip — see useBeanActions.js for why this isn't backed
-// by nova's shared `shots`-style cache instead. ──
-const batches = ref([]);
-const batchesLoading = ref(false);
-const batchesFailed = ref(false);
-let batchReq = 0; // race guard — same pattern as RecipeBrowser.vue's reqId
-
-async function loadBatches() {
-  const beanId = props.bean?.id;
-  const my = ++batchReq;
-  if (!beanId) { batches.value = []; batchesLoading.value = false; return; }
-  batchesLoading.value = true;
-  batchesFailed.value = false;
-  try {
-    const res = await NSXApi.fetchBatches(beanId, true);
-    if (my !== batchReq) return; // a newer load already won
-    const list = Array.isArray(res) ? res : (res?.items ?? []);
-    batches.value = list.slice().sort((a, b) => String(b.roastDate || '').localeCompare(String(a.roastDate || '')));
-  } catch (err) {
-    if (my !== batchReq) return;
-    console.warn('[Nova] could not load this bean\'s bags', err?.message);
-    batches.value = [];
-    batchesFailed.value = true;
-  } finally {
-    if (my === batchReq) batchesLoading.value = false;
-  }
-}
+const { batches, loading: batchesLoading, failed: batchesFailed, load: loadBatches } = useBeanBatches();
 // The panel is mounted fresh per bean (v-if in the Diary), so a plain call is
 // enough — no prop to watch for a bean swap under it.
-loadBatches();
+loadBatches(props.bean?.id);
 
 // ── Batch actions ──
 const showRoastPicker = ref(false);
@@ -78,10 +51,10 @@ async function onRoastConfirm(iso) {
   if (clash) { NSXCore.emit('toast', t('beanManager.roastDateClash')); return; }
   if (target) await setBatchRoastDate(target, iso);
   else await addBatch(props.bean.id, iso);
-  await loadBatches();
+  await loadBatches(props.bean.id);
 }
 async function deleteBatchRow(batch) {
-  if (await confirmAndDeleteBatch(batch)) await loadBatches();
+  if (await confirmAndDeleteBatch(batch)) await loadBatches(props.bean.id);
 }
 </script>
 

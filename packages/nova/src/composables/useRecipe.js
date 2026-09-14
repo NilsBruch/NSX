@@ -563,7 +563,7 @@ export function schedulePushForRecipe(entry) {
  * must win over whatever is currently dialed in. The plain bean-picker flow has
  * no such data, so it defaults to null and nothing changes there.
  */
-export async function composeNewRecipe({ bean, profile, seedContext = null }) {
+export async function composeNewRecipe({ bean, profile, seedContext = null, batch = null }) {
   recipe.id = null;
   Object.assign(recipe, {
     coffeeRoaster: bean.roaster || '—',
@@ -580,34 +580,41 @@ export async function composeNewRecipe({ bean, profile, seedContext = null }) {
     // diverge from the library profile it was picked from.
     profile: cloneProfile(profile.profile),
     // The bean is already a real Diary record here (BeanChooser picked it), so
-    // only the bag is left to resolve — inherited just below, or left to
-    // ensureRecipeBatch (which falls back to the bean's undated bag).
+    // only the bag is left to resolve — from `batch` if the caller already
+    // picked one, inherited just below if not, or left to ensureRecipeBatch
+    // (which falls back to the bean's undated bag) as the last resort.
     beanId: bean.id ?? null,
-    beanBatchId: null,
+    beanBatchId: batch?.id ?? null,
     beanUnlinked: false,
     pinned: false,
-    roastDate: null,
+    roastDate: batch?.roastDate ?? null,
     volumeCalibration: { factor: 1.0, samples: [] },
     rating: 0, // a freshly composed recipe starts unrated
   });
 
-  // Join the bean's CURRENT bag if it has a dated one — same coffee, same
-  // roast, different profile is the ordinary reason to build a second recipe on
-  // a bean, and both should sit on the one bag so their shots stay together.
-  // Without this every new recipe landed on the bean's UNDATED bag regardless,
-  // which is what left so many of them with no roast date at all.
-  // Failure is not fatal: ensureRecipeBatch (inside pushRecipe) still resolves
-  // the undated bag, exactly as it did before.
-  let inheritedRoastDate = null;
-  try {
-    const current = await NSXCore.fetchCurrentBatch(recipe.beanId);
-    if (current?.id) {
-      recipe.beanBatchId = current.id;
-      recipe.roastDate = current.roastDate ?? null;
-      inheritedRoastDate = recipe.roastDate;
+  // `batch` present means the caller already resolved one explicitly —
+  // RecipePicker.vue's wizard now has its own bag-picking step
+  // (BatchPicker.vue), right after Bean, so it always passes one. Only fall
+  // back to auto-joining the bean's CURRENT bag when nothing was passed —
+  // loadOrCreateRecipeForBeanProfile has no such step and still needs this.
+  // Same coffee, same roast, different profile is the ordinary reason to
+  // build a second recipe on a bean, and both should sit on the one bag so
+  // their shots stay together — without this every new recipe landed on the
+  // bean's UNDATED bag regardless, which is what left so many of them with no
+  // roast date at all. Failure is not fatal: ensureRecipeBatch (inside
+  // pushRecipe) still resolves the undated bag, exactly as it did before.
+  let inheritedRoastDate = batch ? (batch.roastDate ?? null) : null;
+  if (!batch) {
+    try {
+      const current = await NSXCore.fetchCurrentBatch(recipe.beanId);
+      if (current?.id) {
+        recipe.beanBatchId = current.id;
+        recipe.roastDate = current.roastDate ?? null;
+        inheritedRoastDate = recipe.roastDate;
+      }
+    } catch (err) {
+      console.warn('[Nova] could not read the current bag for this bean', err?.message);
     }
-  } catch (err) {
-    console.warn('[Nova] could not read the current bag for this bean', err?.message);
   }
 
   await pushRecipe();
