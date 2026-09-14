@@ -1044,11 +1044,17 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   color: var(--faint); font-size: var(--fs-md); text-align: center; padding: 0 10vw;
 }
 /* Reuses .prep-bottom's pinning (see the .prep-bottom-3 rule above). Edit
-   Recipe flush left, the stepper flush right — .prep-bottom's default
-   align-items:stretch stretches Edit to the row's full 68px height, matching
-   the Diary's own bottom-bar buttons; flex: none keeps the row from being
-   squeezed by .shot-graph's flex:1 above it in the same column. */
+   Recipe flush left, the stepper flush right — align-items:center here
+   (not .prep-bottom's default stretch) so the date-nav pill keeps its own
+   compact height instead of being stretched to the row's full 68px; flex:
+   none keeps the row from being squeezed by .shot-graph's flex:1 above it
+   in the same column. */
 .prep-bottom.browse-bottom { flex: none; justify-content: space-between; align-items: center; }
+/* .btn has no height of its own — center-aligned above, it would otherwise
+   sit at its own thin intrinsic height (just the text/icon's line box, since
+   .btn's padding is horizontal only). Matches .diary-bottom's own .btn,
+   which gets its 60px from that row's align-items:stretch instead. */
+.browse-bottom .btn { height: 60px; }
 
 /* The overlay. A scrim that BLURS the espresso page rather than hiding it —
    the recipe you're browsing away from stays visible behind its own browser.
