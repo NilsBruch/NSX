@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
 import StarRating from './StarRating.vue';
@@ -25,6 +26,7 @@ function grinderDisplay(entry) {
 }
 const num = (v, digits = 1) => (Number.isFinite(Number(v)) ? Number(v).toFixed(digits) : '—');
 const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight) || 0, Number(entry.targetYield) || 0);
+const tags = computed(() => (Array.isArray(props.entry.tags) ? props.entry.tags : []));
 </script>
 
 <template>
@@ -42,9 +44,17 @@ const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight)
           <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
         </svg>
       </span>
-      <span class="rp-name">{{ entry.coffeeName }}</span>
-      <div class="rp-rating">
-        <StarRating v-if="Number(entry.rating) > 0" :model-value="Number(entry.rating)" readonly :size="16" />
+      <!-- Name and rating share one row, the stars flush right: the rating is
+           about the coffee named beside it, and giving it a row of its own cost
+           a card-height line that was empty on every unrated recipe. The name
+           yields first when the two don't fit (min-width:0 + its own ellipsis),
+           since a cropped name still identifies the coffee while half a star
+           rating says nothing. -->
+      <div class="rp-name-row">
+        <span class="rp-name">{{ entry.coffeeName }}</span>
+        <div class="rp-rating">
+          <StarRating v-if="Number(entry.rating) > 0" :model-value="Number(entry.rating)" readonly :size="16" />
+        </div>
       </div>
     </div>
     <div class="rp-rows">
@@ -75,7 +85,20 @@ const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight)
     </div>
     <div class="rp-row rp-profile">
       <span class="rp-label">{{ t('recipePicker.lProfile') }}</span>
-      <span class="rp-chip">{{ entry.profileTitle }}</span>
+      <!-- Plain .rp-val, not a pill: the profile is one of the card's FACTS,
+           like the grinder or the dose, so it's read the same way. The pill it
+           used to be made it look like a control, and put a third shape on a
+           card that already carries label/value pairs and (accented) tags. -->
+      <span class="rp-val">{{ entry.profileTitle }}</span>
+    </div>
+    <!-- The recipe's CURRENT tags (the hold menu edits them). A shot shows the
+         tags it was pulled with instead, off its own record — see useRecipe's
+         `tags`, and the shot view's own row.
+         Always rendered, even with no tags: the row reserves its height so
+         every card is the same size whether or not it's tagged — same reason
+         .rp-rating reserves the stars' line above. -->
+    <div class="rp-tags">
+      <span v-for="tag in tags" :key="tag" class="rp-tag">{{ tag }}</span>
     </div>
   </div>
 </template>

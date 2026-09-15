@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, recipes, beanForRecipe, justCreatedRecipeId } from './useRecipe.js';
+import { recipe, recipes, beanForRecipe, justCreatedRecipeId, selectRecipe, setRecipeTags, allRecipeTags } from './useRecipe.js';
 import { shots } from './useCore.js';
 import { openTextField } from './useModals.js';
 
@@ -83,10 +83,37 @@ export function useRecipeList() {
     );
   });
 
+  /**
+   * Recipe tags — the labels that ride along in the pushed workflow and get
+   * stamped onto every shot pulled on it (see useRecipe's `tags`). Reuses the
+   * text field's tag mode, the same editor the bean's tasting notes use,
+   * seeded with every tag the library already has so spellings stay
+   * consistent.
+   *
+   * Lives here rather than in each hold menu because both browsers offer it
+   * and the rule is identical: tags are a property of the LOADED recipe (that
+   * is the one whose workflow is on the machine), so editing them on another
+   * card loads it first — the same thing the menus' other editing entries do.
+   * Called with no entry (RecipeBody's tag chip) it edits the loaded recipe
+   * directly, which is already the one on the machine.
+   */
+  async function editTags(entry = null) {
+    if (entry && !isCurrent(entry)) await selectRecipe(entry);
+    const value = await openTextField({
+      title: t('espresso.tags'),
+      value: (recipe.tags || []).join(', '),
+      placeholder: t('espresso.tagsPlaceholder'),
+      tags: true,
+      suggestions: allRecipeTags.value,
+    });
+    if (value === null) return;
+    await setRecipeTags(value.split(',').map((v) => v.trim()).filter(Boolean));
+  }
+
   async function openSearch() {
     const value = await openTextField({ title: t('recipePicker.search'), value: query.value, placeholder: t('recipePicker.searchPlaceholder') });
     if (value !== null) query.value = value;
   }
 
-  return { query, sortMode, isCurrent, cycleSort, sortLabel, sortedRecipes, listedRecipes, visibleRecipes, openSearch };
+  return { query, sortMode, isCurrent, cycleSort, sortLabel, sortedRecipes, listedRecipes, visibleRecipes, openSearch, editTags };
 }

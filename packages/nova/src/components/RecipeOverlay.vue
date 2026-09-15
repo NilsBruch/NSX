@@ -33,7 +33,7 @@ onMounted(() => {
   if (!shots.value.length) loadShots(200).catch(() => { /* unsorted list is still usable */ });
 });
 
-const { query, isCurrent, cycleSort, sortLabel, listedRecipes, visibleRecipes, openSearch } = useRecipeList();
+const { query, isCurrent, cycleSort, sortLabel, listedRecipes, visibleRecipes, openSearch, editTags } = useRecipeList();
 
 async function pick(entry) {
   await selectRecipe(entry);
@@ -56,6 +56,7 @@ async function openCardMenu(entry) {
     options: [
       ['load', t('diary.loadRecipe')],
       ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
+      ['tags', t('espresso.tags')],
       ['delete', t('common.delete')],
     ],
   });
@@ -63,6 +64,8 @@ async function openCardMenu(entry) {
     await pick(entry);
   } else if (choice === 'pin') {
     await togglePinRecipe(entry);
+  } else if (choice === 'tags') {
+    await editTags(entry);
   } else if (choice === 'delete') {
     const ok = await openConfirm({
       title: t('diary.deleteRecipeConfirm'),

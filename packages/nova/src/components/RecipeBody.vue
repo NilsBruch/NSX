@@ -3,6 +3,8 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipeIdentityParts, formatShortDate } from '../composables/useCore.js';
 import { recipe, roastAge, hasProfile } from '../composables/useRecipe.js';
+import { useRecipeList } from '../composables/useRecipeList.js';
+import { useLongPress } from '../composables/useLongPress.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import StarRating from './StarRating.vue';
@@ -22,6 +24,21 @@ const {
   onDoseClick, doseDrag, onGrindClick, grindDrag, onYieldClick, yieldDrag,
   onTempClick, tempDrag, toggleStopAtWeight, rateRecipe,
 } = useRecipeDials();
+// Only for the tag editor — the same one both recipe browsers' hold menus
+// open, so tags are edited identically wherever you reach them from.
+const { editTags } = useRecipeList();
+
+// Tap the title to browse recipes, HOLD it to edit the loaded recipe's
+// profile. That freed the bottom row's leftmost slot, which was the only
+// button there that wasn't about the shot you just pulled (Rate) or the ones
+// before it (History). A hold has no affordance of its own, which is the
+// trade: it's the same gesture the recipe cards already use for their own
+// menus, so it's the skin's established "more, on this thing" gesture rather
+// than a new one invented here.
+const titlePress = useLongPress({
+  tap: () => emit('open-recipes'),
+  hold: () => { if (hasProfile.value) emit('edit-profile'); },
+});
 
 const ICONS = {
   thermo: '<path d="M10 4a2 2 0 0 1 4 0v9a4.5 4.5 0 1 1-4 0V4z"/><path d="M12 9v6"/>',
@@ -30,14 +47,21 @@ const ICONS = {
   // Gear = grind-size adjustment. Feather-style cog: a toothed ring around a hub.
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   history: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
-  profile: '<path d="M4 19h16"/><path d="M4 16c3 0 3-9 6-9s3 6 5 6 3-2 5-2"/>',
   star: '<path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z"/>',
+  tag: '<path d="M4 11V5a1 1 0 0 1 1-1h6l8 8-7 7-8-8z"/><circle cx="8" cy="8" r="1.2"/>',
   drop: '<path d="M12 3.5s5.5 6.3 5.5 10a5.5 5.5 0 0 1-11 0c0-3.7 5.5-10 5.5-10z"/><path d="M9.5 14.5a2.8 2.8 0 0 0 2.3 2.7"/>',
 };
 
 // The combined identity title — shared with the Diary's recipe rows so the two
 // render the same recipe identically (see useCore's recipeIdentityParts).
 const titleParts = computed(() => recipeIdentityParts(recipe));
+
+// One chip, not a row of pills: this sits in a fixed-width dial column, so a
+// wrapping list would push the orbs around. Empty reads as the invitation to
+// add some, the same way the roast chip does when no date is set.
+const tagLabel = computed(() =>
+  recipe.tags?.length ? recipe.tags.join(' · ') : t('espresso.tags')
+);
 
 const roastLabel = computed(() =>
   recipe.roastDate ? `${t('espresso.roasted')} ${formatShortDate(recipe.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
@@ -54,7 +78,15 @@ const roastLabel = computed(() =>
          browser, where this same title splits into three tappable bubbles at
          the same spot — that's how bean/grinder/profile are swapped
          individually (see RecipeOverlay.vue). -->
-    <button class="recipe-title" :aria-label="t('espresso.openRecipes')" @click="emit('open-recipes')">
+    <button
+      class="recipe-title"
+      :aria-label="t('espresso.openRecipes')"
+      @pointerdown="titlePress.down"
+      @pointermove="titlePress.move"
+      @pointerup="titlePress.up"
+      @pointercancel="titlePress.cancel"
+      @pointerleave="titlePress.cancel"
+    >
       <template v-for="(part, i) in titleParts" :key="i">
         <span v-if="i > 0" class="dot">•</span>{{ part }}
       </template>
@@ -139,6 +171,20 @@ const roastLabel = computed(() =>
             @click="toggleStopAtWeight"
           ></button>
         </div>
+        <!-- The recipe's tags, under the stop-at column — a chip in the same
+             slot the roast chip takes under the dose orb (a sibling of the
+             orbs, not part of them). They belong to the whole recipe rather
+             than to the orbs above, which is why the label reads "Tags" rather
+             than being implied by what it sits under; this is just the column
+             wide enough to carry a tag list. Tapping opens the same editor the
+             recipe cards' hold menus do. -->
+        <button class="roast-chip tag-chip" @click="editTags()">
+          <!-- The icon sits OUTSIDE the outline: the pill is the tag, the icon
+               labels what the pill is — enclosing it made the two read as one
+               oversized chip. -->
+          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.tag"></svg>
+          <span class="tag-chip-text">{{ tagLabel }}</span>
+        </button>
       </div>
     </div>
 
@@ -152,10 +198,10 @@ const roastLabel = computed(() =>
        that moved when you switched tabs (and the gap under it grew with the
        screen). No Browse-recipes button: the identity title above is the way
        into the library now, so Edit profile takes the leftmost slot. -->
-  <div class="prep-bottom prep-bottom-3">
-    <button v-if="hasProfile" class="btn" @click="emit('edit-profile')">
-      <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.profile"></svg>{{ t('espresso.editProfile') }}
-    </button>
+  <div class="prep-bottom prep-bottom-even">
+    <!-- Edit profile used to lead this row; it's a HOLD on the title now (see
+         titlePress), leaving the row to the two things about the shots
+         themselves. -->
     <!-- Once rated, the earned stars take this slot over from the "Rate"
          label — tapping them reopens the same editor, so the rating is both
          the display and the control. StarRating renders no nested <button>

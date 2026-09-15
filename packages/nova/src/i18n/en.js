@@ -96,6 +96,8 @@ export default {
     changeGrinder: 'Change grinder',
     changeProfile: 'Change profile',
     openRecipes: 'Browse recipes',
+    tags: 'Tags',
+    tagsPlaceholder: 'e.g. morning, for guests',
     editProfile: 'Edit profile',
     editRecipe: 'Edit recipe',
     history: 'History',
@@ -283,6 +285,8 @@ export default {
     mWflow: 'Weight flow',
     // The expert graph's legend chip that shows/hides every target curve.
     goals: 'Goals',
+    // The recipe's tags as recorded ON this shot — see useRecipe's `tags`.
+    shotTags: 'Recipe tags',
     mTime: 'Time',
     mGrind: 'Grind',
     mIn: 'In',
