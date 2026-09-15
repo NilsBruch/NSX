@@ -1397,6 +1397,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .batch-row-delete svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
+/* A bag row — BagsPanel's editable list AND BatchPicker's pick list — is at
+   least as tall as the "+ Add bag" button below it (.prep-bottom's own
+   height), so the two read as the same kind of target and an undated bag's
+   single-line row doesn't come out half that size. Its own class rather than
+   .pd-stage: ProfilePicker's stage list shares .pd-stage and is meant to stay
+   dense. */
+.bag-row { min-height: 68px; align-items: center; }
+
 /* ===== Profile editor (ProfileEditor.vue) — reuses .pick-body/.pick-list/
    .pick-detail/.pick-plot/.setting-row/.settings-scroll from the picker and
    settings panels above; only its own layout pieces are added here. ===== */

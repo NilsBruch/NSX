@@ -68,7 +68,7 @@ async function deleteBatchRow(batch) {
     </div>
 
     <div class="pd-stages-list">
-      <div v-for="b in batches" :key="b.id" class="pd-stage batch-row">
+      <div v-for="b in batches" :key="b.id" class="pd-stage batch-row bag-row">
         <!-- Tapping the bag edits it — the same "tap the row, no separate
              pencil" convention the Diary's own rows use elsewhere (see
              DiaryView.vue's .row-main / .row-edit pairing) — Delete is the

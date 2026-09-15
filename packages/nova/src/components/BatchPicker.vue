@@ -65,7 +65,7 @@ async function onRoastConfirm(iso) {
     </div>
 
     <div class="pd-stages-list">
-      <button v-for="b in batches" :key="b.id" class="pd-stage" @click="pickExisting(b)">
+      <button v-for="b in batches" :key="b.id" class="pd-stage bag-row" @click="pickExisting(b)">
         <div class="pd-stage-main">
           <span class="pd-stage-name">{{ b.roastDate ? formatShortDate(b.roastDate) : t('diary.empty') }}</span>
           <span class="pd-stage-detail">{{ b.roastDate ? NSXCore.getBatchAge(b.roastDate) : '' }}<template v-if="b.archived"> · {{ t('diary.archive') }}</template></span>
