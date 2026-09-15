@@ -228,9 +228,12 @@ export const skinSettings = reactive({
   //         six tab colours are unaffected either way — those were never the
   //         part in question.
   tabColors: true,
-  // false = the dark theme this skin was designed in; true = the light one.
-  // Both are the same rules with a different token block (app.css).
-  lightMode: false,
+  // Which token block app.css applies, written to <html data-theme> by
+  // useAccent.js: 'dark' (the one this skin was designed in), 'light', or
+  // 'midnight' (a second dark palette, navy-tinted with raised cards — ported
+  // from the Streamline Dark variant NSX ships). All three are the same rules
+  // with a different set of token values.
+  theme: 'dark',
   shotReviewAutoCloseSec: 5, // 0 = stay open until dismissed
   // true = the profile's pressure/flow TARGETS are drawn alongside the actual
   // ones (dashed curve + outlined bars, see ShotStripChart). OFF by default:
@@ -252,7 +255,7 @@ const SKIN_KEYS = {
   tapToUnlock: 'nova_tap_to_unlock',
   waterUnit: 'nova_water_unit',
   tabColors: 'nova_tab_colors',
-  lightMode: 'nova_light_mode',
+  theme: 'nova_theme',
   shotReviewAutoCloseSec: 'nova_shot_review_autoclose',
   showTargets: 'nova_show_targets',
   coffeeGraph: 'nova_coffee_graph',
@@ -271,7 +274,9 @@ export function loadSkinSettings() {
   skinSettings.tapToUnlock = s.nova_tap_to_unlock === true; // default off
   skinSettings.waterUnit = s.nova_water_unit || 'ml';
   skinSettings.tabColors = s.nova_tab_colors !== false; // default on
-  skinSettings.lightMode = s.nova_light_mode === true;  // default dark
+  // Migrates the old boolean: a device that only ever stored nova_light_mode
+  // keeps the theme it was on, and its next theme change writes nova_theme.
+  skinSettings.theme = s.nova_theme || (s.nova_light_mode === true ? 'light' : 'dark');
   // Default 5s; an explicit stored 0 (off) must survive, so don't `|| 5`.
   skinSettings.shotReviewAutoCloseSec = s.nova_shot_review_autoclose != null ? Number(s.nova_shot_review_autoclose) : 5;
   skinSettings.showTargets = s.nova_show_targets === true; // default off

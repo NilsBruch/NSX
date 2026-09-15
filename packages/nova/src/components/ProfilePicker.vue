@@ -229,7 +229,7 @@ function plotSvg(p, frameIdx = -1) {
     // plot arrived as a dark grey slab with dark-theme grid and tick colours
     // on a white card. Reading skinSettings here also makes the SVG re-render
     // when the theme is switched, since this runs from the template.
-    theme: skinSettings.lightMode ? 'light' : 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
+    theme: skinSettings.theme === 'light' ? 'light' : 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
     showTempLine: false, compactMargins: true, selectedFrameIdx: frameIdx, pressureMax: 12,
   });
 }

@@ -93,7 +93,7 @@ function plotSvg() {
   return NSXCore.renderProfileSpark({ title: draft.title, steps: draft.frames }, {
     // See ProfilePicker.plotSvg — pinned to 'dark', the preview came out as a
     // dark slab on the light theme.
-    theme: skinSettings.lightMode ? 'light' : 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
+    theme: skinSettings.theme === 'light' ? 'light' : 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
     showTempLine: false, compactMargins: true, selectedFrameIdx: selectedFrameIdx.value, pressureMax: 12,
   });
 }

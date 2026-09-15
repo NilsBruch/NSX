@@ -56,6 +56,21 @@ const mix = (a, b, amount) => {
 const DEFAULT_ACCENT = '#7fa8c9';
 
 /**
+ * Themes whose surfaces do NOT take the active tab's hue. The value is the
+ * colour to tint with instead, or null for no tint at all.
+ *
+ * Midnight is the second kind: its whole character is the navy climbing with
+ * elevation, and washing any accent through that pulled the greys off it —
+ * with a per-tab accent, six different ways; with one fixed accent, uniformly
+ * warm, which is not what the palette is. So its greys render exactly as
+ * app.css declares them, on every tab.
+ *
+ * The per-tab --accent itself is untouched either way: icons, labels, chips
+ * and the rail still change colour, only the ground stays put.
+ */
+const FIXED_TINT_THEMES = { midnight: null };
+
+/**
  * The six tab accents are tuned against a near-black page, where they read at
  * 4.7-6.0:1. On the light theme's ground the SAME colours fall to 2.1-2.7:1 —
  * unusable for the small uppercase labels, badges and star ratings the accent
@@ -85,10 +100,13 @@ export function useAccent(tabNameSource) {
   // (loadSkinSettings only fires once bootCore resolves), so the switches have
   // to re-apply rather than being read once at startup.
   watch(
-    [tabAccent, () => skinSettings.tabColors, () => skinSettings.lightMode],
-    ([accent, colourByTab, light]) => {
+    [tabAccent, () => skinSettings.tabColors, () => skinSettings.theme],
+    ([accent, colourByTab, theme]) => {
       const root = document.documentElement;
-      root.dataset.theme = light ? 'light' : 'dark';
+      root.dataset.theme = theme;
+      // Only the LIGHT theme needs the accents darkened — 'midnight' is a dark
+      // palette like the default one, so the accents read on it unchanged.
+      const light = theme === 'light';
 
       // Clear the tints BEFORE reading, always. Two reasons, and the second is
       // the one that bites: an inline value would otherwise be what we read
@@ -107,11 +125,16 @@ export function useAccent(tabNameSource) {
       const cs = getComputedStyle(root);
       const shown = light ? mix(accent, '#000000', LIGHT_DARKEN) : accent;
       root.style.setProperty('--accent', shown);
+      // The surfaces take the tab's hue unless the theme fixes them (see
+      // FIXED_TINT_THEMES) — a fixed colour to tint with, or null for none, in
+      // which case the tints stay cleared and app.css's own greys stand.
+      const ground = theme in FIXED_TINT_THEMES ? FIXED_TINT_THEMES[theme] : shown;
+      if (!ground) return;
       for (const [key, amount] of Object.entries(TINT)) {
         // A stylesheet that ever drops one of these keys would yield '' here;
         // skip rather than write "#NaNNaNNaN" over a working colour.
         const base = cs.getPropertyValue(key).trim();
-        if (base) root.style.setProperty(key, mix(base, shown, amount));
+        if (base) root.style.setProperty(key, mix(base, ground, amount));
       }
     },
     { immediate: true }

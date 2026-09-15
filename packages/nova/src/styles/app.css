@@ -35,7 +35,13 @@
                              the one surface that reads as a display rather
                              than as a panel, and it goes the OTHER way between
                              themes: near-black on dark, white on light */
-  --modal-bg: #161c23;    /* modals and the shot graph, between app and card */
+  --modal-bg: #161c23;    /* modals, between app and card */
+  /* The shot graph's bed. Its own role rather than sharing --modal-bg with the
+     dialogs: the graph is a panel ON the page, not a sheet OVER it, so a theme
+     can decide those two are the same surface or different ones. Resolved
+     lazily, so a theme that redefines only --modal-bg still moves this with
+     it. */
+  --graph-bg: var(--modal-bg);
   --on-accent: #12161b;   /* text/icons ON an accent fill. Dark here, because
                              the accents are mid-tones on a near-black page;
                              the light theme darkens the accents and flips this
@@ -286,6 +292,81 @@
      contact layer up hard, ambient layer barely. */
   --elev-1: -1px -1px 3px rgba(16, 24, 40, 0.10), -4px -4px 16px rgba(16, 24, 40, 0.09);
   --elev-2: -2px -2px 8px rgba(16, 24, 40, 0.16), -13px -13px 40px rgba(16, 24, 40, 0.14);
+}
+
+/* ═══ Midnight theme ════════════════════════════════════════════════════════
+   A second DARK palette, ported from the "Streamline Dark" variant NSX ships
+   ([data-theme="dark"] in packages/nsx/src/css/app.css). Two things separate it
+   from the default dark theme, and they're both structural rather than a
+   different shade of grey:
+
+   1. The greys are navy-tinted, and the tint GROWS with elevation — the page is
+      nearly neutral, a card is slightly blue, and the raised surfaces above it
+      (--card-hi) are unmistakably so. Nova's own dark theme moves the other
+      way, holding one neutral hue at every level.
+   2. Cards are RAISED, not recessed: a card sits lighter than its page here,
+      the way the light theme's do, rather than darker the way the default
+      dark's do. --well still has to stay below the card it lives inside (see
+      --card-bg's note at the top of this file) — that pair is what limits how
+      far the card can move, and it's honoured below.
+
+   Everything else follows the same contract as the other two blocks: tokens
+   only — with one deliberate exception, the recipe card's sheen and its blue
+   loaded state, which live next to .rp-card itself (search for
+   [data-theme="midnight"]). The accents stay the dark theme's (they're mid-tones on a
+   near-black ground either way, which is what --on-accent is dark for), and
+   useAccent's per-tab tint mixes through these greys untouched. */
+:root[data-theme="midnight"] {
+  --app-bg: #090b0f;
+  --page-bg: #101217;
+  --tab-bg: #16181d;
+  /* Near-neutral, matching the source's own card surface (#17191e). The tint
+     deliberately does NOT start here: in the original the cards are grey and
+     only the levels ABOVE them (--card-hi) go blue, which is what makes the
+     blue read as elevation rather than as the skin's colour. An earlier port
+     tinted this one too and every card looked blue. */
+  --card-bg: #17191e;
+  --text: #e0e4ea;
+  --muted: #8a93a6;
+  --faint: #4b5468;
+  /* The one theme where cards have a drawn edge. It's the slate hairline that
+     gives the original its panelled look — a white alpha here would read as a
+     glow instead, which is why the source uses a blue-grey too. */
+  --edge: rgba(55, 65, 81, 0.55);
+  --line: #252a34;
+  --card-hi: #1f2234;   /* the elevation where the navy tint starts — the
+                           source's own elevated-panel colour */
+  --well: #0c0e13;      /* recessed inside a card — moves with --card-bg */
+  --island-bg: #06070a;
+  --modal-bg: #14171e;
+  --on-accent: #0b0d12;
+  --switch-off: #333c4d;
+  --switch-knob: #f2f4f7;
+  --tick: rgba(255, 255, 255, 0.16);
+  --danger-wash: rgba(218, 81, 94, 0.16);
+  --drag-wash: rgba(255, 255, 255, 0.06);
+  --scrim: rgba(6, 8, 12, 0.74);
+  --scrim-blur: rgba(10, 12, 18, 0.62);
+  --scrim-ring: rgba(10, 12, 18, 0.45);
+  --ring-track: rgba(255, 255, 255, 0.07);
+  --chart-grid: rgba(224, 228, 234, 0.05);
+  --chart-scrub: rgba(224, 228, 234, 0.5);
+  --press-filter: brightness(1.16);
+  /* No page gradient: this palette's depth comes from the tint climbing with
+     elevation and from the drawn card edges above, so the diagonal light
+     source the other two themes use only muddied it. Zeroed rather than the
+     rule removed — the wash is still painted, it just carries nothing. */
+  --grad-dark: 0;
+  --grad-light: 0;
+  /* The plot sits flush IN the page rather than on a panel of its own — with
+     the gradient gone there's nothing left for a separate graph bed to sit in,
+     and the curves read better against one continuous ground. */
+  --graph-bg: var(--page-bg);
+  /* Status colours from the source palette: its own green and red, and an
+     amber of the same saturation for the middle state it has no colour for. */
+  --ok: #0ca581;
+  --warn: #c08840;
+  --alert: #da515e;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1599,6 +1680,20 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   padding: 18px 20px; color: var(--text); font-family: inherit;
 }
 .rp-card.current { border-color: var(--accent); }
+/* The one place midnight goes past tokens into a rule, and deliberately: a
+   recipe card is how that palette is recognised, and in the original it isn't
+   a flat fill at all — it's a white 8%->2% sheen over its surface, with the
+   LOADED card swapped for a blue wash and a blue edge instead of taking the
+   tab's accent. Both are background-IMAGE only, so the card colour underneath
+   stays the theme token (and the .current rule follows this one, so a loaded
+   card's blue replaces the sheen rather than stacking with it). */
+:root[data-theme="midnight"] .rp-card {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+}
+:root[data-theme="midnight"] .rp-card.current {
+  background-image: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(10, 132, 255, 0.09));
+  border-color: rgba(10, 132, 255, 0.35);
+}
 /* Marks a pinned recipe — on its card in the browser, and on its row in the
    Diary. Sits before the name rather than in a corner: the pin explains the
    card's POSITION at the top of the list, so it belongs where the eye lands
@@ -1718,7 +1813,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    controls. */
 .shot-graph {
   position: relative; flex: 1; min-height: 0; max-height: 65vh;
-  background: var(--modal-bg); border-radius: var(--r-lg); padding: 14px; display: flex;
+  background: var(--graph-bg); border-radius: var(--r-lg); padding: 14px; display: flex;
 }
 /* The legend, laid over the plot's top-right corner instead of taking a row of
    its own underneath. pointer-events: none is load-bearing on the history
@@ -2232,6 +2327,11 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    own container reads as a gap in it. */
 .seg.seg-setting { flex: none; width: 196px; padding: 3px; background: var(--card-hi); }
 .seg.seg-setting .seg-thumb { top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); }
+/* Three-up in a settings row (the theme picker). Wider than the two-up so the
+   labels keep the same air, and a third of the padded inner width is
+   (100% - 6px)/3 — .seg-3 above already supplies the data-pos="2" travel. */
+.seg.seg-setting.seg-3 { width: 264px; }
+.seg.seg-setting.seg-3 .seg-thumb { width: calc(33.333% - 2px); }
 .seg.seg-setting button { min-width: 0; font-size: var(--fs-xs); padding: 9px 0; }
 @media (prefers-reduced-motion: reduce) { .seg .seg-thumb { transition: none; } }
 

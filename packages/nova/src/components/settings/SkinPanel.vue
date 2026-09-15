@@ -12,6 +12,15 @@ import { skinSettings, saveSkinSetting, displaySupport } from '../../composables
 defineEmits(['close']);
 const { t } = useI18n();
 
+// The three token blocks in app.css, in the order the segmented control shows
+// them. 'midnight' is a second DARK palette (navy-tinted, raised cards), so it
+// sits next to 'dark' rather than opposite the light one.
+const THEMES = [
+  ['light', 'skinSettings.themeLight'],
+  ['dark', 'skinSettings.themeDark'],
+  ['midnight', 'skinSettings.themeMidnight'],
+];
+
 const timeFormatOpts = [['24h', t('skinSettings.timeFormat24')], ['12h', t('skinSettings.timeFormat12')]];
 const startTabOpts = TABS.map((tab) => [tab.name, t(`tab.${tab.name}`)]);
 const optLabel = (opts, v) => opts.find(([value]) => value === v)?.[1] ?? '';
@@ -62,16 +71,20 @@ async function pickReviewAutoClose() {
 
     <div class="settings-scroll">
       <span class="setting-group-label">{{ t('skinSettings.ui') }}</span>
-      <!-- A segmented control rather than a switch: "Skin theme" has two named
+      <!-- A segmented control rather than a switch: the themes are named
            states, and a switch would force one of them to be the unlabelled
            "off" — you'd have to know which. Same control the Diary uses for
-           Browse/History, in its compact size. -->
+           Browse/History/Recipes, in its compact three-up size. -->
       <div class="setting-row">
         <span class="sr-name">{{ t('skinSettings.theme') }}</span>
-        <div class="seg seg-setting" :data-pos="skinSettings.lightMode ? 0 : 1">
+        <div class="seg seg-setting seg-3" :data-pos="THEMES.findIndex(([name]) => name === skinSettings.theme)">
           <span class="seg-thumb"></span>
-          <button :class="{ on: skinSettings.lightMode }" @click="saveSkinSetting('lightMode', true)">{{ t('skinSettings.themeLight') }}</button>
-          <button :class="{ on: !skinSettings.lightMode }" @click="saveSkinSetting('lightMode', false)">{{ t('skinSettings.themeDark') }}</button>
+          <button
+            v-for="[name, label] in THEMES"
+            :key="name"
+            :class="{ on: skinSettings.theme === name }"
+            @click="saveSkinSetting('theme', name)"
+          >{{ t(label) }}</button>
         </div>
       </div>
       <!-- Off restores the original look: one blue everywhere, untinted greys.
