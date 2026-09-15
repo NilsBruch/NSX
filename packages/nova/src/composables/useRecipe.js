@@ -159,10 +159,20 @@ export async function saveVolumeCalibration(cal) {
   await persistCurrentRecipeEdits();
 }
 
+/** The recipe created in this session, while it's still the loaded one and
+ *  still unbrewed — the ONLY recipe useRecipeList hoists to the top of the
+ *  list (a brand-new recipe has no shot to date it, so plain recency order
+ *  buries it right when the user is looking for it). Deliberately not "any
+ *  loaded recipe without shots": selecting an older never-brewed recipe from
+ *  the list made it jump to the top under the user's finger, which is the
+ *  behaviour this ref exists to rule out. */
+export const justCreatedRecipeId = ref(null);
+
 /** Persists the current dial values as a brand-new recipe entity and loads
  *  it (recipe.id now points at it) — the "+ New recipe" flow's save step. */
 export async function createRecipeFromCurrent() {
   recipe.id = NSXCore.makeRecipeId();
+  justCreatedRecipeId.value = recipe.id;
   const entry = snapshotFromCurrentRecipe({ lastUsed: Date.now() });
   recipes.value = await NSXCore.saveRecipes([...recipes.value, entry]);
   return entry;
@@ -171,6 +181,7 @@ export async function createRecipeFromCurrent() {
 export async function deleteRecipe(id) {
   recipes.value = await NSXCore.saveRecipes(recipes.value.filter((r) => r.id !== id));
   if (recipe.id === id) recipe.id = null;
+  if (justCreatedRecipeId.value === id) justCreatedRecipeId.value = null;
 }
 
 /** Bumps a recipe's lastUsed on an actual completed shot — matches NSX's real
@@ -507,6 +518,9 @@ export async function applyEditedLibraryProfile(savedRecord) {
  *  calls schedulePushForRecipe(entry) right after instead, which debounces
  *  that push exactly the way NSX's own recipe list does. */
 export async function selectRecipe(entry, { push = true } = {}) {
+  // Loading anything else ends the just-created recipe's turn at the top of
+  // the list (see justCreatedRecipeId); re-selecting it keeps it there.
+  if (justCreatedRecipeId.value !== (entry.id ?? null)) justCreatedRecipeId.value = null;
   Object.assign(recipe, {
     id: entry.id ?? null,
     coffeeRoaster: entry.coffeeRoaster || '—',

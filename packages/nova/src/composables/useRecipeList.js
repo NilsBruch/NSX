@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, recipes, beanForRecipe } from './useRecipe.js';
+import { recipe, recipes, beanForRecipe, justCreatedRecipeId } from './useRecipe.js';
 import { shots } from './useCore.js';
 import { openTextField } from './useModals.js';
 
@@ -30,14 +30,17 @@ export function useRecipeList() {
   const sortedRecipes = computed(() => {
     const byRecency = window.NSXCore.sortRecipesByLastUsed(recipes.value, shots.value);
     // A never-brewed recipe has no shot to date it, so the recency sort above
-    // leaves it in its original order at the end (see its own comment). While
-    // it's the one actually loaded on the machine — freshly created, or just
-    // reselected — surface it at the very top instead, so it isn't buried
-    // right when the user is looking for it. The moment it's no longer loaded,
-    // or it's actually been brewed (which gives it a real timestamp), this no
-    // longer applies and it falls back to plain recency order.
+    // leaves it in its original order at the end (see its own comment). For a
+    // recipe just CREATED in this session that means being buried the moment
+    // it's saved, so surface it at the very top while it's still the loaded
+    // one. Only that one (justCreatedRecipeId) — keying this on "loaded and
+    // unbrewed" instead made any older never-brewed recipe jump to the top of
+    // the list the moment it was tapped, under the user's own finger. It falls
+    // back to plain recency the moment something else is loaded, or it's
+    // actually brewed (which gives it a real timestamp).
     const currentIdx = byRecency.findIndex((r) =>
-      isCurrent(r) && window.NSXCore.findShotsForWorkflow(r, shots.value).length === 0
+      r.id != null && r.id === justCreatedRecipeId.value
+      && window.NSXCore.findShotsForWorkflow(r, shots.value).length === 0
     );
     const byUse = currentIdx <= 0 ? byRecency : (() => {
       const copy = byRecency.slice();

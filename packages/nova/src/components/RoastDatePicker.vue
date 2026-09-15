@@ -74,11 +74,23 @@ function pick(cell) { if (cell && !cell.future) selected.value = cell.iso; }
       <span class="m-title">{{ t('espresso.setRoastDate') }}</span>
 
       <div class="dp-head">
-        <button class="dp-nav" :aria-label="t('datePicker.prevYear')" @click="shiftYear(-1)">«</button>
-        <button class="dp-nav" :aria-label="t('datePicker.prevMonth')" @click="shiftMonth(-1)">‹</button>
+        <!-- SVG chevrons, not «‹›» glyphs: those carry their own asymmetric side
+             bearings, so the ink sat left of centre in the button's square no
+             matter how the box was centred. Drawn on the same 24x24 grid as
+             the app's other icons (see .ov-back's own back chevron). -->
+        <button class="dp-nav" :aria-label="t('datePicker.prevYear')" @click="shiftYear(-1)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.5 5l-7 7 7 7M12.5 5l-7 7 7 7" /></svg>
+        </button>
+        <button class="dp-nav" :aria-label="t('datePicker.prevMonth')" @click="shiftMonth(-1)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 5l-7 7 7 7" /></svg>
+        </button>
         <span class="dp-month">{{ monthLabel }}</span>
-        <button class="dp-nav" :aria-label="t('datePicker.nextMonth')" @click="shiftMonth(1)">›</button>
-        <button class="dp-nav" :aria-label="t('datePicker.nextYear')" @click="shiftYear(1)">»</button>
+        <button class="dp-nav" :aria-label="t('datePicker.nextMonth')" @click="shiftMonth(1)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5l7 7-7 7" /></svg>
+        </button>
+        <button class="dp-nav" :aria-label="t('datePicker.nextYear')" @click="shiftYear(1)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 5l7 7-7 7M11.5 5l7 7-7 7" /></svg>
+        </button>
       </div>
 
       <div class="dp-grid dp-weekdays">
@@ -111,7 +123,12 @@ function pick(cell) { if (cell && !cell.future) selected.value = cell.iso; }
 .dp-month { width: 200px; text-align: center; font-size: var(--fs-lg); font-weight: 700; letter-spacing: 0.04em; }
 .dp-nav {
   flex: none; width: 52px; height: 52px; border: none; border-radius: 14px;
-  background: var(--card-bg); color: var(--accent); font-family: inherit; font-size: var(--fs-lg); font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card-bg); color: var(--accent); cursor: pointer;
+}
+.dp-nav svg {
+  width: 22px; height: 22px; stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }
 .dp-grid { display: grid; grid-template-columns: repeat(7, 56px); gap: 8px; justify-content: center; }
 .dp-weekdays { margin-bottom: 8px; }
