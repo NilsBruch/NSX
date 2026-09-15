@@ -83,11 +83,18 @@ export default {
     dose: 'Dose',
     grindSize: 'Grind size',
     stopAtTemp: 'Stop at & temp',
+    // Just the temperature: the graph layout's card gives it its own tile, so
+    // the "stop at &" half of stopAtTemp (which labels RecipeBody's combined
+    // yield+temp pair) doesn't apply there.
+    temp: 'Temp',
     targetYield: 'Target yield',
     ratio: 'Ratio',
     confirmReplaceBean: 'Replace the bean in the current recipe?',
     confirmReplaceGrinder: 'Replace the grinder in the current recipe?',
     confirmReplaceProfile: 'Replace the profile in the current recipe?',
+    changeBean: 'Change bean',
+    changeGrinder: 'Change grinder',
+    changeProfile: 'Change profile',
     openRecipes: 'Browse recipes',
     editProfile: 'Edit profile',
     editRecipe: 'Edit recipe',

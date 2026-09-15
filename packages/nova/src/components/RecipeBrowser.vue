@@ -1,12 +1,12 @@
 <script setup>
 /**
  * The coffee page's graph layout (skinSettings.coffeeGraph): recipe cards on
- * the left, the selected one's shot graph on the right, a shot stepper +
- * Edit Recipe button at the bottom. Selecting a card here IS loading the
- * recipe onto the machine — same as RecipeOverlay.vue's cards — but the push
- * is debounced (see selectRecipe/schedulePushForRecipe in useRecipe.js) so
- * flicking through several cards to compare their graphs pushes once, not
- * once per tap.
+ * the left; the selected one's shot stepper, graph and dose/grind/output/temp
+ * card on the right (Rate and Edit profile live in a card's hold menu — see
+ * openCardMenu). Selecting a card here IS loading the recipe onto the machine
+ * — same as RecipeOverlay.vue's cards — but the push is debounced (see selectRecipe/schedulePushForRecipe in
+ * useRecipe.js) so flicking through several cards to compare their graphs
+ * pushes once, not once per tap.
  *
  * The graph's shot stepper deliberately does NOT reuse useLiveShot.js's
  * historyShots/historyIndex/phase — those exist to drive the globally-mounted
@@ -21,6 +21,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
+import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { shots, loadShots, formatDateParts } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
@@ -28,11 +29,18 @@ import { useLongPress } from '../composables/useLongPress.js';
 import { useRecipeList } from '../composables/useRecipeList.js';
 import { formatClock } from '../utils/clock.js';
 import RecipeCard from './RecipeCard.vue';
+import RecipeSettingsCard from './RecipeSettingsCard.vue';
 import ShotStripChart from './ShotStripChart.vue';
 
-const emit = defineEmits(['edit']);
+// pick-bean/pick-grinder/pick-profile: same three EspressoView already binds
+// for RecipeOverlay's identity bubbles (showBeanChooser/pickGrinder/
+// showProfilePicker) — reused here for the card long-press menu's Change
+// bean/grinder/profile, since this layout drops the identity bubbles
+// entirely (the card list is already how you switch bean+profile combos).
+const emit = defineEmits(['edit-profile', 'open-roast', 'pick-bean', 'pick-grinder', 'pick-profile']);
 const { t } = useI18n();
 const { NSXCore } = window;
+const { rateRecipe } = useRecipeDials();
 
 // Same reason RecipeOverlay.vue's onMounted has: shots are what date/sort a
 // recipe, and the recipe library itself may not have been fetched yet if the
@@ -60,17 +68,45 @@ async function pick(entry) {
  * tap only browses, it needs the menu's Load to actually switch), so a
  * second way to do the same thing from the hold menu would be redundant.
  * Pin/Delete are identical either way.
+ *
+ * Change bean/grinder/profile live here (not on the page itself) because
+ * this layout has no identity bubbles to tap — the card list already IS how
+ * you switch between bean+profile combinations, so this is the one door left
+ * for changing just ONE part of an existing recipe in place. Rate and Edit
+ * profile joined them here for the same reason: this layout is short on
+ * vertical space (list, graph, settings card), and both are per-recipe
+ * actions, so the card they belong to is a better home than a page-wide row
+ * under the graph.
+ *
+ * Every one of those acts on the loaded `recipe` singleton, so a menu opened
+ * from a card that ISN'T already loaded loads it first — otherwise the action
+ * would land on a different recipe than the one just long-pressed.
  */
 async function openCardMenu(entry) {
   const choice = await openChooser({
     title: `${entry.coffeeRoaster} ${entry.coffeeName}`,
     options: [
       ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
+      ['rate', t('rating.rate')],
+      // Only for a recipe that actually references a profile — same id-then-title
+      // rule useRecipe's hasProfile applies, but read off THIS entry rather than
+      // the loaded one, since the menu can be opened on any card.
+      ...(entryHasProfile(entry) ? [['editProfile', t('espresso.editProfile')]] : []),
+      ['bean', t('espresso.changeBean')],
+      ['grinder', t('espresso.changeGrinder')],
+      ['profile', t('espresso.changeProfile')],
       ['delete', t('common.delete')],
     ],
   });
   if (choice === 'pin') {
     await togglePinRecipe(entry);
+  } else if (choice === 'rate' || choice === 'editProfile' || choice === 'bean' || choice === 'grinder' || choice === 'profile') {
+    if (!isCurrent(entry)) await pick(entry);
+    if (choice === 'rate') await rateRecipe();
+    else if (choice === 'editProfile') emit('edit-profile');
+    else if (choice === 'bean') emit('pick-bean');
+    else if (choice === 'grinder') emit('pick-grinder');
+    else emit('pick-profile');
   } else if (choice === 'delete') {
     const ok = await openConfirm({
       title: t('diary.deleteRecipeConfirm'),
@@ -81,6 +117,11 @@ async function openCardMenu(entry) {
     if (ok) await deleteRecipe(entry.id);
   }
 }
+
+// See the Edit-profile entry in openCardMenu: the loaded recipe's own version
+// of this is useRecipe's `hasProfile`.
+const entryHasProfile = (entry) =>
+  Boolean(entry.selectedProfileId) || (Boolean(entry.profileTitle) && entry.profileTitle !== '—');
 
 const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
 
@@ -215,12 +256,12 @@ const stepperDetail = computed(() => {
 
 <template>
   <div class="espresso-browse">
-    <!-- No sort/search row above the list any more (always sorted by use,
-         and Edit moved to the bottom bar) — the list itself runs the full
-         column height flush to the page's bottom edge (see .rp-list's fade
-         mask) — the right column keeps its own stepper row below the graph,
-         so the list visibly reaches further down than the graph does, as if
-         more recipes are queued up just out of view. -->
+    <!-- No sort/search row above the list any more (always sorted by use) —
+         the list itself runs the full column height flush to the page's
+         bottom edge (see .rp-list's fade mask) — the right column reserves
+         its own space for the stepper above and the settings card below the
+         graph, so the list visibly reaches further down than the graph does,
+         as if more recipes are queued up just out of view. -->
     <div class="browse-list">
       <div class="rp-list">
         <div class="rp-list-scroll">
@@ -241,32 +282,18 @@ const stepperDetail = computed(() => {
     </div>
 
     <!-- The graph column carries the page title (freed up by EspressoView
-         hiding its own in graph mode — see there), the graph, then its own
-         stepper row — all scoped to this column's width rather than the full
-         page, which is what leaves the list on the left free to run past it. -->
+         hiding its own in graph mode — see there), the stepper, the graph,
+         then the settings card — all scoped to this column's
+         width rather than the full page, which is what leaves the list on
+         the left free to run past it. -->
     <div class="browse-graph-col">
       <div class="page-title browse-graph-title">{{ t('espresso.pageTitle') }}</div>
-      <div class="shot-graph">
-        <ShotStripChart :series="graphSeries" mode="static" :show-targets="skinSettings.showTargets" @scrub="scrub = $event" />
-        <!-- Hold a finger on the graph to fill each label with that point's
-             value — same interaction as LiveShotOverlay's own history screen.
-             Temperature isn't part of the chart itself (see scrubTemp's own
-             note), but reads from the same scrubbed instant. -->
-        <div class="glabel glabel-inset">
-          <i><span class="sw" style="background:#5fb8a5"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
-          <i><span class="sw" style="background:#7fa8c9"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
-          <i><span class="sw" style="background:#ad7648"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
-          <i><span class="sw" style="background:#e8846f"></span>{{ t('liveShot.mTemp') }}<b v-if="scrub"> {{ fmt(scrubTemp, 0) }}<small>°C</small></b></i>
-        </div>
-        <div v-if="!graphShots.length" class="browse-graph-empty">{{ t('liveShot.noShotsYet') }}</div>
-      </div>
 
-      <div class="prep-bottom browse-bottom">
-        <!-- Edit Recipe lives here now, flush left where search used to be —
-             acts on whichever card is currently loaded (bordered .current). -->
-        <button class="btn" @click="emit('edit')">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.5a2.121 2.121 0 0 1 3 3L6 17l-4 1 1-4 11.5-11.5z" /></svg>{{ t('common.edit') }}
-        </button>
+      <!-- The shot stepper, centred under the title — moved up from the
+           bottom row now that the settings card (below the graph) took its
+           old spot. A fixed-width pill (see .date-nav.browse-nav
+           .date's own comment), so centring it here never jitters shot to shot. -->
+      <div class="browse-nav-row">
         <div class="date-nav browse-nav" :class="{ 'is-pressed': datePressed }">
           <button :disabled="!canOlder" :aria-label="t('espresso.olderShot')" @click="olderShot">‹</button>
           <!-- The ‹ › buttons step through shots in place; tapping the label
@@ -287,6 +314,26 @@ const stepperDetail = computed(() => {
           <button :disabled="!canNewer" :aria-label="t('espresso.newerShot')" @click="newerShot">›</button>
         </div>
       </div>
+
+      <div class="shot-graph">
+        <ShotStripChart :series="graphSeries" mode="static" :show-targets="skinSettings.showTargets" @scrub="scrub = $event" />
+        <!-- Hold a finger on the graph to fill each label with that point's
+             value — same interaction as LiveShotOverlay's own history screen.
+             Temperature isn't part of the chart itself (see scrubTemp's own
+             note), but reads from the same scrubbed instant. -->
+        <div class="glabel glabel-inset">
+          <i><span class="sw" style="background:#5fb8a5"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
+          <i><span class="sw" style="background:#7fa8c9"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
+          <i><span class="sw" style="background:#ad7648"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
+          <i><span class="sw" style="background:#e8846f"></span>{{ t('liveShot.mTemp') }}<b v-if="scrub"> {{ fmt(scrubTemp, 0) }}<small>°C</small></b></i>
+        </div>
+        <div v-if="!graphShots.length" class="browse-graph-empty">{{ t('liveShot.noShotsYet') }}</div>
+      </div>
+
+      <!-- The recipe's dose/grind/output/temp, inlined here instead of behind
+           an Edit Recipe button — see useRecipeDials.js for the shared
+           tap/drag wiring RecipeBody.vue's own big dials use identically. -->
+      <RecipeSettingsCard @open-roast="emit('open-roast')" />
     </div>
   </div>
 </template>

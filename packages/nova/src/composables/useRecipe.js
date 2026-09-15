@@ -194,6 +194,15 @@ export async function bumpRecipeLastUsed(id) {
 
 export const roastAge = computed(() => NSXCore.getBatchAge(recipe.roastDate));
 
+// Whether the Edit-profile button has something to open. Deliberately the SAME
+// id-then-title rule EspressoView's editingProfileRecord (and buildGatewayPayload)
+// resolve by, not `selectedProfileId` alone: a recipe can legitimately carry only
+// the title (adopted from a gateway workflow that had no profileId), and gating
+// the button on the id alone made it disappear for exactly those recipes.
+export const hasProfile = computed(() =>
+  Boolean(recipe.selectedProfileId) || (Boolean(recipe.profileTitle) && recipe.profileTitle !== '—')
+);
+
 // A recipe composed while no grinder existed yet carries none (composeNewRecipe
 // falls back to '—'). "One grinder is implicit" (useCore's singleGrinder) only
 // holds once the recipe actually HAS it, so an unset grinder stays pickable
@@ -271,6 +280,16 @@ async function gcBatchIfUnused(batchId) {
 async function syncFromWorkflow(wf) {
   if (!wf) return;
   const display = NSXCore.mapApiWorkflowToDisplay(wf);
+  // The gateway's own GET /workflow doesn't necessarily echo `profileId` back
+  // (only the workflows WE pushed carry one), so taking it at face value blanked
+  // the recipe's profile reference on every boot/WS workflow event — which hid
+  // the Edit-profile button until the next selectRecipe(), and worse, let the
+  // next snapshot persist that null over the saved recipe. Keep the reference we
+  // already have when the gateway carries none AND the profile title is still
+  // the same one; a title change means the profile really did change on the
+  // machine (another skin), and a stale id would then win over the new title in
+  // buildGatewayPayload.
+  const keptProfileId = display.profileTitle === recipe.profileTitle ? recipe.selectedProfileId : null;
   Object.assign(recipe, {
     coffeeRoaster: display.coffeeRoaster,
     coffeeName: display.coffeeName,
@@ -284,7 +303,7 @@ async function syncFromWorkflow(wf) {
     targetYield: display.targetYield > 0 ? display.targetYield : recipe.targetYield,
     groupTemp: NSXCore.resolveProfileTemp(wf?.profile) ?? 0,
     profileTitle: display.profileTitle,
-    selectedProfileId: wf?.profileId ?? null,
+    selectedProfileId: wf?.profileId ?? keptProfileId,
     // stopAtWeight isn't recoverable from a pushed gateway workflow — keep
     // whatever the recipe already has (defaults to true) rather than guessing.
     grinderId: wf?.context?.grinderId ?? null,
@@ -730,6 +749,13 @@ export async function adoptCurrentWorkflowAsRecipe() {
     // be loaded on the machine at boot (no user edit needed; the scale re-push
     // watcher and the bag-heal push below are enough to trigger it).
     recipe.beanId = existing.beanId ?? recipe.beanId;
+    // Same story for the profile reference: the gateway workflow usually has no
+    // profileId of its own (see syncFromWorkflow), and at boot there's no prior
+    // recipe state to keep it from — only the saved recipe still knows which
+    // library profile this is. Without it the Edit-profile button stays hidden
+    // until the next recipe switch. Guarded: a profileId the gateway DID carry
+    // wins, and `existing` was matched on this very profile title anyway.
+    if (!recipe.selectedProfileId) recipe.selectedProfileId = existing.selectedProfileId ?? null;
     if (existing.volumeCalibration) recipe.volumeCalibration = existing.volumeCalibration;
     recipe.rating = Number(existing.rating) || 0;
     recipe.stopAtWeight = existing.stopAtWeight !== false;

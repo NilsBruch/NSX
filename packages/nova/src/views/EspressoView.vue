@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, formatGrinderLabel, profiles, profilesAll, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
 import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile, beanForRecipe } from '../composables/useRecipe.js';
@@ -33,10 +33,9 @@ const hasRecipe = computed(() => {
   return !!(roaster && roaster !== '—' && name && name !== '—');
 });
 
-// The blurred recipe browser, opened by tapping the combined identity title
-// (classic layout) or a recipe card's own bubbles (graph layout, via
-// RecipeBrowser -> RecipeOverlay's own "+"/edit affordances stay local to it;
-// this instance is reached only from RecipeBody's identity title).
+// The blurred recipe browser, opened by tapping the classic layout's combined
+// identity title (RecipeBody.vue). The graph layout has no such title — its
+// own recipe card list is already the browser — so this is classic-only.
 const showRecipeOverlay = ref(false);
 const showProfilePicker = ref(false);
 const showBatchPicker = ref(false);
@@ -44,13 +43,6 @@ const showProfileEditor = ref(false);
 const showBeanChooser = ref(false);
 // The bean->profile creation wizard — the same entry point the Diary's "+" uses.
 const showRecipeCreator = ref(false);
-// Graph layout only: RecipeBody rendered as a full-screen "Edit Recipe" overlay
-// instead of the page itself — see RecipeBrowser.vue's @edit.
-const showRecipeEditor = ref(false);
-
-// Toggling the setting can't strand the Edit Recipe overlay over the classic
-// layout it no longer belongs to.
-watch(() => skinSettings.coffeeGraph, () => { showRecipeEditor.value = false; });
 
 // Bean and grinder tiles' own pickers — see useRecipe.js's setRecipeBean/
 // setRecipeGrinder for why these swap in place (same recipe.id) rather than
@@ -167,43 +159,20 @@ async function onBatchPicked(batch) {
       </button>
     </div>
 
-    <template v-else-if="skinSettings.coffeeGraph">
-      <RecipeBrowser @edit="showRecipeEditor = true" />
-      <div v-if="showRecipeEditor" class="overlay-full">
-        <!-- balanced: plain .ov-top centers .ov-title (flex:1) in whatever
-             space is LEFT after .ov-back, not the row itself, so the label
-             sits shifted right of true centre. .balanced is the app's own
-             fix for that (see AppPanel/GrinderPanel/MachinePanel/SkinPanel/
-             VisualizerPanel) — a 1fr/auto/1fr grid that balances .ov-back's
-             width with an equal empty column on the right. -->
-        <div class="ov-top balanced">
-          <button class="ov-back" @click="showRecipeEditor = false">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('common.back') }}
-          </button>
-          <span class="ov-title">{{ t('espresso.editRecipe') }}</span>
-        </div>
-        <!-- The identity title button RecipeBody normally shows here is
-             replaced (inside RecipeBody itself, when show-history is false)
-             by the same three tappable Bean/Grinder/Profile bubbles
-             <RecipeOverlay> uses — same handlers, so a pick here works
-             identically to picking it from there. -->
-        <RecipeBody
-          :show-history="false"
-          @open-recipes="showRecipeOverlay = true"
-          @open-bean="showBeanChooser = true"
-          @open-grinder="pickGrinder"
-          @open-profile="showProfilePicker = true"
-          @open-roast="openBatchPicker"
-          @edit-profile="openProfileEditor"
-        />
-      </div>
-    </template>
+    <RecipeBrowser
+      v-else-if="skinSettings.coffeeGraph"
+      @edit-profile="openProfileEditor"
+      @open-roast="openBatchPicker"
+      @pick-bean="showBeanChooser = true"
+      @pick-grinder="pickGrinder"
+      @pick-profile="showProfilePicker = true"
+    />
 
     <RecipeBody
       v-else
       @open-recipes="showRecipeOverlay = true"
-      @open-roast="showRoastPicker = true"
-      @edit-profile="showProfileEditor = true"
+      @open-roast="openBatchPicker"
+      @edit-profile="openProfileEditor"
     />
 
     <RecipeOverlay

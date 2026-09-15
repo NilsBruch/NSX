@@ -1038,23 +1038,53 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    free to run past it (see the block comment above). */
 .browse-graph-col { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
 .browse-graph-title { flex: none; }
-.browse-graph-col .shot-graph { max-height: none; }
+/* Centres the shot stepper under the title (see RecipeBrowser.vue's template
+   comment — it used to sit bottom-right, next to the now-deleted Edit Recipe
+   button). The pill is a fixed width (.date-nav.browse-nav .date's own
+   comment), so a plain centred flex row never jitters shot to shot. */
+.browse-nav-row { flex: none; display: flex; justify-content: center; }
+.browse-graph-col .shot-graph { max-height: none; min-height: 180px; }
 .browse-graph-empty {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   color: var(--faint); font-size: var(--fs-md); text-align: center; padding: 0 10vw;
 }
-/* Reuses .prep-bottom's pinning (see the .prep-bottom-3 rule above). Edit
-   Recipe flush left, the stepper flush right — align-items:center here
-   (not .prep-bottom's default stretch) so the date-nav pill keeps its own
-   compact height instead of being stretched to the row's full 68px; flex:
-   none keeps the row from being squeezed by .shot-graph's flex:1 above it
-   in the same column. */
-.prep-bottom.browse-bottom { flex: none; justify-content: space-between; align-items: center; }
-/* .btn has no height of its own — center-aligned above, it would otherwise
-   sit at its own thin intrinsic height (just the text/icon's line box, since
-   .btn's padding is horizontal only). Matches .diary-bottom's own .btn,
-   which gets its 60px from that row's align-items:stretch instead. */
-.browse-bottom .btn { height: 60px; }
+
+/* The recipe's dose/grind/output/temp, inlined under the graph — see
+   RecipeSettingsCard.vue. The card holds only the four values, in 4 equal
+   columns; the roast chip and auto-stop switch sit on their own row below it
+   (.rq-extras). Height comes from the tiles' own content (icon + number +
+   label) rather than a fixed value — a fixed one clipped the labels as soon
+   as the skin's text scale grew. It's still stable shot to shot, so the graph
+   above, which takes the leftover space, doesn't resize as values change. */
+.recipe-quick {
+  flex: none; display: flex; flex-direction: column;
+  background: var(--card-bg); border: 1px solid var(--edge); border-radius: var(--r-md);
+  padding: 10px 14px;
+}
+.rq-values { display: grid; grid-template-columns: repeat(4, 1fr); }
+.rq-item {
+  background: none; border: none; color: var(--text); font-family: inherit;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border-radius: var(--r-sm);
+  touch-action: none; /* dragging to adjust must not trigger page scroll/pan — see .dial */
+}
+.rq-item.dragging { background: var(--drag-wash); }
+/* Stop-at-weight off -> the target yield isn't used (see the switch below it). */
+.rq-item.faded { opacity: 0.4; }
+.rq-item svg { width: 18px; height: 18px; stroke: var(--accent); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+.rq-label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.rq-num { font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.rq-unit { font-size: var(--fs-xs); color: var(--muted); margin-left: 2px; }
+/* The row BELOW the card (not inside it — see RecipeSettingsCard.vue), on the
+   card's own 4 columns and side padding, so the auto-stop switch still sits in
+   the target-yield column it governs rather than floating at the right edge.
+   The chip spans the two columns left of it and keeps the left edge. */
+.rq-extras {
+  flex: none; height: 34px; display: grid; grid-template-columns: repeat(4, 1fr);
+  align-items: center; padding: 0 15px; /* 14px card padding + its 1px border */
+}
+.rq-extras .roast-chip { grid-column: 1 / 3; justify-self: start; }
+.rq-extras .switch { grid-column: 3; justify-self: center; }
 
 /* The overlay. A scrim that BLURS the espresso page rather than hiding it —
    the recipe you're browsing away from stays visible behind its own browser.
@@ -1137,18 +1167,6 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   max-width: 100%;
   font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* RecipeIdentityBubbles.vue's `tall` variant (EspressoView's Edit Recipe
-   overlay only — RecipeOverlay's own identity row and RecipeCrumbs' trail
-   keep the compact default above). Taller bubbles so cut-off names have
-   somewhere to go: the bean renders as two SEPARATE .rov-bubble-name lines
-   (roaster, then name — each still single-line-ellipsis on its own, which
-   reads better than a long roaster name and the bean name sharing one
-   wrapped block), while grinder/profile keep one .rov-bubble-name but with
-   .rov-bubble-wrap letting it wrap onto a second line instead of clipping. */
-.rov-identity.tall .rov-bubble { min-height: 78px; }
-.rov-identity.tall .rov-bubble-wrap {
-  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 /* .rp-strip already carries flex:1/min-height:0 and its own scrolling — the
    .rov-strip class exists only for the pointer-events rules above. */
