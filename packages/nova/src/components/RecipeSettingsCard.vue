@@ -23,10 +23,16 @@ import { useRecipeDials } from '../composables/useRecipeDials.js';
 
 const emit = defineEmits(['open-roast']);
 const { t } = useI18n();
+const { NSXCore } = window;
 const {
   onDoseClick, doseDrag, onGrindClick, grindDrag, onYieldClick, yieldDrag,
   onTempClick, tempDrag, toggleStopAtWeight,
 } = useRecipeDials();
+
+// Brew ratio, shown next to the yield it's derived from. calcRatio already
+// returns the full "1:x.x" string (and "—" for a dose of 0), so nothing here
+// needs to re-derive or format it.
+const ratio = computed(() => NSXCore.calcRatio(recipe.targetDoseWeight, recipe.targetYield));
 
 // Same label as RecipeBody's roast chip (see its own copy of this computed).
 const roastLabel = computed(() =>
@@ -80,7 +86,7 @@ const ICONS = {
         @pointerup="yieldDrag.onPointerUp"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.cup"></svg>
-        <span class="rq-num">{{ recipe.targetYield.toFixed(1) }}<span class="rq-unit">g</span></span>
+        <span class="rq-num">{{ recipe.targetYield.toFixed(1) }}<span class="rq-unit">g</span><span class="rq-ratio">({{ ratio }})</span></span>
         <span class="rq-label">{{ t('espresso.targetYield') }}</span>
       </button>
 

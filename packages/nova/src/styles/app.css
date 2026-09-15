@@ -1075,6 +1075,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .rq-label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .rq-num { font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .rq-unit { font-size: var(--fs-xs); color: var(--muted); margin-left: 2px; }
+/* Brew ratio, trailing the yield it's derived from — same size as the yield
+   itself (it inherits .rq-num), just muted, since it IS a second reading of
+   that value rather than a caption on it. */
+.rq-ratio { color: var(--muted); margin-left: 5px; }
 /* The row BELOW the card (not inside it — see RecipeSettingsCard.vue), on the
    card's own 4 columns and side padding, so the auto-stop switch still sits in
    the target-yield column it governs rather than floating at the right edge.
