@@ -126,6 +126,10 @@ const entryHasProfile = (entry) =>
 const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
 
 // ── This recipe's shots, newest-first — independent of useLiveShot.js ──
+// The expert plot brings its own legend (toggles, not a caption), so the
+// .glabel below is hidden when it's on — same rule as LiveShotOverlay's.
+const expertGraph = computed(() => skinSettings.graphMode === 'expert');
+
 const graphShots = computed(() => NSXCore.findShotsForWorkflow(recipe, shots.value));
 const graphIndex = ref(0); // 0 = newest
 const graphShot = ref(null); // full detail (incl. measurements), fetched below
@@ -186,8 +190,14 @@ const graphNormalized = computed(() => (graphShot.value ? NSXCore.normalizeShotD
 // scaleRate is normalizeShotData's name for weight-flow.
 const graphSeries = computed(() => {
   const s = graphNormalized.value;
-  if (!s) return { elapsed: [], pressure: [], targetPressure: [], flow: [], targetFlow: [], weightFlow: [] };
-  return { elapsed: s.elapsed, pressure: s.pressure, targetPressure: s.targetPressure, flow: s.flow, targetFlow: s.targetFlow, weightFlow: s.scaleRate };
+  if (!s) return { elapsed: [], pressure: [], targetPressure: [], flow: [], targetFlow: [], weightFlow: [], temperature: [] };
+  // temperature/targetTemperature feed the expert plot's right-hand scale; the
+  // normal one never draws them (see ShotStripChart).
+  return {
+    elapsed: s.elapsed, pressure: s.pressure, targetPressure: s.targetPressure,
+    flow: s.flow, targetFlow: s.targetFlow, weightFlow: s.scaleRate,
+    temperature: s.temperature, targetTemperature: s.targetTemperature,
+  };
 });
 
 // Hold-to-scrub readout — same pattern as LiveShotOverlay.vue's own history
@@ -316,12 +326,12 @@ const stepperDetail = computed(() => {
       </div>
 
       <div class="shot-graph">
-        <ShotStripChart :series="graphSeries" mode="static" :show-targets="skinSettings.showTargets" @scrub="scrub = $event" />
+        <ShotStripChart :series="graphSeries" mode="static" :show-targets="skinSettings.showTargets" :expert="expertGraph" @scrub="scrub = $event" />
         <!-- Hold a finger on the graph to fill each label with that point's
              value — same interaction as LiveShotOverlay's own history screen.
              Temperature isn't part of the chart itself (see scrubTemp's own
              note), but reads from the same scrubbed instant. -->
-        <div class="glabel glabel-inset">
+        <div v-if="!expertGraph" class="glabel glabel-inset">
           <i><span class="sw" style="background:#5fb8a5"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
           <i><span class="sw" style="background:#7fa8c9"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
           <i><span class="sw" style="background:#ad7648"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>

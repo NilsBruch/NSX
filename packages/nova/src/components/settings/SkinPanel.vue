@@ -87,6 +87,21 @@ async function pickReviewAutoClose() {
           >{{ t(label) }}</button>
         </div>
       </div>
+      <!-- Normal is the strip chart the skin was designed around; Expert is the
+           same data as a read-it-properly plot (axes, temperature scale, a
+           legend that toggles each line). Applies to the live shot and every
+           history graph at once — see ShotStripChart.vue. -->
+      <div class="setting-row">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('skinSettings.graphMode') }}</span>
+          <span class="sr-sub">{{ t('skinSettings.graphModeSub') }}</span>
+        </span>
+        <div class="seg seg-setting" :data-pos="skinSettings.graphMode === 'expert' ? 1 : 0">
+          <span class="seg-thumb"></span>
+          <button :class="{ on: skinSettings.graphMode !== 'expert' }" @click="saveSkinSetting('graphMode', 'normal')">{{ t('skinSettings.graphNormal') }}</button>
+          <button :class="{ on: skinSettings.graphMode === 'expert' }" @click="saveSkinSetting('graphMode', 'expert')">{{ t('skinSettings.graphExpert') }}</button>
+        </div>
+      </div>
       <!-- Off restores the original look: one blue everywhere, untinted greys.
            The rail's six tab colours stay either way — this is about whether
            the PAGE takes the colour of the tab you're on. -->

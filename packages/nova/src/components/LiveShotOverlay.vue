@@ -21,6 +21,9 @@ const { NSXCore, NSXApi } = window;
 // pressure green, flow blue, weight-flow coffee brown (the user-facing
 // metaphor: water in = blue bars, coffee out = brown fill).
 const LIVE_COLORS = { temp: '#e8846f', pressure: '#5fb8a5', flow: '#7fa8c9', wflow: '#ad7648' };
+// The expert plot carries its own legend (it's a set of toggles, not a
+// caption), so the .glabel captions below are hidden when it's on.
+const expertGraph = computed(() => skinSettings.graphMode === 'expert');
 const liveElapsedLabel = computed(() => {
   // Index, not Array.prototype.at(): older Android 12 WebViews predate .at()
   // and throw here mid-render, blanking the whole live overlay (works on
@@ -66,8 +69,14 @@ const shotSeries = computed(() => {
 // scaleRate is normalizeShotData's name for weight-flow.
 const historyStripSeries = computed(() => {
   const s = shotSeries.value;
-  if (!s) return { elapsed: [], pressure: [], targetPressure: [], flow: [], targetFlow: [], weightFlow: [] };
-  return { elapsed: s.elapsed, pressure: s.pressure, targetPressure: s.targetPressure, flow: s.flow, targetFlow: s.targetFlow, weightFlow: s.scaleRate };
+  if (!s) return { elapsed: [], pressure: [], targetPressure: [], flow: [], targetFlow: [], weightFlow: [], temperature: [] };
+  // temperature/targetTemperature are read by the expert plot's right-hand
+  // scale only — the normal one never draws them (see ShotStripChart).
+  return {
+    elapsed: s.elapsed, pressure: s.pressure, targetPressure: s.targetPressure,
+    flow: s.flow, targetFlow: s.targetFlow, weightFlow: s.scaleRate,
+    temperature: s.temperature, targetTemperature: s.targetTemperature,
+  };
 });
 const dateLabel = computed(() => {
   const shot = currentShot.value;
@@ -205,13 +214,13 @@ async function editGrindSetting() {
       </span>
     </div>
     <div class="shot-graph">
-      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" />
+      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" />
       <!-- Inside the plot, top right, rather than on a row of its own below it:
            a legend is a caption for the graph, and it was costing a full row of
            the column for three short words.
            No temperature entry: the strip chart doesn't plot temp (the metric
            tile below carries it) — a legend swatch for an absent line lies. -->
-      <div class="glabel glabel-inset">
+      <div v-if="!expertGraph" class="glabel glabel-inset">
         <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}</i>
         <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}</i>
         <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}</i>
@@ -265,11 +274,11 @@ async function editGrindSetting() {
 
     <template v-if="currentShot">
       <div class="shot-graph">
-        <ShotStripChart :series="historyStripSeries" mode="static" :show-targets="skinSettings.showTargets" @scrub="scrub = $event" />
+        <ShotStripChart :series="historyStripSeries" mode="static" :show-targets="skinSettings.showTargets" :expert="expertGraph" @scrub="scrub = $event" />
         <!-- No temperature swatch: the strip chart doesn't plot temp, matching
              the live view exactly (see the request that spawned this). Holding a
              finger on the graph fills each label with that point's value. -->
-        <div class="glabel glabel-inset">
+        <div v-if="!expertGraph" class="glabel glabel-inset">
           <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
           <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
           <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
