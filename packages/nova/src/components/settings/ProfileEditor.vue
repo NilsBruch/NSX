@@ -275,6 +275,18 @@ async function attemptClose() {
 
 function save() {
   const built = NSXCore.buildProfileFromDraft(draft, originalProfile);
+  // The group temperature belongs to the RECIPE, not to the profile. The
+  // recipe's Temp dial is what raises or lowers a shot: buildGatewayPayload
+  // shifts every frame by (dialed − the profile's own temperature) on push, so
+  // the profile only ever states the temperatures its frames run at.
+  //
+  // buildProfileFromDraft writes a profile-level `groupTemp` for NSX, whose
+  // editor has a control for it that moves the frames with it. Nova has no such
+  // control — its temperature slider edits the selected frame — so the value
+  // would be whatever the profile read as when this editor opened, left behind
+  // as the baseline the dial measures from. Edit the frames from 93 to 95 and
+  // the recipe would still read 93, and dialling 95 to "fix" it pushed 97.
+  delete built.groupTemp;
   emit('saved', { profile: built, originalProfile });
 }
 </script>
