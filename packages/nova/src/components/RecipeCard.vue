@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
+import { skinSettings } from '../composables/useSettings.js';
 import StarRating from './StarRating.vue';
 
 /**
@@ -95,9 +96,9 @@ const tags = computed(() => (Array.isArray(props.entry.tags) ? props.entry.tags 
          tags it was pulled with instead, off its own record — see useRecipe's
          `tags`, and the shot view's own row.
          Always rendered, even with no tags: the row reserves its height so
-         every card is the same size whether or not it's tagged — same reason
-         .rp-rating reserves the stars' line above. -->
-    <div class="rp-tags">
+         every card is the same size whether or not it's tagged. Hidden
+         entirely (height and all) when the skin setting is off. -->
+    <div v-if="skinSettings.showTags" class="rp-tags">
       <span v-for="tag in tags" :key="tag" class="rp-tag">{{ tag }}</span>
     </div>
   </div>

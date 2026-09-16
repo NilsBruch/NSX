@@ -338,8 +338,9 @@ export const skinSettings = reactive({
   // useAccent.js: 'dark' (the one this skin was designed in), 'light', or
   // 'midnight' (a second dark palette, navy-tinted with raised cards — ported
   // from the Streamline Dark variant NSX ships). All three are the same rules
-  // with a different set of token values.
-  theme: 'dark',
+  // with a different set of token values. Midnight is the default the skin now
+  // ships in; 'dark' is the palette it was originally designed in.
+  theme: 'midnight',
   shotReviewAutoCloseSec: 5, // 0 = stay open until dismissed
   // true = the profile's pressure/flow TARGETS are drawn alongside the actual
   // ones (dashed curve + outlined bars, see ShotStripChart). OFF by default:
@@ -352,6 +353,12 @@ export const skinSettings = reactive({
   // its own right-hand scale) and a legend that toggles series and goals.
   // Same renderer either way — see ShotStripChart.vue.
   graphMode: 'normal',
+  // false hides recipe tags everywhere in the UI: the chip on the coffee page,
+  // the pills on recipe cards, the row in the shot view, and the hold menus'
+  // own Tags entry. It does NOT touch the data — tags stay on the recipes and
+  // keep riding along to the shots (see useRecipe's `tags`), so turning this
+  // back on shows everything that was recorded while it was off.
+  showTags: true,
   // true = the coffee page becomes a browser: recipe cards on the left, the
   // selected recipe's shot graph on the right, a shot stepper + Edit Recipe
   // button at the bottom, instead of the single-recipe dial layout. OFF by
@@ -371,6 +378,7 @@ const SKIN_KEYS = {
   shotReviewAutoCloseSec: 'nova_shot_review_autoclose',
   showTargets: 'nova_show_targets',
   graphMode: 'nova_graph_mode',
+  showTags: 'nova_show_tags',
   coffeeGraph: 'nova_coffee_graph',
 };
 export function loadSkinSettings() {
@@ -389,11 +397,16 @@ export function loadSkinSettings() {
   skinSettings.tabColors = s.nova_tab_colors !== false; // default on
   // Migrates the old boolean: a device that only ever stored nova_light_mode
   // keeps the theme it was on, and its next theme change writes nova_theme.
-  skinSettings.theme = s.nova_theme || (s.nova_light_mode === true ? 'light' : 'dark');
+  // An explicit `false` there means the user chose the original dark palette,
+  // so it stays dark rather than being moved to the new midnight default —
+  // only a device that never picked a theme at all gets that.
+  skinSettings.theme = s.nova_theme
+    || (s.nova_light_mode === true ? 'light' : s.nova_light_mode === false ? 'dark' : 'midnight');
   // Default 5s; an explicit stored 0 (off) must survive, so don't `|| 5`.
   skinSettings.shotReviewAutoCloseSec = s.nova_shot_review_autoclose != null ? Number(s.nova_shot_review_autoclose) : 5;
   skinSettings.showTargets = s.nova_show_targets === true; // default off
   skinSettings.graphMode = s.nova_graph_mode || 'normal';
+  skinSettings.showTags = s.nova_show_tags !== false; // default on
   skinSettings.coffeeGraph = s.nova_coffee_graph === true; // default off
 }
 export async function saveSkinSetting(key, value) {

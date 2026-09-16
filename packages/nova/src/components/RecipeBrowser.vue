@@ -92,7 +92,9 @@ async function openCardMenu(entry) {
       // rule useRecipe's hasProfile applies, but read off THIS entry rather than
       // the loaded one, since the menu can be opened on any card.
       ...(entryHasProfile(entry) ? [['editProfile', t('espresso.editProfile')]] : []),
-      ['tags', t('espresso.tags')],
+      // Hidden with the tags themselves: with the display off there is nothing
+      // the entry could show the result of (skinSettings.showTags).
+      ...(skinSettings.showTags ? [['tags', t('espresso.tags')]] : []),
       ['bean', t('espresso.changeBean')],
       ['grinder', t('espresso.changeGrinder')],
       ['profile', t('espresso.changeProfile')],

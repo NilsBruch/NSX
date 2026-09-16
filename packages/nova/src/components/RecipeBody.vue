@@ -5,6 +5,7 @@ import { recipeIdentityParts, formatShortDate } from '../composables/useCore.js'
 import { recipe, roastAge, hasProfile } from '../composables/useRecipe.js';
 import { useRecipeList } from '../composables/useRecipeList.js';
 import { useLongPress } from '../composables/useLongPress.js';
+import { skinSettings } from '../composables/useSettings.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import StarRating from './StarRating.vue';
@@ -178,7 +179,7 @@ const roastLabel = computed(() =>
              than being implied by what it sits under; this is just the column
              wide enough to carry a tag list. Tapping opens the same editor the
              recipe cards' hold menus do. -->
-        <button class="roast-chip tag-chip" @click="editTags()">
+        <button v-if="skinSettings.showTags" class="roast-chip tag-chip" @click="editTags()">
           <!-- The icon sits OUTSIDE the outline: the pill is the tag, the icon
                labels what the pill is — enclosing it made the two read as one
                oversized chip. -->

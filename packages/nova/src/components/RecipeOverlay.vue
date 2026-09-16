@@ -19,6 +19,7 @@ import { refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../
 import { shots, loadShots } from '../composables/useCore.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
+import { skinSettings } from '../composables/useSettings.js';
 import { useRecipeList } from '../composables/useRecipeList.js';
 import RecipeCard from './RecipeCard.vue';
 import RecipeIdentityBubbles from './RecipeIdentityBubbles.vue';
@@ -56,7 +57,8 @@ async function openCardMenu(entry) {
     options: [
       ['load', t('diary.loadRecipe')],
       ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
-      ['tags', t('espresso.tags')],
+      // See RecipeBrowser's copy: the entry follows the tag display setting.
+      ...(skinSettings.showTags ? [['tags', t('espresso.tags')]] : []),
       ['delete', t('common.delete')],
     ],
   });

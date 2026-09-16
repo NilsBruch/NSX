@@ -453,6 +453,8 @@ export default {
     graphModeSub: 'Expert adds axes, a temperature scale and a legend that toggles each line',
     graphNormal: 'Normal',
     graphExpert: 'Expert',
+    showTags: 'Recipe tags',
+    showTagsSub: 'Show tags on recipes and on the shots pulled with them',
     tabColors: 'Colour by tab',
     tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',

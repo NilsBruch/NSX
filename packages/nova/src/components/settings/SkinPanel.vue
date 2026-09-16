@@ -102,6 +102,16 @@ async function pickReviewAutoClose() {
           <button :class="{ on: skinSettings.graphMode === 'expert' }" @click="saveSkinSetting('graphMode', 'expert')">{{ t('skinSettings.graphExpert') }}</button>
         </div>
       </div>
+      <!-- Display only: the tags stay on the recipes and keep being recorded on
+           every shot either way, so turning this back on shows what was saved
+           while it was off. -->
+      <div class="setting-row">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('skinSettings.showTags') }}</span>
+          <span class="sr-sub">{{ t('skinSettings.showTagsSub') }}</span>
+        </span>
+        <button class="switch" :class="{ on: skinSettings.showTags }" role="switch" :aria-checked="skinSettings.showTags" @click="saveSkinSetting('showTags', !skinSettings.showTags)"></button>
+      </div>
       <!-- Off restores the original look: one blue everywhere, untinted greys.
            The rail's six tab colours stay either way — this is about whether
            the PAGE takes the colour of the tab you're on. -->

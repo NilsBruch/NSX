@@ -296,7 +296,7 @@ async function editGrindSetting() {
       </div>
       <!-- Read-only: these are what the recipe carried when the shot was
            pulled. Editing tags is a recipe action (the card hold menu). -->
-      <div v-if="shotTags.length" class="shot-tags">
+      <div v-if="skinSettings.showTags && shotTags.length" class="shot-tags">
         <span class="st-label">{{ t('liveShot.shotTags') }}</span>
         <span v-for="tag in shotTags" :key="tag" class="st-tag">{{ tag }}</span>
       </div>
