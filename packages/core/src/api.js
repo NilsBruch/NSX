@@ -446,6 +446,83 @@ function stopLogStream() {
   if (logsWs) logsWs.close();
 }
 
+/* ── App-update WebSocket (ws/v1/update) ──────────────────
+ * Two-way, unlike every other socket here: the gateway pushes an AppUpdateState
+ * snapshot on connect and on every state change, and accepts
+ * { command: "check" | "install" } back. That command channel is the ONLY way
+ * to start an update — GET /api/v1/update reports, it cannot act.
+ *
+ * On demand (like the log stream), not at load: only a settings screen needs it,
+ * and `install` downloads a build onto someone's machine. Command errors come
+ * back as a direct { error, url } reply with no `phase`.
+ */
+let updateWs = null;
+let updateWsReady = false;
+let updateWsWanted = false;
+let updateReconnectDelay = 1000;
+let _onUpdateData = null;
+let _onUpdateOpen = null;
+
+function connectAppUpdate(onData, onOpen) {
+  _onUpdateData = onData || null;
+  _onUpdateOpen = onOpen || null;
+  updateWsWanted = true;
+
+  // Already up: no second socket, but the caller still expects its onOpen —
+  // that is where the initial "check" is sent. Only once genuinely OPEN, since
+  // sendAppUpdateCommand throws on a socket that is still connecting.
+  if (updateWs && updateWs.readyState !== WebSocket.CLOSED) {
+    if (_onUpdateOpen && updateWsReady) _onUpdateOpen();
+    return;
+  }
+
+  updateWs = new WebSocket(`${WS_BASE}/ws/v1/update`);
+
+  updateWs.onopen = () => {
+    updateWsReady = true;
+    updateReconnectDelay = 1000;
+    if (_onUpdateOpen) _onUpdateOpen();
+  };
+
+  updateWs.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (_onUpdateData) _onUpdateData(data);
+    } catch (err) {
+      console.warn("Update WS parse error:", err);
+    }
+  };
+
+  updateWs.onerror = () => {};
+
+  updateWs.onclose = () => {
+    updateWsReady = false;
+    if (!updateWsWanted) return;
+    setTimeout(() => { if (updateWsWanted) connectAppUpdate(_onUpdateData, _onUpdateOpen); }, updateReconnectDelay);
+    updateReconnectDelay = Math.min(updateReconnectDelay * 2, MAX_DELAY);
+  };
+}
+
+function disconnectAppUpdate() {
+  updateWsWanted = false;
+  _onUpdateData = null;
+  _onUpdateOpen = null;
+  if (updateWs) updateWs.close();
+}
+
+/**
+ * Send a command on the app-update channel.
+ * @param {{command: "check"|"install"}} command
+ * @throws {Error} when the socket isn't open — the caller decides whether that
+ *                 is worth a toast (a silent check on connect usually isn't).
+ */
+function sendAppUpdateCommand(command) {
+  if (!updateWs || !updateWsReady || updateWs.readyState !== WebSocket.OPEN) {
+    throw new Error("Update WebSocket is not connected");
+  }
+  updateWs.send(JSON.stringify(command));
+}
+
 /* ── REST helpers ─────────────────────────────────────── */
 
 /**
@@ -593,16 +670,39 @@ async function fetchGatewayInfo() {
 /**
  * GET /api/v1/update
  * Whether a newer gateway build exists. `phase` is an open set the gateway
- * defines ("available" and "upToDate" are the two observed); treat anything
- * else as "nothing to report" rather than mapping it.
+ * defines ("idle", "available" and "upToDate" are the ones observed); treat
+ * anything else as "nothing to report" rather than mapping it.
  *
- * READ-ONLY on purpose: the bridge exposes no documented way to START an
- * update, and guessing a write endpoint would risk kicking off a real
- * download on someone's machine. Installing stays in the Decent app.
- * @returns {Promise<{phase: string, currentVersion: string, latestVersion: string, releaseNotes: string}>}
+ * A one-shot snapshot of the same state the ws/v1/update channel streams
+ * (connectAppUpdate below) — use the socket when you also want to command a
+ * check or an install.
+ * @returns {Promise<{phase: string, currentVersion: string, latestVersion: string, releaseNotes: string, installable: boolean, progress: number|null}>}
  */
 async function fetchAppUpdate() {
   return request("/api/v1/update");
+}
+
+/**
+ * GET /api/v1/webui/skins
+ * Every skin the gateway has installed, including this one. `version` is what
+ * is on disk; `reaMetadata.sourceUrl` ("github_release:owner/repo@tag") says
+ * where it came from, and is absent for a skin not installed from a release.
+ * @returns {Promise<Array<{id: string, name: string, version: string, isBundled: boolean, reaMetadata: object|null}>>}
+ */
+async function fetchSkins() {
+  const res = await request("/api/v1/webui/skins");
+  return Array.isArray(res) ? res : (res?.skins ?? []);
+}
+
+/**
+ * POST /api/v1/webui/skins/update
+ * Asks the gateway to re-check every installed skin's source and download
+ * whatever is newer, server-side. Returns once that is done — re-read
+ * fetchSkins() to see which versions changed.
+ * @throws {Error} on non-OK HTTP response
+ */
+async function updateSkins() {
+  return request("/api/v1/webui/skins/update", "POST");
 }
 
 /**
@@ -975,6 +1075,11 @@ window.NSXApi = {
   fetchMachineInfo,
   fetchGatewayInfo,
   fetchAppUpdate,
+  fetchSkins,
+  updateSkins,
+  connectAppUpdate,
+  disconnectAppUpdate,
+  sendAppUpdateCommand,
   pushWorkflow,
   pushSteamSettings,
   pushHotwaterSettings,

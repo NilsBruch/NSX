@@ -219,19 +219,64 @@ step exactly.
   same response are deliberately not cached — read those from
   `NSXApi.fetchDisplayState()`.
 
-No domain of their own — two plain `NSXApi` reads a settings screen needs, with
+No domain of their own — one plain `NSXApi` read a settings screen needs, with
 nothing worth caching:
 
 - **`NSXApi.fetchGatewayInfo()`** — `GET /api/v1/info`: the gateway's own build
   (`version`, `buildNumber`, `fullVersion`, `commitShort`, `buildTime`). Not
-  the DE1's — that's `fetchMachineInfo()`.
-- **`NSXApi.fetchAppUpdate()`** — `GET /api/v1/update`: `{ phase,
-  currentVersion, latestVersion, releaseNotes }`. `phase` is an open set the
-  gateway defines (`available` and `upToDate` observed); anything else should
-  read as "nothing to report". **Read-only on purpose** — the bridge exposes no
-  documented way to start an update, so a skin shows the status and leaves
-  installing to the Decent app. Both routes are absent on older gateway builds,
-  so call them fail-soft.
+  the DE1's — that's `fetchMachineInfo()`. Absent on older gateway builds, so
+  call it fail-soft.
+
+### Updates — `update.js`
+
+"Is something newer than what is running?", for the Decent app and for the skin
+itself. The two halves are answered by different parties on purpose:
+
+- **Is there something newer → GitHub, not the gateway.** `GET /api/v1/update`
+  cannot answer it on desktop: the app's own checker returns early on macOS
+  (Sparkle owns updates there) and reports `phase: "idle"` with a null
+  `latestVersion` on Windows, so a badge built on it is blank on exactly the
+  platforms in use. `checkAppUpdate()` compares `fetchGatewayInfo().version`
+  against the newest release tag of `decentespresso/decaid` and returns
+  `{ current, latest, known, updateAvailable, releasesUrl }` — **`known: false`
+  means "could not find out", which must not be shown as "up to date"**.
+- **Install it → only the gateway can.** For the app that is the ws/v1/update
+  command channel below, and it is Android-only (`installable`). For the skin it
+  is `installSkinUpdate(skinId)`: `POST /api/v1/webui/skins/update` has the
+  gateway re-download every skin from the source it recorded at install time,
+  then re-reads the list and reports `{ updated, version }` for *this* skin —
+  `updated: true` is the skin's cue to reload the page, since the new files are
+  on disk while the tab still runs the old bundle.
+
+Selectors: `compareVersions(a, b)` (semver-ish, tolerates a leading `v`, a
+missing patch segment and prereleases), `parseSkinRepo(skin)` (the `owner/repo`
+out of `reaMetadata.sourceUrl`, or null for a skin not installed from a
+release — nothing to check).
+Commands: `fetchLatestRelease(repo, { tagPrefix })`, `clearReleaseCache()`,
+`checkAppUpdate()`, `loadSkins(force)`, `findSkin(id)`,
+`checkSkinUpdate(skinId, { repo, tagPrefix, force })`, `installSkinUpdate(id)`.
+
+`tagPrefix` matters here: this repo publishes **two** release streams (`v*` for
+NSX, `nova-v*` for Nova), so GitHub's own "latest" regularly points at the other
+skin. With a prefix the release list is filtered and the highest version among
+the matches wins. Release lookups are cached for the page's lifetime and fail
+soft (offline / rate-limited / no releases → `null`); a person pressing "check"
+should `clearReleaseCache()` first, or they get the cached answer back.
+
+The gateway's own update state, for acting rather than badging, is three
+`NSXApi` calls:
+
+- **`NSXApi.connectAppUpdate(onData, onOpen)` / `disconnectAppUpdate()`** —
+  `ws/v1/update`. Pushes an `AppUpdateState` snapshot on connect and on every
+  change: `{ phase, currentVersion, latestVersion, installable, progress,
+  releaseUrl }`. Opened on demand, not at load — only a settings screen needs it.
+- **`NSXApi.sendAppUpdateCommand({ command })`** — `"check"` or `"install"`, the
+  **only** way to start an update. Throws when the socket isn't open; a command
+  the gateway rejects replies with `{ error, url }` and no `phase`.
+- **`NSXApi.fetchAppUpdate()`** — `GET /api/v1/update`, the same state as a
+  one-shot read. `phase` is an open set (`idle`, `checking`, `available`,
+  `downloading`, `installing`, `upToDate` observed); treat anything unrecognised
+  as "nothing to report".
 
 ### Profile rendering — `profile-render.js` (owns **no state at all**)
 

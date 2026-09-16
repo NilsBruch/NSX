@@ -2174,6 +2174,27 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    not be a thinner control than one that opens a page. */
 .sw-update { margin-top: 10px; font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.05em; }
 .sw-update.sw-accent { color: var(--accent); }
+/* A link styled as one of those buttons (the app's release page, where there is
+   no in-app install) still has to sit like one. */
+a.sw-update { text-decoration: none; }
+/* The status line under each heading: quiet by default, accent when there is
+   something newer — the same two-state signal the button opposite it carries. */
+.sw-upd-line { margin: 6px 0 0; font-size: var(--fs-sm); font-weight: 500; color: var(--muted); }
+.sw-upd-line.sw-accent { color: var(--accent); }
+/* App and skin as two columns of one card, split by a hairline: the same
+   question asked about two things, not two settings. Equal widths so neither
+   reads as the main one, and the version sits directly under its own heading
+   rather than opposite it -- at half width there is no room for a line that
+   has a label at one end and a number at the other. */
+.sw-upd-cols { display: flex; align-items: stretch; gap: 16px; }
+.sw-upd-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sw-upd-col + .sw-upd-col { padding-left: 16px; border-left: 1px solid var(--line); }
+.sw-upd-ver { font-size: var(--fs-base); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* Each column's own action sits at ITS bottom, so two buttons of different
+   heights (or one column having none) still line up along the card's floor. */
+.sw-upd-col .sw-update { margin-top: auto; }
+.sw-progress { margin-top: 8px; height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; }
+.sw-progress span { display: block; height: 100%; background: var(--accent); transition: width 200ms linear; }
 
 /* Navigation tiles: a row of equal-width buttons inside a TileCard. Much
    smaller than the six that used to fill the page -- they are a way out of
@@ -2317,11 +2338,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .day-chip.on { background: var(--accent); color: var(--on-accent); }
 
 .toast {
-  position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 40;
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 40;
   background: var(--card-bg); color: var(--text); border-radius: var(--r-md); padding: 12px 20px;
   font-size: var(--fs-sm); font-weight: 600; max-width: 80%; text-align: center;
   box-shadow: -6px -6px 24px rgba(0, 0, 0, 0.4);
 }
+.toast-bottom { bottom: 84px; }
+/* Clear of the notch on a phone, and of the overlay's own back/title row. */
+.toast-top { top: calc(env(safe-area-inset-top, 0px) + 20px); }
 
 /* ===== Diary: header row, segmented Browse/Full toggle, bean row split ===== */
 /* Fixed height: the back button is taller than the sort button, so without it

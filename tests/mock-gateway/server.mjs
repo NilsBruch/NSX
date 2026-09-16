@@ -92,10 +92,39 @@ const state = {
   shotDetails: structuredClone(fx.shotDetails),
   store: structuredClone(fx.store),
   workflow: structuredClone(fx.currentWorkflow),
+  skins: structuredClone(fx.skins),
   // Simulated shot progression
   shotStartedAt: 0,
   frameOffset: 0,
 };
+
+/* ── updates ──────────────────────────────────────────────
+ * Nothing to update by default, which is the normal answer and the one the skin
+ * has to handle gracefully. Set APP_UPDATE_TO / SKIN_UPDATE_TO to a version to
+ * play the other side: an app update that can be installed in place (with
+ * progress), and a skin whose files change on the next POST to
+ * /webui/skins/update — which is what makes the skin reload into them.
+ *   APP_UPDATE_TO=0.9.0 SKIN_UPDATE_TO=0.4.0 npm run dev:gateway
+ */
+const APP_UPDATE_TO = process.env.APP_UPDATE_TO || "";
+const SKIN_UPDATE_TO = process.env.SKIN_UPDATE_TO || "";
+
+const appUpdateState = {
+  phase: "idle",
+  currentVersion: fx.gatewayInfo.version,
+  latestVersion: null,
+  releaseNotes: null,
+  releaseUrl: fx.gatewayInfo.releaseUrl,
+  installable: false,
+  progress: null,
+  error: null,
+};
+
+/** Patch the shared state and push it to everyone watching the channel. */
+function setUpdateState(patch) {
+  Object.assign(appUpdateState, patch);
+  broadcast("/ws/v1/update", appUpdateState);
+}
 
 const FLOWING = new Set(["espresso", "steam", "hotWater", "flush"]);
 const FRAME_SECONDS = 6;
@@ -435,6 +464,20 @@ function routeApi(req, res, url, body) {
     }
   }
 
+  // ── build info / updates ──
+  // The skin's update card is built from these three plus ws/v1/update below.
+  if (path === "/api/v1/info") return json(fx.gatewayInfo);
+  if (path === "/api/v1/update") return json(appUpdateState);
+  if (path === "/api/v1/webui/skins" && method === "GET") return json(state.skins);
+  if (path === "/api/v1/webui/skins/update" && method === "POST") {
+    // What the real bridge does: re-download from each skin's recorded source.
+    // Here, bump whatever SKIN_UPDATE_TO says so the reload path is exercisable.
+    if (SKIN_UPDATE_TO) {
+      for (const skin of state.skins) if (skin.reaMetadata) skin.version = SKIN_UPDATE_TO;
+    }
+    return json({ updated: !!SKIN_UPDATE_TO });
+  }
+
   // ── misc ──
   if (path === "/api/v1/scale/tare") return noContent();
   if (path === "/api/v1/devices/scan") return noContent();
@@ -495,6 +538,7 @@ const WS_PATHS = [
   "/ws/v1/devices",
   "/ws/v1/logs",
   "/ws/v1/plugins/time-to-ready.reaplugin/timeToReady",
+  "/ws/v1/update",
 ];
 
 const wss = new Map(WS_PATHS.map((p) => [p, new WebSocketServer({ noServer: true })]));
@@ -522,6 +566,44 @@ wss.get("/ws/v1/devices").on("connection", (ws) =>
     ],
   })));
 wss.get("/ws/v1/scale/snapshot").on("connection", (ws) => ws.send(JSON.stringify({ status: "connected" })));
+
+/* App-update channel: a snapshot on connect, then one on every state change,
+ * and { command } back the other way — the same two-way shape the real gateway
+ * has. `install` runs a fake download so the progress bar can be seen; it is
+ * offered only when APP_UPDATE_TO is set, mirroring `installable` being false
+ * on every platform but Android. */
+wss.get("/ws/v1/update").on("connection", (ws) => {
+  ws.send(JSON.stringify(appUpdateState));
+  ws.on("message", (raw) => {
+    let command = null;
+    try { command = JSON.parse(String(raw))?.command; } catch { /* ignore */ }
+
+    if (command === "check") {
+      setUpdateState({ phase: "checking" });
+      setTimeout(() => setUpdateState(APP_UPDATE_TO
+        ? { phase: "available", latestVersion: APP_UPDATE_TO, installable: true }
+        : { phase: "idle", latestVersion: null, installable: false }), 400);
+      return;
+    }
+
+    if (command === "install") {
+      if (!appUpdateState.installable) {
+        return void ws.send(JSON.stringify({ error: "No update to install", url: fx.gatewayInfo.releaseUrl }));
+      }
+      let pct = 0;
+      const tick = setInterval(() => {
+        pct += 0.2;
+        if (pct < 1) return setUpdateState({ phase: "downloading", progress: pct });
+        clearInterval(tick);
+        setUpdateState({ phase: "installing", progress: 1 });
+        setTimeout(() => setUpdateState({ phase: "idle", progress: null, installable: false, latestVersion: null }), 600);
+      }, 400);
+      return;
+    }
+
+    ws.send(JSON.stringify({ error: `mock: unknown command ${command}` }));
+  });
+});
 wss.get("/ws/v1/machine/waterLevels").on("connection", (ws) => ws.send(JSON.stringify(fx.waterLevels)));
 
 // Live streams.

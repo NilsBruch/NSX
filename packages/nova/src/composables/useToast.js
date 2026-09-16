@@ -9,11 +9,19 @@ import { reactive } from 'vue';
 
 const { NSXCore } = window;
 
-export const toastState = reactive({ message: '', visible: false });
+export const toastState = reactive({ message: '', visible: false, position: 'bottom' });
 
 let hideTimer = null;
-export function showToast(message) {
+/**
+ * @param {string} message
+ * @param {{position?: 'bottom'|'top'}} [opts] Bottom by default — where every
+ *   core-bridged toast has always appeared. 'top' is for an answer to something
+ *   the user just pressed further down the screen, which at the bottom would
+ *   land under their own hand.
+ */
+export function showToast(message, { position = 'bottom' } = {}) {
   toastState.message = message;
+  toastState.position = position;
   toastState.visible = true;
   clearTimeout(hideTimer);
   hideTimer = setTimeout(() => { toastState.visible = false; }, 3200);

@@ -3815,6 +3815,52 @@ export const shotDetails = Object.fromEntries(shotsFull.map((s) => [s.id, s]));
 
 // Not exposed over REST by the gateway (WebSocket only), so still hand-written.
 export const waterLevels = { currentLevel: 780, refillLevel: 100 };
+
+// GET /api/v1/info — the gateway's own build, which the skin's update card
+// compares against the newest published release.
+export const gatewayInfo = {
+  "commit": "d4721e5377ed176946d4b4584ec625f0c4aae45b",
+  "commitShort": "d4721e53",
+  "branch": "HEAD",
+  "buildTime": "2026-09-16T06:31:52Z",
+  "version": "0.8.6",
+  "buildNumber": "2801",
+  "appStore": false,
+  "releaseUrl": "https://github.com/decentespresso/decaid/releases",
+  "localIp": ""
+};
+
+// GET /api/v1/webui/skins — what the gateway has installed. `reaMetadata` is
+// what marks a skin as updatable (it records where it came from); a skin
+// without it was copied in by hand and has no source to re-check.
+export const skins = [
+  {
+    "id": "NSX-skin",
+    "name": "NSX",
+    "description": "Skin for Decent.app",
+    "version": "v0.4.3",
+    "isBundled": true,
+    "reaMetadata": {
+      "skinId": "NSX-skin",
+      "sourceUrl": "github_release:NilsBruch/NSX@v0.4.3",
+      "commitHash": "v0.4.3",
+      "includePrerelease": false
+    }
+  },
+  {
+    "id": "Nova-skin",
+    "name": "Nova",
+    "description": "Skin for Decent.app",
+    "version": "0.3.0",
+    "isBundled": true,
+    "reaMetadata": {
+      "skinId": "Nova-skin",
+      "sourceUrl": "github_release:NilsBruch/NSX@nova-v0.3.0",
+      "commitHash": "nova-v0.3.0",
+      "includePrerelease": false
+    }
+  }
+];
 export const deletedProfiles = [];
 
 // HAND-WRITTEN, deliberately not snapshotted: the KV store holds the skin's own

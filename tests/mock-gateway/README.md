@@ -53,10 +53,35 @@ the namespace-wide endpoint instead of per-key GETs.
 - The machine-snapshot and scale WebSockets stream at 4 Hz; devices report both
   machine and scale as connected.
 
+## Simulated updates
+
+The skin's update card is built from `GET /api/v1/info`, `GET /api/v1/webui/skins`,
+`POST /api/v1/webui/skins/update` and the two-way `ws/v1/update` channel — all
+mocked. By default there is nothing to update, which is the normal answer and the
+one the skin has to handle gracefully. Two env vars play the other side:
+
+```bash
+APP_UPDATE_TO=0.9.0 SKIN_UPDATE_TO=0.4.0 npm run dev:gateway
+```
+
+- `APP_UPDATE_TO` — `{"command":"check"}` on the socket then answers `available`
+  with that version and `installable: true`, and `{"command":"install"}` runs a
+  fake download (`downloading` with `progress` 0→1, then `installing`), so the
+  progress bar is exercisable. Without it the channel answers `idle` and an
+  `install` is refused with an `{error}` reply, matching a desktop gateway.
+- `SKIN_UPDATE_TO` — the version every installed skin jumps to on the next
+  `POST /webui/skins/update`, which is what makes the skin notice its on-disk
+  version changed and reload.
+
+Note that "is something newer published" is asked of **GitHub**, not of the mock
+(see `packages/core/src/domains/update.js` for why), so the *badge* still reflects
+real release tags even here — only the install paths are simulated.
+
 ## Fixtures
 
 `fixtures.mjs` seeds four profiles (one **hidden**, one cleaning profile), two
-recipes (one referencing the hidden profile), beans, grinders and three shots.
+recipes (one referencing the hidden profile), beans, grinders, three shots, the
+gateway's build info and two installed skins.
 The hidden profile plus the recipe pointing at it exist so the hidden-profile
 push path stays exercisable by hand.
 

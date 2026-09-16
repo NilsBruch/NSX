@@ -192,6 +192,112 @@ export async function loadAppUpdate() {
   appUpdate.value = await NSXApi.fetchAppUpdate().catch(() => null);
 }
 
+/* ── Updates: the app, and this skin ──────────────────────────────────────────
+ * Three moving parts, one card (UpdateWidget.vue):
+ *
+ *  - appRelease / skinRelease: "is something newer published?", answered by
+ *    comparing against GitHub release tags in core's update domain. The gateway
+ *    cannot answer this on desktop — its own checker reports phase "idle" with a
+ *    null latestVersion there — so a badge driven off /api/v1/update stays blank
+ *    on the machines people actually use.
+ *  - appUpdate (AppUpdateState, live on ws/v1/update): the gateway's own view,
+ *    which is what carries `installable` and the download progress. Only used
+ *    for ACTING, not for the badge.
+ *  - runSkinUpdate: the gateway re-downloads this skin from its recorded source.
+ *    That one works everywhere, and is the only update this skin can finish by
+ *    itself.
+ */
+
+/** This build, and the release stream it is published in (vite defines). */
+const SKIN_ID = typeof __SKIN_ID__ === 'string' ? __SKIN_ID__ : 'Nova-skin';
+export const SKIN_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '';
+// NSX and Nova release out of ONE repo with two tag streams ('v*' / 'nova-v*'),
+// so the newest release of the repo is regularly not the newest Nova.
+const SKIN_TAG_PREFIX = 'nova-v';
+
+export const appRelease = ref(null);   // { current, latest, known, updateAvailable, releasesUrl }
+export const skinRelease = ref(null);  // { installed, latest, known, updateAvailable, releasesUrl }
+
+/**
+ * Ask GitHub what the newest published app and skin are. `force` is a person
+ * pressing the button: it drops the cached tags so the question is really asked
+ * again (a re-render is served from the cache).
+ */
+export async function loadReleaseChecks(force = false) {
+  if (force) NSXCore.clearReleaseCache();
+  const [app, skin] = await Promise.all([
+    NSXCore.checkAppUpdate().catch(() => null),
+    NSXCore.checkSkinUpdate(SKIN_ID, { tagPrefix: SKIN_TAG_PREFIX, force }).catch(() => null),
+  ]);
+  appRelease.value = app;
+  skinRelease.value = skin;
+}
+
+/**
+ * Open the gateway's update channel and ask it, silently, where it stands.
+ * Silent on purpose: on desktop the answer is "idle" with nothing in it, which
+ * is not worth a toast — the badge comes from loadReleaseChecks either way.
+ * What this is really here for is `installable` and the download progress.
+ */
+export function startAppUpdateChannel() {
+  NSXApi.connectAppUpdate(
+    (data) => {
+      // A rejected command replies directly, with no phase — surface that one.
+      if (data && data.error && !data.phase) {
+        NSXCore.emit('toast', data.url ? `${data.error} — ${data.url}` : data.error);
+        return;
+      }
+      appUpdate.value = data;
+    },
+    () => { try { NSXApi.sendAppUpdateCommand({ command: 'check' }); } catch { /* not connected yet */ } },
+  );
+}
+
+export function stopAppUpdateChannel() {
+  NSXApi.disconnectAppUpdate();
+}
+
+/**
+ * Ask the gateway to re-check. Silent when the channel isn't there: on a gateway
+ * too old for ws/v1/update this would toast on every press, while the part of
+ * the check the user actually sees — the release comparison — worked fine.
+ */
+export function sendAppUpdateCheck() {
+  try {
+    NSXApi.sendAppUpdateCommand({ command: 'check' });
+  } catch { /* no channel; loadReleaseChecks still answers the question */ }
+}
+
+/**
+ * Start the in-app app update. Only offered when the gateway says `installable`
+ * — which today means Android; every other platform installs from the release
+ * page, so the card links there instead.
+ */
+export function installAppUpdate() {
+  try {
+    NSXApi.sendAppUpdateCommand({ command: 'install' });
+  } catch (err) {
+    NSXCore.emit('toast', err?.message || String(err));
+  }
+}
+
+/**
+ * Have the gateway download the newest skin files, then reload into them.
+ *
+ * The reload is the point: the new files are on disk but this tab is still
+ * running the old bundle. Only reloads when the on-disk version actually
+ * changed, so pressing this with nothing new leaves the screen alone.
+ * @returns {Promise<{updated: boolean, version: string}>}
+ */
+export async function runSkinUpdate() {
+  const result = await NSXCore.installSkinUpdate(SKIN_ID);
+  if (result.updated) {
+    skinRelease.value = { ...(skinRelease.value || {}), installed: result.version, updateAvailable: false };
+    setTimeout(() => window.location.reload(), 1500);
+  }
+  return result;
+}
+
 /** Auto Sleep — NSX's presence settings, not an app/machine settings key. */
 export const presenceSettings = reactive({ userPresenceEnabled: false, sleepTimeoutMinutes: 30 });
 export async function loadPresenceSettings() {

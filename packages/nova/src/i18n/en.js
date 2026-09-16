@@ -376,6 +376,10 @@ export default {
     connection: 'Connection', noDevices: 'No devices paired',
     appTitle: 'App', checkUpdates: 'Check for updates', upToDate: 'Up to date',
     updateAvailable: '{version} available',
+    skinTitle: 'Skin', updateApp: 'Update app', updateSkin: 'Update skin',
+    download: 'Download', updating: 'Updating',
+    checking: 'Checking…', checkFailed: 'Could not check',
+    skinUpdating: 'Downloading…', skinUpdated: 'Updated to {version} — reloading…',
   },
   beanManager: {
     batches: 'Bags',
