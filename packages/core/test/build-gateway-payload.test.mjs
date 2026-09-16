@@ -85,16 +85,23 @@ test("prefers the user-owned copy with the highest version when titles collide",
   assert.equal(payload.profileId, "u3");
 });
 
-test("legacy (NSX, no stopAtWeight field): target_volume zeroed unless volume-stop enabled", async () => {
+test("legacy (NSX, no stopAtWeight field): volume stop disabled unless enabled", async () => {
   stubCore();
   const off = await NSXCore.buildGatewayPayload({ selectedProfileId: "p-hidden", targetYield: 36 }, { scaleConnected: false });
-  assert.equal(off.profile.target_volume, 0);
+  assert.equal(off.context.targetWaterVolume, 0);
+  assert.equal(off.profile.target_volume, undefined, "the profile is never overridden");
 
   const on = await NSXCore.buildGatewayPayload(
     { selectedProfileId: "p-hidden", targetYield: 36, useVolumeStopWhenNoScale: true, volumeCalibration: { factor: 1.1 } },
     { scaleConnected: false },
   );
-  assert.equal(on.profile.target_volume, 40, "round(36 * 1.1)");
+  assert.equal(on.context.targetWaterVolume, 40, "round(36 * 1.1)");
+});
+
+test("legacy (NSX) + scale: volume stop left to the profile (null)", async () => {
+  stubCore();
+  const p = await NSXCore.buildGatewayPayload({ selectedProfileId: "p-hidden", targetYield: 36 }, { scaleConnected: true });
+  assert.equal(p.context.targetWaterVolume, null, "null inherits the profile's own target_volume");
 });
 
 // --- Nova's explicit stopAtWeight three-way stop mode ---
@@ -109,7 +116,8 @@ test("stopAtWeight ON + scale: weight stop, profile volume-stop turned off", asy
     { selectedProfileId: "p-vol", targetYield: 36, stopAtWeight: true },
     { scaleConnected: true },
   );
-  assert.equal(p.profile.target_volume, 0, "no volume stop when weighing");
+  assert.equal(p.context.targetWaterVolume, 0, "no volume stop when weighing");
+  assert.equal(p.profile.target_volume, 100, "the profile itself is left untouched");
   assert.equal(p.context.targetYield, 36, "dialed yield drives the weight stop");
 });
 
@@ -119,7 +127,8 @@ test("stopAtWeight ON + no scale: volume stop = targetYield * calibration factor
     { selectedProfileId: "p-vol", targetYield: 36, stopAtWeight: true, volumeCalibration: { factor: 1.1 } },
     { scaleConnected: false },
   );
-  assert.equal(p.profile.target_volume, 40, "round(36 * 1.1), overriding the profile's own 100");
+  assert.equal(p.context.targetWaterVolume, 40, "round(36 * 1.1), overriding the profile's own 100");
+  assert.equal(p.profile.target_volume, 100, "as a workflow field — the profile is not rewritten");
   assert.equal(p.profile.target_weight, 0, "no weight stop without a scale");
 });
 
@@ -129,7 +138,7 @@ test("stopAtWeight ON + no scale: factor defaults to 1.0 when uncalibrated", asy
     { selectedProfileId: "p-vol", targetYield: 36, stopAtWeight: true },
     { scaleConnected: false },
   );
-  assert.equal(p.profile.target_volume, 36, "no calibration yet -> 1:1 ml per gram");
+  assert.equal(p.context.targetWaterVolume, 36, "no calibration yet -> 1:1 ml per gram");
 });
 
 test("stopAtWeight OFF: manual stop — no weight, no volume, targetYield zeroed", async () => {
@@ -139,7 +148,7 @@ test("stopAtWeight OFF: manual stop — no weight, no volume, targetYield zeroed
     { scaleConnected: true },
   );
   assert.equal(p.profile.target_weight, 0);
-  assert.equal(p.profile.target_volume, 0);
+  assert.equal(p.context.targetWaterVolume, 0, "volume stop disabled for the workflow");
   assert.equal(p.context.targetYield, 0, "context yield zeroed so the gateway can't weight-stop");
 });
 

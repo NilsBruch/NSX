@@ -237,38 +237,43 @@
     // path below (this builder is shared by both skins — see the file header).
     //
     //   stopAtWeight ON  + scale     -> weight stop (context.targetYield drives
-    //                                   it); any volume stop baked into the
-    //                                   profile is turned off.
+    //                                   it); the volume stop is turned off.
     //   stopAtWeight ON  + no scale  -> no way to weigh, so stop on VOLUME
-    //                                   instead: target_volume = the dialed
-    //                                   yield converted to ml via the recipe's
-    //                                   learned calibration factor (targetYield
-    //                                   * factor); never a weight stop.
-    //   stopAtWeight OFF             -> neither: target_weight AND target_volume
-    //                                   zeroed, and context.targetYield forced to
-    //                                   0 (below) so the gateway can't weight-stop
-    //                                   either. The user stops the shot manually.
+    //                                   instead: the dialed yield converted to
+    //                                   ml via the recipe's learned calibration
+    //                                   factor (targetYield * factor); never a
+    //                                   weight stop.
+    //   stopAtWeight OFF             -> neither: target_weight zeroed, the volume
+    //                                   stop disabled, and context.targetYield
+    //                                   forced to 0 (below) so the gateway can't
+    //                                   weight-stop either. The user stops the
+    //                                   shot manually.
+    //
+    // The volume stop is a WORKFLOW field (context.targetWaterVolume, ml), not a
+    // profile override: null inherits Profile.target_volume, 0 disables volumetric
+    // stopping for this workflow. targetYield stays beverage weight in grams and is
+    // never used as a volume fallback.
+    let targetWaterVolume = null;
     if (typeof workflow.stopAtWeight === "boolean") {
       if (!workflow.stopAtWeight) {
-        resolvedProfile = { ...resolvedProfile, target_weight: 0, target_volume: 0 };
+        resolvedProfile = { ...resolvedProfile, target_weight: 0 };
+        targetWaterVolume = 0;
       } else if (scaleConnected) {
-        resolvedProfile = { ...resolvedProfile, target_volume: 0 };
+        targetWaterVolume = 0;
       } else {
         const factor = workflow.volumeCalibration?.factor ?? 1.0;
         const yield_ = Number(workflow.targetYield || 0);
-        const targetVolume = yield_ > 0 && factor > 0 ? Math.round(yield_ * factor) : 0;
-        resolvedProfile = { ...resolvedProfile, target_weight: 0, target_volume: targetVolume };
+        resolvedProfile = { ...resolvedProfile, target_weight: 0 };
+        targetWaterVolume = yield_ > 0 && factor > 0 ? Math.round(yield_ * factor) : 0;
       }
     } else if (!scaleConnected) {
       // Legacy virtual-scale path (NSX): estimate a volume target from yield*factor.
       if (workflow.useVolumeStopWhenNoScale) {
         const factor = workflow.volumeCalibration?.factor ?? 1.0;
         const yield_ = Number(workflow.targetYield || 0);
-        if (yield_ > 0 && factor > 0) {
-          resolvedProfile = { ...resolvedProfile, target_volume: Math.round(yield_ * factor) };
-        }
+        if (yield_ > 0 && factor > 0) targetWaterVolume = Math.round(yield_ * factor);
       } else {
-        resolvedProfile = { ...resolvedProfile, target_volume: 0 };
+        targetWaterVolume = 0;
       }
     }
 
@@ -292,6 +297,9 @@
         grinderSetting: workflow.grinderSetting || "—",
         targetDoseWeight: Number(workflow.targetDoseWeight || 0),
         targetYield: pushedYield,
+        // Always sent (null included): omitting it leaves the gateway's previous
+        // value in place, so an explicit null is what restores "inherit profile".
+        targetWaterVolume,
         ...(workflow.grinderId ? { grinderId: workflow.grinderId } : {}),
         ...(workflow.beanBatchId ? { beanBatchId: workflow.beanBatchId } : {}),
         extras: tags.length > 0 ? { tags } : null,

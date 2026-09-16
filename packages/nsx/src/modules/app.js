@@ -1215,8 +1215,13 @@ async function endLiveShotSession() {
 
   const _wasDone = _capturedSubstate === 'pouringDone';
   const _targetYield  = Number(_capturedWorkflow?.targetYield  || 0);
-  const _targetVolume = Number(_capturedWorkflow?.gatewayWorkflow?.profile?.target_volume
-    || _capturedWorkflow?.profile?.target_volume || 0);
+  // The workflow's own volume stop wins; null there means "inherit the profile's".
+  const _workflowVolume = _capturedWorkflow?.gatewayWorkflow?.context?.targetWaterVolume;
+  const _targetVolume = Number(
+    (_workflowVolume ?? null) !== null
+      ? _workflowVolume
+      : (_capturedWorkflow?.gatewayWorkflow?.profile?.target_volume
+        || _capturedWorkflow?.profile?.target_volume || 0));
 
   const _wasWeightStop = _targetYield > 0 && _capturedWeight >= _targetYield * 0.92;
 

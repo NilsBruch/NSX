@@ -449,7 +449,7 @@ export async function pushRecipe({ silent = false } = {}) {
     // -> context.extras.tags, which is what stamps them onto every shot pulled
     // on this workflow (see the `tags` note on `recipe`).
     tags: recipe.tags,
-    // Needed for the no-scale volume stop: target_volume = targetYield * factor.
+    // Needed for the no-scale volume stop: targetWaterVolume = targetYield * factor.
     volumeCalibration: recipe.volumeCalibration,
     grinderId: recipe.grinderId,
     beanBatchId: recipe.beanBatchId,
@@ -469,7 +469,7 @@ export async function pushRecipe({ silent = false } = {}) {
 // ── Re-push when the scale connects/disconnects ──────────────────────────────
 // The stop mode baked into the pushed workflow depends on whether a scale is
 // present: stopAtWeight ON + scale -> weight stop; ON + no scale -> volume stop
-// (target_volume = yield * factor). See buildGatewayPayload. The machine only
+// (context.targetWaterVolume = yield * factor). See buildGatewayPayload. The machine only
 // re-reads that on a push, so a scale that dies (or wakes) AFTER the recipe was
 // pushed leaves the WRONG stop mode on the machine until the next dial edit —
 // that's the "no scale = no volume stop" bug. Re-push on the change so the

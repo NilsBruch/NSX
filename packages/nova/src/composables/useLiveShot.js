@@ -26,7 +26,7 @@ export const series = reactive({ elapsed: [], pressure: [], targetPressure: [], 
 
 // ── No-scale virtual weight (live volume-stop estimate) ──────────────────────
 // With no scale AND a volume stop (stopAtWeight on, scale absent -> the machine
-// stops on target_volume, see buildGatewayPayload), the DE1 is tracking VOLUME,
+// stops on the workflow's targetWaterVolume, see buildGatewayPayload), the DE1 is tracking VOLUME,
 // not weight — but the live snapshot stream carries neither weight nor volume.
 // So from the profile frame where the machine STARTS counting volume
 // (target_volume_count_start), we integrate the snapshot flow ourselves and
@@ -327,7 +327,7 @@ async function applyPostShotVirtualScale(newShot, prefetchedFull = null) {
 
     // Estimated-yield annotation — only meaningful for a shot that stopped on
     // VOLUME rather than a real scale: stopAtWeight is on but no scale was
-    // connected, so the machine stopped at the profile's target_volume and the
+    // connected, so the machine stopped at the workflow's targetWaterVolume and the
     // real output weight was never measured. `virtualScale: true` is what marks
     // that yield as approximate (resolveActualYield reads it -> history shows a
     // '*'); matches NSX's _runPostShotActions exactly.
