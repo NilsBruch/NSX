@@ -99,6 +99,20 @@ export function useAccent(tabNameSource) {
   // Watched as a set: both settings arrive AFTER this first runs
   // (loadSkinSettings only fires once bootCore resolves), so the switches have
   // to re-apply rather than being read once at startup.
+  // Whole-skin zoom. app.css's type scale is rem-based off one root font size
+  // (18px, deliberately above the browser default for a kiosk at arm's length),
+  // so scaling that single value scales the type AND every rem-sized control
+  // with it. Its own watcher: it has nothing to do with colour, and it must
+  // re-apply when the stored value arrives after boot like the rest.
+  watch(
+    () => skinSettings.uiScale,
+    (scale) => {
+      const pct = Number(scale) || 100;
+      document.documentElement.style.fontSize = `${(18 * pct) / 100}px`;
+    },
+    { immediate: true },
+  );
+
   watch(
     [tabAccent, () => skinSettings.tabColors, () => skinSettings.theme],
     ([accent, colourByTab, theme]) => {

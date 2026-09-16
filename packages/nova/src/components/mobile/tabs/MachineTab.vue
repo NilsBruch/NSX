@@ -33,6 +33,7 @@ import { formatWaterLevel } from '../../../utils/water.js';
 import { showToast } from '../../../composables/useToast.js';
 import { openNumberPad } from '../../../composables/useModals.js';
 import SettingSlider from '../../settings/SettingSlider.vue';
+import { dispTemp, toCelsius, tempRange, tempUnitLabel } from '../../../composables/useUnits.js';
 
 const { t } = useI18n();
 const { NSXApi, NSXCore } = window;
@@ -97,8 +98,8 @@ function steamPresetCancel(key) {
 
 // ── Hot water ────────────────────────────────────────────────────────────
 async function editHotwaterTemp() {
-  const v = await openNumberPad({ title: t('hotwater.temperature'), unit: '°C', value: String(hotwater.temp) });
-  if (v != null) NSXCore.setHotwaterTemp(parseFloat(v));
+  const v = await openNumberPad({ title: t('hotwater.temperature'), unit: tempUnitLabel.value, value: String(dispTemp(hotwater.temp)) });
+  if (v != null) NSXCore.setHotwaterTemp(toCelsius(parseFloat(v)));
 }
 async function editHotwaterVolume() {
   const v = await openNumberPad({ title: t('hotwater.volume'), unit: 'ml', value: String(hotwater.volume) });
@@ -217,9 +218,9 @@ function flushPresetCancel(key) {
 
     <span class="setting-group-label">{{ t('tab.hotwater') }}</span>
     <SettingSlider
-      :label="t('hotwater.temperature')" :model-value="hotwater.temp"
-      :min="50" :max="100" :step="1" unit="°C"
-      @change="NSXCore.setHotwaterTemp($event)" @edit="editHotwaterTemp"
+      :label="t('hotwater.temperature')" :model-value="dispTemp(hotwater.temp)"
+      v-bind="tempRange(50, 100)" :unit="tempUnitLabel"
+      @change="NSXCore.setHotwaterTemp(toCelsius($event))" @edit="editHotwaterTemp"
     />
     <SettingSlider
       :label="t('hotwater.volume')" :model-value="hotwater.volume"

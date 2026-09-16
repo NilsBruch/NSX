@@ -10,6 +10,7 @@ import { openNumberPad, openChooser } from '../../composables/useModals.js';
 import { machine } from '../../composables/useCore.js';
 import { steam } from '../../composables/useMachineFunctions.js';
 import SettingSlider from './SettingSlider.vue';
+import { dispTemp, toCelsius, tempRange, tempUnitLabel } from '../../composables/useUnits.js';
 import {
   appSettings, loadAppSettings, saveAppSetting,
   machineSettings, loadMachineSettings, saveMachineSetting,
@@ -31,8 +32,8 @@ const viewTitle = () => (view.value === 'calibration' ? t('machineSettings.calib
 function goBack() { if (view.value === 'main') emit('close'); else view.value = 'main'; }
 
 async function editSteamTemp() {
-  const v = await openNumberPad({ title: t('machineSettings.steamTemp'), unit: '°C', value: steam.temp ?? 150 });
-  if (v != null) NSXCore.setSteamTemp(Number(v));
+  const v = await openNumberPad({ title: t('machineSettings.steamTemp'), unit: tempUnitLabel.value, value: dispTemp(steam.temp ?? 150) });
+  if (v != null) NSXCore.setSteamTemp(toCelsius(Number(v)));
 }
 
 onMounted(() => {
@@ -59,14 +60,23 @@ async function editHeaterFlow(key, label) {
   const v = await openNumberPad({ title: label, unit: 'ml/s', value: advancedSettings[key] ?? 0 });
   if (v != null) saveAdvancedSetting(key, Number(v));
 }
+// The idle target sits among the heater's flow settings but is a TEMPERATURE,
+// so it needs its own editor: sharing editHeaterFlow labelled it 'ml/s'.
+async function editHeaterIdleTemp() {
+  const v = await openNumberPad({
+    title: t('machineSettings.heaterIdle'), unit: tempUnitLabel.value,
+    value: dispTemp(advancedSettings.heaterIdleTemp ?? 0, 1),
+  });
+  if (v != null) saveAdvancedSetting('heaterIdleTemp', toCelsius(Number(v)));
+}
 async function editFanThreshold() {
-  const v = await openNumberPad({ title: t('machineSettings.fanThreshold'), unit: '°C', value: machineSettings.fan ?? 0 });
-  if (v != null) saveMachineSetting('fan', Number(v));
+  const v = await openNumberPad({ title: t('machineSettings.fanThreshold'), unit: tempUnitLabel.value, value: dispTemp(machineSettings.fan ?? 0) });
+  if (v != null) saveMachineSetting('fan', toCelsius(Number(v)));
 }
 
 async function editFlushTemp() {
-  const v = await openNumberPad({ title: t('machineSettings.flushTemp'), unit: '°C', value: machineSettings.flushTemp ?? 80 });
-  if (v != null) saveMachineSetting('flushTemp', Number(v));
+  const v = await openNumberPad({ title: t('machineSettings.flushTemp'), unit: tempUnitLabel.value, value: dispTemp(machineSettings.flushTemp ?? 80) });
+  if (v != null) saveMachineSetting('flushTemp', toCelsius(Number(v)));
 }
 async function editFlushTimeout() {
   const v = await openNumberPad({ title: t('machineSettings.flushTimeout'), unit: 's', value: machineSettings.flushTimeout ?? 10 });
@@ -147,9 +157,9 @@ const refillKitLabel = () => refillKitOpts.find(([value]) => value === (advanced
         <span class="setting-group-label">{{ t('machineSettings.steamFlush') }}</span>
         <SettingSlider
           :label="t('machineSettings.steamTemp')"
-          :model-value="steam.temp ?? null"
-          :min="130" :max="170" :step="5"
-          @change="NSXCore.setSteamTemp($event)" @edit="editSteamTemp"
+          :model-value="steam.temp == null ? null : dispTemp(steam.temp)"
+          v-bind="tempRange(130, 170)" :step="5" :unit="tempUnitLabel"
+          @change="NSXCore.setSteamTemp(toCelsius($event))" @edit="editSteamTemp"
         />
         <button class="setting-row as-btn" @click="pickSteamPurgeMode">
           <span class="sr-name">{{ t('machineSettings.steamPurgeMode') }}</span>
@@ -157,9 +167,9 @@ const refillKitLabel = () => refillKitOpts.find(([value]) => value === (advanced
         </button>
         <SettingSlider
           :label="t('machineSettings.flushTemp')"
-          :model-value="machineSettings.flushTemp ?? null"
-          :min="0" :max="105" :step="1" unit="°C"
-          @change="saveMachineSetting('flushTemp', $event)" @edit="editFlushTemp"
+          :model-value="machineSettings.flushTemp == null ? null : dispTemp(machineSettings.flushTemp)"
+          v-bind="tempRange(0, 105)" :unit="tempUnitLabel"
+          @change="saveMachineSetting('flushTemp', toCelsius($event))" @edit="editFlushTemp"
         />
         <SettingSlider
           :label="t('machineSettings.flushTimeout')"
@@ -214,16 +224,16 @@ const refillKitLabel = () => refillKitOpts.find(([value]) => value === (advanced
       <template v-else-if="view === 'heater'">
         <SettingSlider
           :label="t('machineSettings.fanThreshold')"
-          :model-value="machineSettings.fan ?? null"
-          :min="0" :max="100" :step="1"
-          @change="saveMachineSetting('fan', $event)" @edit="editFanThreshold"
+          :model-value="machineSettings.fan == null ? null : dispTemp(machineSettings.fan)"
+          v-bind="tempRange(0, 100)" :unit="tempUnitLabel"
+          @change="saveMachineSetting('fan', toCelsius($event))" @edit="editFanThreshold"
         />
         <SettingSlider
           :label="t('machineSettings.heaterIdle')"
-          :model-value="advancedSettings.heaterIdleTemp ?? null"
-          :min="0" :max="99" :step="0.5" :decimals="1"
-          @change="saveAdvancedSetting('heaterIdleTemp', $event)"
-          @edit="editHeaterFlow('heaterIdleTemp', t('machineSettings.heaterIdle'))"
+          :model-value="advancedSettings.heaterIdleTemp == null ? null : dispTemp(advancedSettings.heaterIdleTemp, 1)"
+          v-bind="tempRange(0, 99)" :step="0.5" :decimals="1" :unit="tempUnitLabel"
+          @change="saveAdvancedSetting('heaterIdleTemp', toCelsius($event))"
+          @edit="editHeaterIdleTemp"
         />
         <SettingSlider
           :label="t('machineSettings.heaterPh1')"

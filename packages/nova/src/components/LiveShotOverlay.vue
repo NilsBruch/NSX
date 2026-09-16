@@ -12,6 +12,7 @@ import { isPhone } from '../composables/useLayout.js';
 import ShotStripChart from './ShotStripChart.vue';
 import PhaseTicker from './PhaseTicker.vue';
 import { frames as profileFrames, frameName } from '../composables/useProfileDisplay.js';
+import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 
 const { t } = useI18n();
 const { NSXCore, NSXApi } = window;
@@ -237,7 +238,7 @@ async function editGrindSetting() {
       </div>
     </div>
     <div class="live-metrics">
-      <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.temp }">{{ t('liveShot.mTemp') }}</div><div class="mv">{{ last(series.temperature, 0) }}<small>°C</small></div></div>
+      <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.temp }">{{ t('liveShot.mTemp') }}</div><div class="mv">{{ dispTemp(last(series.temperature, 0)) }}<small>{{ tempUnitLabel }}</small></div></div>
       <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.pressure }">{{ t('liveShot.mPressure') }}</div><div class="mv">{{ last(series.pressure) }}<small>bar</small></div></div>
       <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.flow }">{{ t('liveShot.mFlow') }}</div><div class="mv">{{ last(series.flow) }}<small>ml/s</small></div></div>
       <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.wflow }">{{ t('liveShot.mWflow') }}</div><div class="mv">{{ last(series.weightFlow) }}<small>g/s</small></div></div>

@@ -14,6 +14,7 @@ import { frames, frameDetailText, frameName } from '../composables/useProfileDis
 import { openConfirm, openChooser } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { isPhone } from '../composables/useLayout.js';
+import { fmtTemp } from '../composables/useUnits.js';
 import ProfileEditor from './settings/ProfileEditor.vue';
 
 const props = defineProps({
@@ -196,7 +197,7 @@ function peakPressure(p) {
 }
 function tempLabel(p) {
   const t2 = NSXCore.resolveProfileTemp(p?.profile);
-  return t2 != null ? `${t2}°C` : '—';
+  return t2 != null ? fmtTemp(t2) : '—';
 }
 
 // Which frame (0-based) is highlighted on the plot — cleared whenever the

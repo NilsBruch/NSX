@@ -371,6 +371,15 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Base lifted from the 16px browser default: this is a fixed-size kiosk display
+   viewed at arm's length, not a desktop window, so 1rem should be bigger than
+   web-default. Every rem value in the type scale above scales with it — which
+   is also what the Display size setting drives, by overriding this one value
+   (useAccent.js). body takes it in REM rather than repeating the pixel value,
+   so text that inherits its size follows the setting like the tokens do. */
+html { font-size: 18px; }
+body { font-size: 1rem; }
+
 html, body {
   height: 100%;
   /* .stage below is a fixed 100vh — nothing at the page level is meant to
@@ -381,10 +390,6 @@ html, body {
      window's edge in a desktop browser's default light theme, easy to
      mistake for a stray border around the whole window. */
   overflow: hidden;
-  /* Base lifted from the 16px browser default: this is a fixed-size kiosk
-     display viewed at arm's length, not a desktop window, so 1rem should be
-     bigger than web-default. Every rem value in the scale above scales with it. */
-  font-size: 18px;
   /* background-COLOR, not the shorthand: the lit-surfaces rule further down
      puts the screen's light on top of it, and a shorthand here would reset
      that image away. */
@@ -2186,6 +2191,10 @@ a.sw-update { text-decoration: none; }
    reads as the main one, and the version sits directly under its own heading
    rather than opposite it -- at half width there is no room for a line that
    has a label at one end and a number at the other. */
+/* A line of prose on a settings page — a plugin's own description, or "there
+   is nothing here". Not a row: it states something rather than setting it. */
+.settings-note { padding: 10px 4px; font-size: var(--fs-sm); font-weight: 500; color: var(--muted); line-height: 1.4; }
+
 .sw-upd-cols { display: flex; align-items: stretch; gap: 16px; }
 .sw-upd-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .sw-upd-col + .sw-upd-col { padding-left: 16px; border-left: 1px solid var(--line); }

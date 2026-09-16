@@ -21,6 +21,7 @@ import { showToast } from '../../composables/useToast.js';
 import { skinSettings } from '../../composables/useSettings.js';
 import { isPhone } from '../../composables/useLayout.js';
 import SettingSlider from './SettingSlider.vue';
+import { dispTemp, toCelsius, tempRange, tempUnitLabel } from '../../composables/useUnits.js';
 
 const props = defineProps({
   record: { type: Object, default: null }, // profile record being edited, or null = new
@@ -148,6 +149,22 @@ const editStepName = () => editText(
 // its tap-to-numberpad path (below) does not, matching every existing
 // SettingSlider caller in MachinePanel.vue (none of them clamp the typed
 // value either — the user's typed number is trusted as-is). ───────────────
+/** A temperature pad: shows the display unit, stores Celsius. */
+async function editTempField(getter, setter, title) {
+  const v = await openNumberPad({ title, unit: tempUnitLabel.value, value: dispTemp(getter()) });
+  if (v != null) setter(toCelsius(parseFloat(v) || 0));
+}
+
+/** The selected frame's own temperature, same conversion as editTempField. */
+async function editFrameTemp() {
+  const f = selectedFrame.value;
+  if (!f) return;
+  const v = await openNumberPad({
+    title: t('profileEditor.temperature'), unit: tempUnitLabel.value, value: dispTemp(f.temperature),
+  });
+  if (v != null) f.temperature = toCelsius(parseFloat(v) || 0);
+}
+
 async function editFrameField(field, title, unit) {
   const f = selectedFrame.value;
   if (!f) return;
@@ -224,7 +241,7 @@ function setLimiterFlowRange(v) { draft.limits.limiterFlowRange = v || 0.6; }
 function setLimiterPressureRange(v) { draft.limits.limiterPressureRange = v || 0.6; }
 function setStopWeight(v) { draft.limits.stopWeightValue = v; draft.limits.stopWeightEnabled = v > 0; }
 
-const editTankTemp = () => editLimitField(() => draft.limits.tankTempValue, setTankTemp, t('profileEditor.preheat'), '°C');
+const editTankTemp = () => editTempField(() => draft.limits.tankTempValue, setTankTemp, t('profileEditor.preheat'));
 const editStopVolumeStart = () => editLimitField(() => draft.limits.stopVolumeStartIndex, setStopVolumeStart, t('profileEditor.volumeCountStart'), '');
 // The frame INDEX is what's actually stored/edited, but "frame 2" means
 // nothing at a glance — show the frame's own name (or its "Stage N" fallback)
@@ -352,9 +369,9 @@ function save() {
             <div class="pe-group">
               <span class="pd-panel-label">{{ t('profileEditor.groupTemperature') }}</span>
               <SettingSlider
-                :label="t('profileEditor.temperature')" :model-value="selectedFrame.temperature"
-                :min="70" :max="100" :step="1" unit="°C"
-                @change="selectedFrame.temperature = $event" @edit="editFrameField('temperature', t('profileEditor.temperature'), '°C')"
+                :label="t('profileEditor.temperature')" :model-value="dispTemp(selectedFrame.temperature)"
+                v-bind="tempRange(70, 100)" :unit="tempUnitLabel"
+                @change="selectedFrame.temperature = toCelsius($event)" @edit="editFrameTemp"
               />
               <div class="pe-seg-row">
                 <span class="pe-seg-label">{{ t('profileEditor.sensor') }}</span>
@@ -446,9 +463,10 @@ function save() {
 
     <div v-else-if="activeTab === 'limits'" class="settings-scroll pe-limits">
       <SettingSlider
-        :label="t('profileEditor.preheat')" :model-value="draft.limits.tankTempValue"
-        :min="0" :max="100" :step="1" unit="°C" :off-label="t('common.off')"
-        @change="setTankTemp" @edit="editTankTemp"
+        :label="t('profileEditor.preheat')" :model-value="dispTemp(draft.limits.tankTempValue)"
+        v-bind="tempRange(0, 100)" :unit="tempUnitLabel"
+        :off-label="t('common.off')" :off-value="tempRange(0, 100).min"
+        @change="setTankTemp(toCelsius($event))" @edit="editTankTemp"
       />
 
       <!-- Preinfusion: which frame it ends after, and what it stops the shot

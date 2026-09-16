@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { hotwater } from '../composables/useMachineFunctions.js';
 import { openNumberPad } from '../composables/useModals.js';
 import { useDragDial, DIAL_PX_PER_STEP } from '../composables/useDragDial.js';
+import { dispTemp, toCelsius, tempRange, tempUnitLabel } from '../composables/useUnits.js';
 
 const { t } = useI18n();
 const { NSXCore } = window;
@@ -13,9 +14,9 @@ const { NSXCore } = window;
 const PRESET_KEYS = ['klein', 'mittel', 'gross'];
 
 async function editTemp() {
-  const v = await openNumberPad({ title: t('hotwater.temperature'), unit: '°C', value: String(hotwater.temp) });
+  const v = await openNumberPad({ title: t('hotwater.temperature'), unit: tempUnitLabel.value, value: String(dispTemp(hotwater.temp)) });
   if (v == null) return;
-  NSXCore.setHotwaterTemp(parseFloat(v));
+  NSXCore.setHotwaterTemp(toCelsius(parseFloat(v)));
 }
 
 // Press-and-pull-to-adjust, no visible track — see useDragDial.js. A plain tap
@@ -27,13 +28,16 @@ async function editTemp() {
 // risk a push firing mid-drag on any brief pause, so a local override drives
 // the on-screen number while dragging, and the real setter (which pushes) only
 // runs once, on release.
+// In DISPLAY units end to end: the override, the bounds and what the dial
+// reports, converted to Celsius once on release. Dragging in one unit and
+// committing in another is how a dial comes to lie about what it set.
 const dragTempOverride = ref(null);
-const tempDisplay = () => dragTempOverride.value ?? hotwater.temp;
+const tempDisplay = () => dragTempOverride.value ?? dispTemp(hotwater.temp);
 const tempDrag = useDragDial({
   get: tempDisplay,
   set: (v) => { dragTempOverride.value = v; },
-  onCommit: (v) => { NSXCore.setHotwaterTemp(v); dragTempOverride.value = null; },
-  min: 50, max: 100, step: 1, pxPerUnit: DIAL_PX_PER_STEP / 1,
+  onCommit: (v) => { NSXCore.setHotwaterTemp(toCelsius(v)); dragTempOverride.value = null; },
+  ...tempRange(50, 100), pxPerUnit: DIAL_PX_PER_STEP / 1,
 });
 const onTempClick = tempDrag.guardClick(editTemp);
 
@@ -92,7 +96,7 @@ function onPresetCancel(key) {
           @pointermove="tempDrag.onPointerMove"
           @pointerup="tempDrag.onPointerUp"
         >
-          <span class="num">{{ dragTempOverride ?? hotwater.temp }}</span><span class="unit">°C</span>
+          <span class="num">{{ tempDisplay() }}</span><span class="unit">{{ tempUnitLabel }}</span>
         </button>
       </div>
 

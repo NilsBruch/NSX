@@ -31,6 +31,7 @@ import { showToast } from '../../../composables/useToast.js';
 import RecipeDetail from '../RecipeDetail.vue';
 import RecipePicker from '../../RecipePicker.vue';
 import StarRating from '../../StarRating.vue';
+import { fmtTemp } from '../../../composables/useUnits.js';
 
 const { t } = useI18n();
 
@@ -91,7 +92,7 @@ function recipeFacts(r) {
   return [
     `${dose.toFixed(1)} → ${yield_.toFixed(1)} g (${ratio})`,
     `${t('espresso.grindSize')} ${r.grinderSetting}`,
-    `${Number(r.groupTemp) || 0} °C`,
+    fmtTemp(r.groupTemp || 0),
   ].join(' · ');
 }
 

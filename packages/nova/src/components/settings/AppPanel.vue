@@ -6,14 +6,17 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { openChooser, openWheel } from '../../composables/useModals.js';
+import { openChooser, openConfirm, openTextField, openWheel } from '../../composables/useModals.js';
 import {
-  devices, loadDevices,
+  devices, loadDevices, forgetDevice,
+  wifiScales, loadWifiScales, addWifiScale, removeWifiScale,
   appSettings, loadAppSettings, saveAppSetting,
   machineSettings, loadMachineSettings, saveMachineSetting,
-  loadPlugins, visualizerPlugin,
+  loadPlugins, visualizerPlugin, plugins,
 } from '../../composables/useSettings.js';
+import { showToast } from '../../composables/useToast.js';
 import VisualizerPanel from './VisualizerPanel.vue';
+import PluginsPanel from './PluginsPanel.vue';
 
 defineEmits(['close']);
 const { t } = useI18n();
@@ -23,7 +26,56 @@ onMounted(() => {
   loadAppSettings();
   loadMachineSettings();
   loadPlugins();
+  loadWifiScales();
 });
+
+/* Pairings.
+ * Connecting and disconnecting is the settings page's Connection widget.
+ * Forgetting belongs here with the other things you SET: it is not a session
+ * action but a decision about which devices this machine keeps reaching for,
+ * and it is confirmed because the only way back is to put the device in
+ * pairing mode and scan for it again.
+ */
+async function forget(device) {
+  const ok = await openConfirm({
+    title: t('machineSettings.forgetDevice', { name: device.name || device.id }),
+    message: t('machineSettings.forgetDeviceSub'),
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await forgetDevice(device.id);
+  } catch (err) {
+    showToast(err?.message || String(err));
+  }
+}
+
+/* Wi-Fi scales.
+ * A network scale is not discovered — it answers at an address you know — so
+ * unlike everything else on this page its list is typed in rather than scanned.
+ */
+async function addScale() {
+  const host = await openTextField({
+    title: t('machineSettings.addWifiScale'),
+    placeholder: t('machineSettings.wifiScaleHint'),
+  });
+  if (!host) return;
+  try {
+    await addWifiScale(host);
+  } catch (err) {
+    showToast(err?.message || String(err));
+  }
+}
+
+async function removeScale(host) {
+  const ok = await openConfirm({ title: t('machineSettings.removeWifiScale', { host }), danger: true });
+  if (!ok) return;
+  try {
+    await removeWifiScale(host);
+  } catch (err) {
+    showToast(err?.message || String(err));
+  }
+}
 
 // DE1 first, scale after — the machine is the primary device. Only the
 // preferred-device pickers below read this now.
@@ -105,6 +157,10 @@ async function pickLogLevel() {
 }
 
 const showVisualizer = ref(false);
+const showPlugins = ref(false);
+// The Visualizer has a panel of its own; this counts what else is installed, so
+// the Plugins row can say whether opening it is worth the trip.
+const otherPluginCount = computed(() => plugins.value.filter((p) => p.id !== 'visualizer.reaplugin').length);
 </script>
 
 <template>
@@ -183,8 +239,40 @@ const showVisualizer = ref(false);
         <span class="sr-name">{{ t('systemSettings.visualizer') }}</span>
         <span class="sr-value muted">{{ visualizerPlugin()?.loaded ? t('settingsPage.connected') : '' }}<span class="sr-chev">›</span></span>
       </button>
+      <!-- Everything else the gateway has loaded, configured from each plugin's
+           own schema — see PluginsPanel. -->
+      <button class="setting-row as-btn" @click="showPlugins = true">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('systemSettings.plugins') }}</span>
+          <span class="sr-sub">{{ t('systemSettings.pluginsSub') }}</span>
+        </span>
+        <span class="sr-value muted">{{ otherPluginCount || '' }}<span class="sr-chev">›</span></span>
+      </button>
+
+      <!-- Pairings and network scales: which devices this machine keeps
+           reaching for, as opposed to what is connected right now. -->
+      <span class="setting-group-label">{{ t('machineSettings.pairings') }}</span>
+      <button v-for="d in orderedDevices" :key="d.id" class="setting-row as-btn" @click="forget(d)">
+        <span class="sr-main">
+          <span class="sr-name">{{ d.name || d.id }}</span>
+          <span class="sr-sub">{{ t('machineSettings.forget') }}</span>
+        </span>
+        <span class="sr-value muted">{{ d.connected ? t('settingsPage.connected') : t('settingsPage.disconnected') }}</span>
+      </button>
+      <button v-for="host in wifiScales" :key="host" class="setting-row as-btn" @click="removeScale(host)">
+        <span class="sr-main">
+          <span class="sr-name">{{ host }}</span>
+          <span class="sr-sub">{{ t('machineSettings.wifiScale') }}</span>
+        </span>
+        <span class="sr-value muted">{{ t('machineSettings.remove') }}</span>
+      </button>
+      <button class="setting-row as-btn" @click="addScale">
+        <span class="sr-name">{{ t('machineSettings.addWifiScale') }}</span>
+        <span class="sr-value"><span class="sr-chev">›</span></span>
+      </button>
     </div>
 
     <VisualizerPanel v-if="showVisualizer" @close="showVisualizer = false" />
+    <PluginsPanel v-if="showPlugins" @close="showPlugins = false" />
   </div>
 </template>

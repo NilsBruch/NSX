@@ -29,6 +29,7 @@ import { steam } from '../composables/useMachineFunctions.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { showToast } from '../composables/useToast.js';
 import { formatClock } from '../utils/clock.js';
+import { fmtTemp } from '../composables/useUnits.js';
 import { formatWaterLevel } from '../utils/water.js';
 
 const { t } = useI18n();
@@ -69,14 +70,14 @@ const ICONS = {
 // liveShot.groupTemperature streams off the always-on machine-snapshot socket
 // (~250ms), not just during a shot — see useCore.js — so it's a genuine live
 // reading, not a stale "last shot" value.
-const groupTempLabel = computed(() => `${Math.round(liveShot.groupTemperature)}°C`);
+const groupTempLabel = computed(() => fmtTemp(liveShot.groupTemperature));
 // Actual steam-boiler temperature from the live machine snapshot (the same
 // snap.steamTemperature field NSX reads). Falls back to the configured steam
 // target when the machine isn't reporting a live value (idle / not finite).
 const steamTempLabel = computed(() => {
   const live = Number(liveShot.steamTemperature);
   const shown = Number.isFinite(live) && live > 0 ? live : steam.temp;
-  return `${Math.round(shown)}°C`;
+  return fmtTemp(shown);
 });
 
 const HEATING_STATES = new Set(['heating', 'preheating']);

@@ -4,13 +4,20 @@
  * wakelock, a display-service call). Brightness itself now lives on the
  * Settings landing page's vertical slider, not here — see SettingsView.vue.
  */
+import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { openChooser, openNumberPad } from '../../composables/useModals.js';
+import { openChooser, openConfirm, openNumberPad } from '../../composables/useModals.js';
 import { TABS } from '../../router/index.js';
-import { skinSettings, saveSkinSetting, displaySupport } from '../../composables/useSettings.js';
+import {
+  skinSettings, saveSkinSetting, displaySupport,
+  installedSkins, activeSkinId, loadInstalledSkins, switchSkin,
+} from '../../composables/useSettings.js';
+import { showToast } from '../../composables/useToast.js';
 
 defineEmits(['close']);
 const { t } = useI18n();
+
+onMounted(loadInstalledSkins);
 
 // The three token blocks in app.css, in the order the segmented control shows
 // them. 'midnight' is a second DARK palette (navy-tinted, raised cards), so it
@@ -57,6 +64,54 @@ async function editScreensaverBrightness() {
 async function pickReviewAutoClose() {
   const v = await openChooser({ title: t('skinSettings.reviewAutoClose'), options: autoCloseOpts, current: String(skinSettings.shotReviewAutoCloseSec) });
   if (v != null) saveSkinSetting('shotReviewAutoCloseSec', Number(v));
+}
+
+// Celsius or Fahrenheit, everywhere — readouts and the pickers that set them
+// alike (see useUnits.js). The machine is unaffected: it is told Celsius either
+// way, so this can be flipped mid-session without touching a single value.
+const tempUnitOpts = [['C', t('skinSettings.tempC')], ['F', t('skinSettings.tempF')]];
+async function pickTempUnit() {
+  const v = await openChooser({ title: t('skinSettings.tempUnit'), options: tempUnitOpts, current: skinSettings.tempUnit });
+  if (v != null) saveSkinSetting('tempUnit', v);
+}
+
+// Whole-skin zoom, applied to the root font size every rem in app.css is built
+// on — so the controls grow with the type rather than the text outgrowing its
+// buttons. Percentages, because that is what the setting means.
+const uiScaleOpts = [[85, '85%'], [100, '100%'], [115, '115%'], [130, '130%']];
+async function pickUiScale() {
+  const v = await openChooser({
+    title: t('skinSettings.uiScale'),
+    options: uiScaleOpts.map(([value, label]) => [String(value), label]),
+    current: String(skinSettings.uiScale),
+  });
+  if (v != null) saveSkinSetting('uiScale', Number(v));
+}
+
+/* ── Which skin the machine serves ───────────────────────────────────────────
+ * The way out of Nova. Confirmed first, because it replaces the screen the user
+ * is looking at with a different program — and it is not something you undo
+ * from here afterwards; you would have to find the same setting in whatever
+ * skin you landed in.
+ */
+const switching = ref(false);
+async function pickSkin(skin) {
+  if (switching.value || skin.id === activeSkinId.value) return;
+  const ok = await openConfirm({
+    title: t('skinSettings.switchSkin', { name: skin.name || skin.id }),
+    message: t('skinSettings.switchSkinSub'),
+  });
+  if (!ok) return;
+  switching.value = true;
+  try {
+    // Only reached when the new port never came up: the gateway HAS switched,
+    // so the honest report is "it's done, go to it yourself", not an error.
+    if (!(await switchSkin(skin.id))) showToast(t('skinSettings.switchSkinManual'), { position: 'top' });
+  } catch (err) {
+    showToast(err?.message || String(err), { position: 'top' });
+  } finally {
+    switching.value = false;
+  }
 }
 </script>
 
@@ -180,6 +235,38 @@ async function pickReviewAutoClose() {
         <span class="sr-main"><span class="sr-name">{{ t('skinSettings.reviewAutoClose') }}</span><span class="sr-sub">{{ t('skinSettings.reviewAutoCloseSub') }}</span></span>
         <span class="sr-value">{{ autoCloseLabel(skinSettings.shotReviewAutoCloseSec) }}<span class="sr-chev">›</span></span>
       </button>
+      <button class="setting-row as-btn" @click="pickTempUnit">
+        <span class="sr-main"><span class="sr-name">{{ t('skinSettings.tempUnit') }}</span><span class="sr-sub">{{ t('skinSettings.tempUnitSub') }}</span></span>
+        <span class="sr-value">{{ optLabel(tempUnitOpts, skinSettings.tempUnit) }}<span class="sr-chev">›</span></span>
+      </button>
+      <button class="setting-row as-btn" @click="pickUiScale">
+        <span class="sr-main"><span class="sr-name">{{ t('skinSettings.uiScale') }}</span><span class="sr-sub">{{ t('skinSettings.uiScaleSub') }}</span></span>
+        <span class="sr-value">{{ skinSettings.uiScale }}%<span class="sr-chev">›</span></span>
+      </button>
+
+      <!-- Last on the page on purpose: it is the one setting here that leaves
+           Nova, so it should not sit among the ones that adjust it. Only shown
+           when the gateway lists more than this skin — with nothing to switch
+           to, it would be a dead row. -->
+      <template v-if="installedSkins.length > 1">
+        <span class="setting-group-label">{{ t('skinSettings.activeSkin') }}</span>
+        <button
+          v-for="skin in installedSkins"
+          :key="skin.id"
+          class="setting-row as-btn"
+          :disabled="switching"
+          @click="pickSkin(skin)"
+        >
+          <span class="sr-main">
+            <span class="sr-name">{{ skin.name || skin.id }}</span>
+            <span class="sr-sub">{{ skin.version }}</span>
+          </span>
+          <span class="sr-value">
+            {{ skin.id === activeSkinId ? t('skinSettings.skinActive') : '' }}
+            <span v-if="skin.id !== activeSkinId" class="sr-chev">›</span>
+          </span>
+        </button>
+      </template>
     </div>
   </div>
 </template>

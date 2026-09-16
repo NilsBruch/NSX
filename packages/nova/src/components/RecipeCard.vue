@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
 import StarRating from './StarRating.vue';
+import { fmtTemp } from '../composables/useUnits.js';
 
 /**
  * One recipe card's markup, lifted out of RecipeOverlay.vue so RecipeBrowser.vue
@@ -80,7 +81,7 @@ const tags = computed(() => (Array.isArray(props.entry.tags) ? props.entry.tags 
         </div>
         <div class="rp-row">
           <span class="rp-label">{{ t('recipePicker.lTemp') }}</span>
-          <span class="rp-val">{{ num(entry.groupTemp, 0) }} °C</span>
+          <span class="rp-val">{{ fmtTemp(entry.groupTemp) }}</span>
         </div>
       </div>
     </div>

@@ -130,6 +130,31 @@ export async function saveVisualizerSetting(key, value) {
 }
 export const visualizerPlugin = () => plugins.value.find((p) => p.id === VISUALIZER_ID);
 
+/* ── Any plugin, from its own schema ──────────────────────────────────────────
+ * The Visualizer above is hand-written because it is the one nearly everyone
+ * uses and it earns tailored copy. Every OTHER plugin describes its settings
+ * itself (core's getPluginSchema), so one generic detail page covers the ones
+ * that exist today and the ones that don't yet.
+ */
+export const pluginValues = ref({});      // wire name -> stored value, for the open plugin
+export const pluginSecrets = reactive({}); // wire name -> "a secret is stored", never the secret
+
+export async function loadPluginDetail(id) {
+  const values = (await NSXCore.loadPluginSettings(id)) || {};
+  pluginValues.value = values;
+  for (const key of Object.keys(pluginSecrets)) delete pluginSecrets[key];
+  for (const field of NSXCore.getPluginSchema(plugins.value.find((p) => p.id === id))) {
+    if (field.secure) pluginSecrets[field.key] = NSXCore.isPluginSecretSet(values, field.key);
+  }
+}
+
+export async function savePluginDetailSetting(id, field, value) {
+  await NSXCore.savePluginSetting(id, field.key, value);
+  // A secret is never held locally — all the UI may know is that one is stored.
+  if (field.secure) pluginSecrets[field.key] = value !== '';
+  else pluginValues.value = { ...pluginValues.value, [field.key]: value };
+}
+
 export const appSettings = reactive({});
 export const machineSettings = reactive({});
 export const advancedSettings = reactive({});
@@ -281,6 +306,53 @@ export function installAppUpdate() {
   }
 }
 
+/* ── Which skin the gateway serves ────────────────────────────────────────── */
+
+export const installedSkins = ref([]);
+export const activeSkinId = ref(null);
+
+export async function loadInstalledSkins(force = false) {
+  installedSkins.value = await NSXCore.loadSkins(force);
+  activeSkinId.value = await NSXCore.loadActiveSkinId();
+  return installedSkins.value;
+}
+
+/**
+ * Switch the gateway to another skin and go there.
+ *
+ * The new skin is served on a fresh port, so core reads back where it landed
+ * and hands us a URL; a same-frame assign is the only navigation that works on
+ * the tablet's webview, which has no second window to open. A null url means
+ * the switch happened but the new port never appeared — say so rather than
+ * navigate somewhere wrong, since a wrong guess lands the user back in the skin
+ * they just left and looks like the switch failed.
+ * @returns {Promise<boolean>} whether we are navigating
+ */
+export async function switchSkin(skinId) {
+  const { url } = await NSXCore.switchToSkin(skinId);
+  if (!url) return false;
+  window.location.assign(url);
+  return true;
+}
+
+/* ── Wi-Fi scales and pairings ────────────────────────────────────────────── */
+
+export const wifiScales = ref([]);
+
+export async function loadWifiScales() {
+  wifiScales.value = await NSXCore.loadWifiScales();
+}
+export async function addWifiScale(host) {
+  wifiScales.value = await NSXCore.addWifiScale(host);
+}
+export async function removeWifiScale(host) {
+  wifiScales.value = await NSXCore.removeWifiScale(host);
+}
+/** Forget a pairing for good — the device leaves the list until found again. */
+export async function forgetDevice(deviceId) {
+  devices.value = mapDevices(await NSXCore.forgetDevice(deviceId));
+}
+
 /**
  * Have the gateway download the newest skin files, then reload into them.
  *
@@ -364,6 +436,15 @@ export const skinSettings = reactive({
   // button at the bottom, instead of the single-recipe dial layout. OFF by
   // default so the classic page is what everyone keeps seeing.
   coffeeGraph: false,
+  // 'C' | 'F' — the unit every temperature in the skin is SHOWN and ENTERED in.
+  // The gateway is Celsius-only, so this never leaves the skin: core's units
+  // domain converts at the edges (see useUnits.js).
+  tempUnit: 'C',
+  // Whole-skin zoom as a percentage. app.css sizes everything off one root
+  // font size, so this is a single multiplier rather than a per-element size —
+  // and it deliberately scales the layout with the type, since a tablet
+  // mounted at arm's length needs the controls bigger, not just the labels.
+  uiScale: 100,
 });
 const SKIN_KEYS = {
   wakeOnUnlock: 'nova_wake_on_unlock',
@@ -380,6 +461,8 @@ const SKIN_KEYS = {
   graphMode: 'nova_graph_mode',
   showTags: 'nova_show_tags',
   coffeeGraph: 'nova_coffee_graph',
+  tempUnit: 'nova_temp_unit',
+  uiScale: 'nova_ui_scale',
 };
 export function loadSkinSettings() {
   const s = NSXCore.getStore();
@@ -408,6 +491,8 @@ export function loadSkinSettings() {
   skinSettings.graphMode = s.nova_graph_mode || 'normal';
   skinSettings.showTags = s.nova_show_tags !== false; // default on
   skinSettings.coffeeGraph = s.nova_coffee_graph === true; // default off
+  skinSettings.tempUnit = s.nova_temp_unit === 'F' ? 'F' : 'C';
+  skinSettings.uiScale = s.nova_ui_scale != null ? Number(s.nova_ui_scale) : 100;
 }
 export async function saveSkinSetting(key, value) {
   skinSettings[key] = value;

@@ -17,6 +17,7 @@ import { grinders } from './useCore.js';
 import { recipe, pushRecipe, setRecipeRating } from './useRecipe.js';
 import { openNumberPad, openRating } from './useModals.js';
 import { useDragDial, DIAL_PX_PER_STEP } from './useDragDial.js';
+import { dispTemp, toCelsius, tempRange, tempUnitLabel } from './useUnits.js';
 
 export function useRecipeDials() {
   const { t } = useI18n();
@@ -54,9 +55,11 @@ export function useRecipeDials() {
     await pushRecipe();
   }
   async function editTemp() {
-    const v = await openNumberPad({ title: t('espresso.stopAtTemp'), unit: '°C', value: String(recipe.groupTemp) });
+    const v = await openNumberPad({ title: t('espresso.stopAtTemp'), unit: tempUnitLabel.value, value: String(dispTemp(recipe.groupTemp)) });
     if (v == null) return;
-    recipe.groupTemp = parseFloat(v);
+    // Back to Celsius immediately: the recipe is pushed to the machine, which
+    // only ever speaks Celsius (see useUnits.js).
+    recipe.groupTemp = toCelsius(parseFloat(v));
     await pushRecipe();
   }
 
@@ -108,11 +111,13 @@ export function useRecipeDials() {
   });
   const onYieldClick = yieldDrag.guardClick(editYield);
 
+  // Display units while dragging, Celsius on release — the number under the
+  // finger and the value stored have to be the same temperature.
   const tempDrag = useDragDial({
-    get: () => recipe.groupTemp,
-    set: (v) => { recipe.groupTemp = v; },
+    get: () => dispTemp(recipe.groupTemp),
+    set: (v) => { recipe.groupTemp = toCelsius(v); },
     onCommit: () => pushRecipe(),
-    min: 80, max: 100, step: 1, pxPerUnit: DIAL_PX_PER_STEP / 1,
+    ...tempRange(80, 100), pxPerUnit: DIAL_PX_PER_STEP / 1,
   });
   const onTempClick = tempDrag.guardClick(editTemp);
 

@@ -36,6 +36,7 @@ import BatchPicker from '../BatchPicker.vue';
 import BeanChooser from '../BeanChooser.vue';
 import ProfilePicker from '../ProfilePicker.vue';
 import StarRating from '../StarRating.vue';
+import { dispTemp, fmtTemp, toCelsius, tempUnitLabel } from '../../composables/useUnits.js';
 
 const props = defineProps({ entry: { type: Object, required: true } });
 const emit = defineEmits(['close']);
@@ -89,9 +90,9 @@ async function editYield() {
   else await patchRecipeEntry(props.entry.id, { targetYield: value });
 }
 async function editTemp() {
-  const v = await openNumberPad({ title: t('espresso.stopAtTemp'), unit: '°C', value: String(source.value.groupTemp) });
+  const v = await openNumberPad({ title: t('espresso.stopAtTemp'), unit: tempUnitLabel.value, value: String(dispTemp(source.value.groupTemp)) });
   if (v == null) return;
-  const value = parseFloat(v);
+  const value = toCelsius(parseFloat(v));
   if (isLoaded.value) { recipe.groupTemp = value; await pushRecipe(); }
   else await patchRecipeEntry(props.entry.id, { groupTemp: value });
 }
@@ -213,7 +214,7 @@ async function removeThis() {
       </div>
       <button class="phone-list-row" @click="editTemp">
         <span class="rmeta">{{ t('espresso.stopAtTemp') }}</span>
-        <span class="phone-row-value">{{ source.groupTemp }} °C<span class="chev">›</span></span>
+        <span class="phone-row-value">{{ fmtTemp(source.groupTemp) }}<span class="chev">›</span></span>
       </button>
       <button v-if="!singleGrinder" class="phone-list-row" @click="pickGrinder">
         <span class="rmeta">{{ t('espresso.grinder') }}</span>

@@ -9,6 +9,7 @@ import { skinSettings } from '../composables/useSettings.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import StarRating from './StarRating.vue';
+import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 
 /**
  * The classic coffee page: the recipe's whole identity in one tappable title
@@ -158,7 +159,7 @@ const roastLabel = computed(() =>
               @pointerup="tempDrag.onPointerUp"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.thermo"></svg><br />
-              <span class="num">{{ recipe.groupTemp }}</span><br /><span class="unit">°C</span>
+              <span class="num">{{ dispTemp(recipe.groupTemp) }}</span><br /><span class="unit">{{ tempUnitLabel }}</span>
             </button>
           </div>
           <!-- Stop-at-weight toggle, text-free: the dimmed yield grams are the

@@ -34,6 +34,7 @@ import './core/domains/profile-simulate.js';
 import './core/domains/profile-render.js';
 import './core/domains/display.js';
 import './core/domains/update.js';
+import './core/domains/units.js';
 
 // translations.js (shared with NSX) defaults to German. Nova is English-only
 // for now (see the design log) — core functions that read window.NSXI18n?.t

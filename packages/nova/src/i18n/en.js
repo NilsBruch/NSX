@@ -152,8 +152,8 @@ export default {
     // threshold, and its "seconds" field is more of a safety cap. Only when a
     // frame carries no exit condition at all does the timer become the real
     // reason it ends, hence the separate "for {seconds}s" fallback.
-    stageUntil: 'At {temp}°C, {pump} {value} until {exit}',
-    stageFor: 'At {temp}°C, {pump} {value} for {seconds}s',
+    stageUntil: 'At {temp}, {pump} {value} until {exit}',
+    stageFor: 'At {temp}, {pump} {value} for {seconds}s',
     exitPressureOver: 'pressure over {value} bar',
     exitPressureUnder: 'pressure under {value} bar',
     exitFlowOver: 'flow over {value} ml/s',
@@ -398,6 +398,13 @@ export default {
     tareFailed: 'Tare failed', controlFailed: 'Command failed',
   },
   machineSettings: {
+    pairings: 'Paired devices',
+    forget: 'Tap to forget', remove: 'Remove',
+    forgetDevice: 'Forget {name}?',
+    forgetDeviceSub: 'The machine stops connecting to it. To use it again, put it in pairing mode and scan.',
+    wifiScale: 'Wi-Fi scale', addWifiScale: 'Add Wi-Fi scale',
+    wifiScaleHint: 'Hostname or IP address',
+    removeWifiScale: 'Remove {host}?',
     connections: 'Connections', connectedDevices: 'Connected devices', machine: 'Machine', scale: 'Scale', scan: 'Scan',
     none: '— None —',
     preferredMachine: 'Preferred machine', preferredScale: 'Preferred scale', autoConnect: 'Auto-connect on startup',
@@ -439,6 +446,13 @@ export default {
   },
   skinSettings: {
     ui: 'UI',
+    tempUnit: 'Temperature', tempUnitSub: 'Shown and entered in this unit; the machine is told Celsius either way',
+    tempC: 'Celsius', tempF: 'Fahrenheit',
+    uiScale: 'Display size', uiScaleSub: 'Scales the whole interface, controls included',
+    activeSkin: 'Active skin', skinActive: 'In use',
+    switchSkin: 'Switch to {name}?',
+    switchSkinSub: 'The machine will serve that skin instead, and this screen goes there now.',
+    switchSkinManual: 'Skin switched. Open the machine’s web interface to reach it.',
     lockscreen: 'Lockscreen', wakeOnUnlock: 'Wake DE1 on unlock', wakeOnUnlockSub: 'Off: unlocking the screen leaves the machine asleep',
     tapToUnlock: 'Tap to wake',
     tapToUnlockSub: 'Off: slide to unlock, so a wipe of the screen can’t dismiss it',
@@ -480,6 +494,11 @@ export default {
     gmDisabled: 'Disabled', gmTracking: 'Tracking', gmFull: 'Full',
     logLevel: 'Log level', autoUpdate: 'Automatic update checks',
     integrations: 'Integrations', visualizer: 'Visualizer',
+    plugins: 'Plugins', pluginsSub: 'Everything else the machine has loaded',
+    pluginEnabled: 'Enabled', pluginOn: 'On', pluginOff: 'Off',
+    pluginSaved: 'Saved',
+    noPlugins: 'No plugins installed',
+    noPluginSettings: 'This plugin has nothing to configure.',
     vizEnabled: 'Enabled', vizUser: 'Username', vizPass: 'Password',
     // The gateway redacts stored secrets, so the row can say "saved" but never show it.
     vizPassSaved: 'Saved',

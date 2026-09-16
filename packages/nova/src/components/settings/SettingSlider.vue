@@ -31,6 +31,10 @@ const props = defineProps({
   // an inactive limit reads as off rather than as a real cap of zero. Left
   // null for sliders where 0 is a genuine value (e.g. frame index 0).
   offLabel: { type: String, default: null },
+  // Which displayed value MEANS off. 0 for everything measured from zero; a
+  // temperature track in Fahrenheit needs 32, since that is where its own floor
+  // sits and the Celsius zero it converts back to is what turns the limit off.
+  offValue: { type: Number, default: 0 },
   // Track only, no label and no value button — for a caller that has already
   // put both in its own header row (see DisplayWidget) and just wants the
   // full width for the track.
@@ -77,7 +81,7 @@ const numericDisplay = computed(() => (hasValue.value ? shown.value.toFixed(prop
 const display = computed(() => {
   // "Off" wins over everything, including mid-drag: dragging to the floor
   // should say so immediately, not read as a 0 g cap.
-  if (props.offLabel != null && hasValue.value && shown.value === 0) return props.offLabel;
+  if (props.offLabel != null && hasValue.value && shown.value === props.offValue) return props.offLabel;
   return dragValue.value === null && props.textValue != null ? props.textValue : numericDisplay.value;
 });
 

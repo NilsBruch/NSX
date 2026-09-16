@@ -5,6 +5,8 @@
  * (NSXCore.normalizeFrameExit); this file only adds i18n phrase-building on
  * top, which can't live in core (core has no i18n of its own).
  */
+import { fmtTemp } from './useUnits.js';
+
 const { NSXCore } = window;
 
 export function frames(p) {
@@ -28,7 +30,9 @@ function exitPhrase(exit, t) {
  *  safety cap than the real stop reason whenever an exit is set. Falls back
  *  to a plain duration only when the frame carries no exit condition. */
 export function frameDetailText(f, t) {
-  const temp = Number(f?.temperature || 0).toFixed(0);
+  // Formatted, not bare: the sentence reads 'At 93°C, ...' and the unit is
+  // part of what the frame says, so it follows the skin's temperature setting.
+  const temp = fmtTemp(f?.temperature || 0);
   const pump = f?.pump === 'flow' ? t('profilePicker.pumpFlow') : t('profilePicker.pumpPressure');
   const value = f?.pump === 'flow' ? `${Number(f?.flow || 0).toFixed(1)} ml/s` : `${Number(f?.pressure || 0).toFixed(1)} bar`;
   const exit = exitPhrase(NSXCore.normalizeFrameExit(f), t);

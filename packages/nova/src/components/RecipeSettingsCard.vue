@@ -20,6 +20,7 @@ import { useI18n } from 'vue-i18n';
 import { formatShortDate } from '../composables/useCore.js';
 import { recipe, roastAge } from '../composables/useRecipe.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
+import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 
 const emit = defineEmits(['open-roast']);
 const { t } = useI18n();
@@ -99,7 +100,7 @@ const ICONS = {
         @pointerup="tempDrag.onPointerUp"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.thermo"></svg>
-        <span class="rq-num">{{ recipe.groupTemp }}<span class="rq-unit">°C</span></span>
+        <span class="rq-num">{{ dispTemp(recipe.groupTemp) }}<span class="rq-unit">{{ tempUnitLabel }}</span></span>
         <span class="rq-label">{{ t('espresso.temp') }}</span>
       </button>
     </div>

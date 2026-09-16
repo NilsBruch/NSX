@@ -31,6 +31,7 @@ import { formatClock } from '../utils/clock.js';
 import RecipeCard from './RecipeCard.vue';
 import RecipeSettingsCard from './RecipeSettingsCard.vue';
 import ShotStripChart from './ShotStripChart.vue';
+import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 
 // pick-bean/pick-grinder/pick-profile: same three EspressoView already binds
 // for RecipeOverlay's identity bubbles (showBeanChooser/pickGrinder/
@@ -340,7 +341,7 @@ const stepperDetail = computed(() => {
           <i><span class="sw" style="background:#5fb8a5"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
           <i><span class="sw" style="background:#7fa8c9"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
           <i><span class="sw" style="background:#ad7648"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
-          <i><span class="sw" style="background:#e8846f"></span>{{ t('liveShot.mTemp') }}<b v-if="scrub"> {{ fmt(scrubTemp, 0) }}<small>°C</small></b></i>
+          <i><span class="sw" style="background:#e8846f"></span>{{ t('liveShot.mTemp') }}<b v-if="scrub"> {{ dispTemp(scrubTemp) }}<small>{{ tempUnitLabel }}</small></b></i>
         </div>
         <div v-if="!graphShots.length" class="browse-graph-empty">{{ t('liveShot.noShotsYet') }}</div>
       </div>

@@ -47,6 +47,9 @@
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+// Named apart from this file's own tempRange(), which is the axis SCALE in
+// Celsius, not a unit conversion.
+import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 
 const props = defineProps({
   // { elapsed, pressure, targetPressure, flow, targetFlow, weightFlow } —
@@ -115,7 +118,10 @@ const LEGEND = [
   { key: 'pressure', color: X_COLORS.pressure, label: 'liveShot.mPressure', unit: 'bar' },
   { key: 'flow', color: X_COLORS.flow, label: 'liveShot.mFlow', unit: 'ml/s' },
   { key: 'weight', color: X_COLORS.weight, label: 'liveShot.mWflow', unit: 'g/s' },
-  { key: 'temperature', color: X_COLORS.temperature, label: 'liveShot.mTemp', unit: '°C' },
+  // No unit here: the temperature one follows the skin's setting, so the
+  // template reads tempUnitLabel for this row. A ref parked in a plain array
+  // would not unwrap in the template anyway.
+  { key: 'temperature', color: X_COLORS.temperature, label: 'liveShot.mTemp', unit: '' },
 ];
 
 /** The scrubbed sample's value per legend entry, so the expert legend doubles
@@ -411,7 +417,8 @@ function drawExpert(g, gridColor, windowStart) {
   for (let i = 0; i <= 4; i++) {
     const v = tlo + tStep * i;
     ctx.fillStyle = X_COLORS.temperature;
-    ctx.fillText(`${Math.round(v)}°`, px + pw + 6, yTemp(v));
+    // Plotted in Celsius, labelled in whatever the user reads.
+    ctx.fillText(`${dispTemp(v)}°`, px + pw + 6, yTemp(v));
   }
 
   // Time along the bottom. Live: the labels scroll WITH the data (the window
@@ -538,7 +545,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf));
         @click="shown[s.key] = !shown[s.key]"
       >
         <span class="sw" :style="{ background: s.color }"></span>{{ t(s.label) }}
-        <b v-if="scrubbed && shown[s.key]">{{ fmtLegend(scrubbed[s.key], s.key === 'temperature' ? 0 : 1) }}<small>{{ s.unit }}</small></b>
+        <b v-if="scrubbed && shown[s.key]">{{ s.key === 'temperature' ? fmtLegend(dispTemp(scrubbed[s.key]), 0) : fmtLegend(scrubbed[s.key], 1) }}<small>{{ s.key === 'temperature' ? tempUnitLabel : s.unit }}</small></b>
       </button>
       <button class="sl-chip sl-goals" :class="{ off: !shown.goals }" :aria-pressed="shown.goals" @click="shown.goals = !shown.goals">
         {{ t('liveShot.goals') }}
