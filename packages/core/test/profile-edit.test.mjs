@@ -449,16 +449,35 @@ test("a bundled profile saved untouched is NOT an execution change", () => {
   assert.equal(NSXCore.isUnchangedProfileCopy(built, BUNDLED), true, "and so the copy is refused");
 });
 
-test("editing frame temperatures moves groupTemp with them", () => {
-  // Regression: the editor's temperature slider edits the SELECTED FRAME, and
-  // draft.groupTemp keeps whatever the profile read as on open. Writing that
-  // back left the profile claiming 93 while its steps ran 95 — and
-  // buildGatewayPayload shifts frames by (dialed - groupTemp), so a recipe
-  // dialed to 95 pushed that profile at 97.
+test("a frame's temperature is a deviation from groupTemp, not a redefinition of it", () => {
+  // groupTemp is the profile's REFERENCE temperature — the DE1's own shot
+  // settings carry one, and buildGatewayPayload shifts every frame by
+  // (dialed - groupTemp) on push. NSX's editor moves all frames together when
+  // the reference moves, and leaves the reference alone when one frame is
+  // edited; a frame sitting above or below it is the point of a frame.
+  // Deriving groupTemp from the first step instead would re-baseline every
+  // profile whose frames vary — and every recipe pushing one.
   const draft = draftOf(BUNDLED);
-  draft.frames.forEach((f) => { f.temperature = 95; });
+  draft.frames[0].temperature = 95;
   const built = NSXCore.buildProfileFromDraft(draft, BUNDLED);
-  assert.deepEqual(built.steps.map((s) => s.temperature), [95, 95]);
-  assert.equal(built.groupTemp, 95, "the profile must not claim a temperature its steps do not run");
-  assert.equal(NSXCore.profileHasExecutionChanges(built, BUNDLED), true, "and it IS a real change");
+  assert.deepEqual(built.steps.map((s) => s.temperature), [95, 93]);
+  assert.equal(built.groupTemp, 93, "the reference stays where the profile put it");
+  assert.equal(NSXCore.profileHasExecutionChanges(built, BUNDLED), true, "the frame change is still a real change");
+});
+
+test("a profile whose reference differs from its first frame survives a resave", () => {
+  // The case deriving groupTemp from step one would have broken: reference 93,
+  // frames deliberately 90/96 around it.
+  const varied = {
+    title: "Varied",
+    groupTemp: 93,
+    steps: [
+      { name: "a", pump: "flow", flow: 8, seconds: 1, temperature: 90, sensor: "coffee" },
+      { name: "b", pump: "pressure", pressure: 9, seconds: 20, temperature: 96, sensor: "coffee" },
+    ],
+  };
+  const draft = { ...draftOf(varied), groupTemp: 93 };
+  const built = NSXCore.buildProfileFromDraft(draft, varied);
+  assert.equal(built.groupTemp, 93);
+  assert.equal(NSXCore.profileHasExecutionChanges(built, varied), false, "an untouched resave changes nothing");
 });

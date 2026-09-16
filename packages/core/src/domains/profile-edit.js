@@ -292,17 +292,14 @@
     profile.title = draft.title;
     profile.author = draft.author;
     profile.notes = draft.notes;
-    // Resolved from the steps that were just built, NOT carried over from
-    // draft.groupTemp. The editor has no group-temperature control — its
-    // temperature slider edits the SELECTED FRAME — so draft.groupTemp still
-    // holds whatever the profile read as when it opened. Writing that back made
-    // the saved profile claim one temperature while its steps ran another, and
-    // buildGatewayPayload takes this field as the baseline it shifts frames
-    // from: a profile edited from 93 to 95, pushed by a recipe dialed to 95,
-    // came out at 97.
-    profile.groupTemp = steps
-      .map((step) => Number(step?.temperature))
-      .find((t) => Number.isFinite(t) && t > 0) ?? draft.groupTemp;
+    // The profile's REFERENCE temperature, kept as the draft holds it — not
+    // derived from the steps. A frame's temperature is a deliberate deviation
+    // from this reference (NSX's editor shifts every frame by the delta when
+    // the reference moves, and leaves it alone when a single frame is edited),
+    // and buildGatewayPayload shifts frames by (dialed − groupTemp) on push.
+    // Deriving it from the first step would silently re-baseline every profile
+    // whose frames vary, and with them every recipe that uses one.
+    profile.groupTemp = draft.groupTemp;
     profile.beverage_type = String(draft.beverageType || orig.beverage_type || "espresso");
     profile.tank_temperature = draft.limits.tankTempEnabled ? draft.limits.tankTempValue : 0;
     profile.target_weight = draft.limits.stopWeightEnabled ? draft.limits.stopWeightValue : 0;
