@@ -12,10 +12,9 @@ import {
   wifiScales, loadWifiScales, addWifiScale, removeWifiScale,
   appSettings, loadAppSettings, saveAppSetting,
   machineSettings, loadMachineSettings, saveMachineSetting,
-  loadPlugins, visualizerPlugin, plugins,
+  loadPlugins, plugins,
 } from '../../composables/useSettings.js';
 import { showToast } from '../../composables/useToast.js';
-import VisualizerPanel from './VisualizerPanel.vue';
 import PluginsPanel from './PluginsPanel.vue';
 
 defineEmits(['close']);
@@ -156,11 +155,9 @@ async function pickLogLevel() {
   if (v != null) saveAppSetting('logLevel', v);
 }
 
-const showVisualizer = ref(false);
 const showPlugins = ref(false);
-// The Visualizer has a panel of its own; this counts what else is installed, so
-// the Plugins row can say whether opening it is worth the trip.
-const otherPluginCount = computed(() => plugins.value.filter((p) => p.id !== 'visualizer.reaplugin').length);
+// How many there are to configure, so the row says whether it is worth the trip.
+const pluginCount = computed(() => plugins.value.length);
 </script>
 
 <template>
@@ -190,6 +187,28 @@ const otherPluginCount = computed(() => plugins.value.filter((p) => p.id !== 'vi
       <button class="setting-row as-btn" @click="pickScalePowerMode">
         <span class="sr-main"><span class="sr-name">{{ t('machineSettings.scalePower') }}</span><span class="sr-sub">{{ t('machineSettings.spSub') }}</span></span>
         <span class="sr-value">{{ optLabel(scalePowerOpts, appSettings.scalePowerMode) }}<span class="sr-chev">›</span></span>
+      </button>
+
+      <!-- Pairings and network scales: which devices this machine keeps
+           reaching for, as opposed to what is connected right now. -->
+      <span class="setting-group-label">{{ t('machineSettings.pairings') }}</span>
+      <button v-for="d in orderedDevices" :key="d.id" class="setting-row as-btn" @click="forget(d)">
+        <span class="sr-main">
+          <span class="sr-name">{{ d.name || d.id }}</span>
+          <span class="sr-sub">{{ t('machineSettings.forget') }}</span>
+        </span>
+        <span class="sr-value muted">{{ d.connected ? t('settingsPage.connected') : t('settingsPage.disconnected') }}</span>
+      </button>
+      <button v-for="host in wifiScales" :key="host" class="setting-row as-btn" @click="removeScale(host)">
+        <span class="sr-main">
+          <span class="sr-name">{{ host }}</span>
+          <span class="sr-sub">{{ t('machineSettings.wifiScale') }}</span>
+        </span>
+        <span class="sr-value muted">{{ t('machineSettings.remove') }}</span>
+      </button>
+      <button class="setting-row as-btn" @click="addScale">
+        <span class="sr-name">{{ t('machineSettings.addWifiScale') }}</span>
+        <span class="sr-value"><span class="sr-chev">›</span></span>
       </button>
 
       <span class="setting-group-label">{{ t('appSettings.powerCharging') }}</span>
@@ -234,45 +253,18 @@ const otherPluginCount = computed(() => plugins.value.filter((p) => p.id !== 'vi
         <button class="switch" :class="{ on: appSettings.automaticUpdateCheck }" role="switch" :aria-checked="!!appSettings.automaticUpdateCheck" @click="saveAppSetting('automaticUpdateCheck', !appSettings.automaticUpdateCheck)"></button>
       </div>
 
+      <!-- Everything the gateway has loaded, the Visualizer included: one way
+           in, so the same plugin is not listed twice on one page. -->
       <span class="setting-group-label">{{ t('systemSettings.integrations') }}</span>
-      <button class="setting-row as-btn" @click="showVisualizer = true">
-        <span class="sr-name">{{ t('systemSettings.visualizer') }}</span>
-        <span class="sr-value muted">{{ visualizerPlugin()?.loaded ? t('settingsPage.connected') : '' }}<span class="sr-chev">›</span></span>
-      </button>
-      <!-- Everything else the gateway has loaded, configured from each plugin's
-           own schema — see PluginsPanel. -->
       <button class="setting-row as-btn" @click="showPlugins = true">
         <span class="sr-main">
           <span class="sr-name">{{ t('systemSettings.plugins') }}</span>
           <span class="sr-sub">{{ t('systemSettings.pluginsSub') }}</span>
         </span>
-        <span class="sr-value muted">{{ otherPluginCount || '' }}<span class="sr-chev">›</span></span>
-      </button>
-
-      <!-- Pairings and network scales: which devices this machine keeps
-           reaching for, as opposed to what is connected right now. -->
-      <span class="setting-group-label">{{ t('machineSettings.pairings') }}</span>
-      <button v-for="d in orderedDevices" :key="d.id" class="setting-row as-btn" @click="forget(d)">
-        <span class="sr-main">
-          <span class="sr-name">{{ d.name || d.id }}</span>
-          <span class="sr-sub">{{ t('machineSettings.forget') }}</span>
-        </span>
-        <span class="sr-value muted">{{ d.connected ? t('settingsPage.connected') : t('settingsPage.disconnected') }}</span>
-      </button>
-      <button v-for="host in wifiScales" :key="host" class="setting-row as-btn" @click="removeScale(host)">
-        <span class="sr-main">
-          <span class="sr-name">{{ host }}</span>
-          <span class="sr-sub">{{ t('machineSettings.wifiScale') }}</span>
-        </span>
-        <span class="sr-value muted">{{ t('machineSettings.remove') }}</span>
-      </button>
-      <button class="setting-row as-btn" @click="addScale">
-        <span class="sr-name">{{ t('machineSettings.addWifiScale') }}</span>
-        <span class="sr-value"><span class="sr-chev">›</span></span>
+        <span class="sr-value muted">{{ pluginCount || '' }}<span class="sr-chev">›</span></span>
       </button>
     </div>
 
-    <VisualizerPanel v-if="showVisualizer" @close="showVisualizer = false" />
     <PluginsPanel v-if="showPlugins" @close="showPlugins = false" />
   </div>
 </template>

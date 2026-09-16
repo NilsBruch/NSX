@@ -5,9 +5,12 @@
  *
  * A plugin describes its settings itself ({ type, label, description, secure,
  * default } per key, see core's getPluginSchema), so this page can configure a
- * plugin that did not exist when the skin was built. The Visualizer keeps its
- * hand-written panel: it is the one nearly everyone uses, and tailored copy is
- * worth it there — this is what the other dozen get instead of nothing.
+ * plugin that did not exist when the skin was built.
+ *
+ * The Visualizer is the exception, and opens its own hand-written panel from
+ * this list: it is the one nearly everyone uses, so it earns tailored copy —
+ * but it is reached from here like every other plugin, rather than being listed
+ * a second time next to them.
  *
  * Secrets are never shown. From Decaid 0.7.17-beta.4 the gateway answers a
  * secure field with "a value is set" and not the value, so the row reads
@@ -21,6 +24,9 @@ import {
   pluginValues, pluginSecrets, loadPluginDetail, savePluginDetailSetting,
 } from '../../composables/useSettings.js';
 import { showToast } from '../../composables/useToast.js';
+import VisualizerPanel from './VisualizerPanel.vue';
+
+const VISUALIZER_ID = 'visualizer.reaplugin';
 
 const { NSXCore } = window;
 
@@ -29,6 +35,7 @@ const { t } = useI18n();
 
 // null = the list; otherwise the plugin being configured.
 const open = ref(null);
+const showVisualizer = ref(false);
 
 onMounted(loadPlugins);
 
@@ -54,6 +61,7 @@ function displayValue(field) {
 }
 
 async function openPlugin(plugin) {
+  if (plugin.id === VISUALIZER_ID) { showVisualizer.value = true; return; }
   open.value = plugin;
   try {
     await loadPluginDetail(plugin.id);
@@ -165,5 +173,7 @@ async function toggleEnabled(plugin) {
         <p v-if="!fields.length" class="settings-note">{{ t('systemSettings.noPluginSettings') }}</p>
       </template>
     </div>
+
+    <VisualizerPanel v-if="showVisualizer" @close="showVisualizer = false" />
   </div>
 </template>

@@ -450,6 +450,7 @@ export default {
     tempC: 'Celsius', tempF: 'Fahrenheit',
     uiScale: 'Display size', uiScaleSub: 'Scales the whole interface, controls included',
     activeSkin: 'Active skin', skinActive: 'In use',
+    activeSkinSub: 'Pick which skin the machine serves.',
     switchSkin: 'Switch to {name}?',
     switchSkinSub: 'The machine will serve that skin instead, and this screen goes there now.',
     switchSkinManual: 'Skin switched. Open the machine’s web interface to reach it.',

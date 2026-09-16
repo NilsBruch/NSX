@@ -14,10 +14,22 @@ import {
 } from '../../composables/useSettings.js';
 import { showToast } from '../../composables/useToast.js';
 
-defineEmits(['close']);
+const emit = defineEmits(['close']);
 const { t } = useI18n();
 
 onMounted(loadInstalledSkins);
+
+// 'main' | 'skins' — the installed skins live one level deeper (drill in from a
+// row, same as the Machine page's calibration groups), so this page keeps its
+// length as skins are installed instead of growing a row per skin.
+const view = ref('main');
+const viewTitle = () => (view.value === 'skins' ? t('skinSettings.activeSkin') : t('settingsPage.skin'));
+function goBack() { if (view.value === 'main') emit('close'); else view.value = 'main'; }
+
+const activeSkinName = () => {
+  const skin = installedSkins.value.find((x) => x.id === activeSkinId.value);
+  return skin?.name || skin?.id || '—';
+};
 
 // The three token blocks in app.css, in the order the segmented control shows
 // them. 'midnight' is a second DARK palette (navy-tinted, raised cards), so it
@@ -118,13 +130,14 @@ async function pickSkin(skin) {
 <template>
   <div class="overlay-full">
     <div class="ov-top balanced">
-      <button class="ov-back" @click="$emit('close')">
+      <button class="ov-back" @click="goBack">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('settingsPage.back') }}
       </button>
-      <span class="ov-title">{{ t('settingsPage.skin') }}</span>
+      <span class="ov-title">{{ viewTitle() }}</span>
     </div>
 
     <div class="settings-scroll">
+      <template v-if="view === 'main'">
       <span class="setting-group-label">{{ t('skinSettings.ui') }}</span>
       <!-- A segmented control rather than a switch: the themes are named
            states, and a switch would force one of them to be the unlabelled
@@ -248,8 +261,16 @@ async function pickSkin(skin) {
            Nova, so it should not sit among the ones that adjust it. Only shown
            when the gateway lists more than this skin — with nothing to switch
            to, it would be a dead row. -->
-      <template v-if="installedSkins.length > 1">
-        <span class="setting-group-label">{{ t('skinSettings.activeSkin') }}</span>
+      <button v-if="installedSkins.length > 1" class="setting-row as-btn" @click="view = 'skins'">
+        <span class="sr-name">{{ t('skinSettings.activeSkin') }}</span>
+        <span class="sr-value">{{ activeSkinName() }}<span class="sr-chev">›</span></span>
+      </button>
+      </template>
+
+      <!-- One row per installed skin, a page of their own: the list grows with
+           every skin installed, and the settings above it should not. -->
+      <template v-else-if="view === 'skins'">
+        <p class="settings-note">{{ t('skinSettings.activeSkinSub') }}</p>
         <button
           v-for="skin in installedSkins"
           :key="skin.id"
