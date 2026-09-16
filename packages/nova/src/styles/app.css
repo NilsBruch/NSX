@@ -2393,10 +2393,16 @@ a.sw-update { text-decoration: none; }
 .sort-btn.icon-only { padding: 8px; width: 38px; justify-content: center; }
 .sort-btn.icon-only svg { width: 18px; height: 18px; }
 /* Matches .ov-back's own size exactly — for headers where these sit right
-   next to Back and should read as equally-weighted actions. */
-.sort-btn.lg { padding: 11px 16px; font-size: var(--fs-sm); text-transform: uppercase; }
-.sort-btn.lg.icon-only { width: auto; padding: 11px; }
+   next to Back and should read as equally-weighted actions. The min-height is
+   what keeps an icon-only one the same height as a texted one beside it: the
+   text sets the height of the others, so without it the icon button sat a few
+   pixels shorter than the button it shares a row with. */
+.sort-btn.lg { padding: 11px 16px; font-size: var(--fs-sm); text-transform: uppercase; min-height: 44px; }
+/* Wider than the icon needs: it is a bare glyph with no word to aim at, and at
+   a machine you touch with wet hands the target is the whole point. */
+.sort-btn.lg.icon-only { width: auto; min-width: 64px; padding: 11px 20px; }
 .sort-btn.lg svg { width: 15px; height: 15px; }
+.sort-btn.lg.icon-only svg { width: 18px; height: 18px; }
 
 .seg { position: relative; display: flex; background: var(--card-bg); border-radius: var(--r-md); padding: 4px; }
 .seg .seg-thumb {
