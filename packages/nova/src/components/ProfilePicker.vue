@@ -132,8 +132,9 @@ const entries = computed(() => {
 
 // Delete/hide act on the SELECTED profile, alongside Edit in the detail
 // pane's action row — not per-row list buttons. Delete is Custom-only
-// (Decent defaults can only be copied, never removed, per the DE1's own
-// rule) and confirms first: unlike the old per-row trash icon (which had a
+// (Decent defaults can only be copied or hidden, never removed or changed in
+// place, per the DE1's own rule — Edit copies one, see openEditProfile) and
+// confirms first: unlike the old per-row trash icon (which had a
 // "toggle edit mode, then tap" two-step guard built in), this is now a
 // single top-level tap, so a confirm step replaces that lost friction. Hide
 // applies to BOTH tabs — a Decent default can be hidden just as well as a
@@ -250,10 +251,10 @@ const editingRecord = ref(null); // null = new profile
 const presetSourceId = ref(null);
 
 // Tapping "+ New" no longer jumps straight into a blank editor — it asks
-// blank vs. from an existing profile first (any Decent default can only ever
-// be copied, never edited in place; this makes copying a REGULAR way to start
-// a new profile too, not something that only implicitly happens by hitting
-// Edit on a default — see openEditProfile's removal below).
+// blank vs. from an existing profile first. Editing a default copies it too
+// (see openEditProfile), but the two are different intents: this one starts
+// from a profile and expects a new one; that one starts from a profile you
+// wanted to change and discovers it cannot be changed.
 async function newProfileChoice() {
   const v = await openChooser({
     title: t('profilePicker.newProfileChoiceTitle'),
@@ -286,10 +287,12 @@ function useSelectedAsPreset() {
   showEditor.value = true;
 }
 function openEditProfile() {
-  // Decent defaults can't be edited in place at all (see the save-branch
-  // comment below) — the template hides this button for them, but guard here
-  // too so a stray call can't slip a default into the PUT/execution-change path.
-  if (!selected.value || selected.value.isDefault) return;
+  // A Decent default opens here too. It is never edited in place — the editor
+  // says so (its Save reads "Save copy") and saveLibraryProfile forks it,
+  // leaving the original alone — but "open it, change something, keep it" is
+  // what people mean by Edit, and refusing to open it only made them hunt for
+  // "New -> From preset" to do the same thing.
+  if (!selected.value) return;
   editingRecord.value = selected.value;
   presetSourceId.value = null;
   showEditor.value = true;
@@ -451,10 +454,10 @@ async function onEditorSaved({ profile: built, originalProfile }) {
             <button class="btn" @click="toggleSelectedVisibility">
               {{ selected.visibility === 'hidden' ? t('profilePicker.unhide') : t('profilePicker.hide') }}
             </button>
-            <!-- Decent defaults can't be edited in place at all (see
-                 onEditorSaved) — "New -> From preset" is how you start a new
-                 profile based on one now, not this button. -->
-            <button v-if="isUserOwned(selected)" class="btn accent" @click="openEditProfile">{{ t('common.edit') }}</button>
+            <!-- Shown for a Decent default too: saving one creates your copy
+                 and leaves the original where it is (saveLibraryProfile), and
+                 the editor says as much before you press Save. -->
+            <button class="btn accent" @click="openEditProfile">{{ t('common.edit') }}</button>
           </template>
           <!-- The caller names this: inside the new-recipe wizard the press
                creates the recipe, and "Select profile" would understate what
