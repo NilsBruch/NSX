@@ -1515,6 +1515,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    its own width per position. .seg.pe-tabseg (two classes) is used so the width
    overrides the generic two-tab .seg .seg-thumb rule that comes later in the
    file; data-pos=1 reuses the generic translateX(100%), data-pos=2 is ours. */
+/* Says that Save will fork rather than overwrite (a Decent-shipped profile is
+   immutable). Above the tabs, because it is true of the whole editor, and in
+   the accent so it reads as what this session IS rather than as a warning. */
+.pe-fork-note { align-self: center; max-width: 520px; margin: 6px 0 0; text-align: center; font-size: var(--fs-sm); font-weight: 500; color: var(--accent); }
 .seg.pe-tabseg { align-self: center; width: 340px; flex: none; margin: 2px 0 0; padding: 7px; }
 .seg.pe-tabseg .seg-thumb { top: 7px; bottom: 7px; left: 7px; width: calc(33.333% - 4.667px); }
 .seg.pe-tabseg[data-pos="2"] .seg-thumb { transform: translateX(200%); }

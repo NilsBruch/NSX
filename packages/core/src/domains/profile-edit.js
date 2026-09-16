@@ -326,6 +326,51 @@
     return execSnapshot(builtProfile) !== execSnapshot(originalProfile);
   }
 
+  /**
+   * Did a POST /profiles actually create what we sent, or did the gateway hand
+   * back something that already existed?
+   *
+   * POST is CONTENT-ADDRESSED: the id is a hash of the execution fields, and
+   * title/author/notes are hashed separately. Send a profile whose execution
+   * already exists and the gateway answers 201 with the STORED record — its id,
+   * its title — instead of minting ours. Verified against a live gateway:
+   * re-posting a Decent profile with only the title changed returns the
+   * untouched default, `isDefault: true` and all.
+   *
+   * The response looks like success, so the only reliable tell is comparing
+   * what came back against what was sent. Without this, a skin reports a save
+   * that never happened and then points the recipe at the profile the user was
+   * trying to fork away from.
+   *
+   * @param {object|null} saved   what POST returned
+   * @param {{title: string, avoidId?: string|null}} sent  the title we sent, and
+   *        the record we were forking away from (its id coming back means the
+   *        fork collapsed into its source)
+   * @returns {boolean} true when nothing new was created
+   */
+  function isProfileSaveDeduped(saved, { title, avoidId = null } = {}) {
+    if (!saved) return true;                       // no record at all is a failed save
+    if (avoidId && saved.id === avoidId) return true;
+    return String(saved.profile?.title || "") !== String(title || "");
+  }
+
+  /**
+   * Can this save produce a new record at all?
+   *
+   * A copy of a Decent-shipped profile — or of any profile used as a starting
+   * point — only exists because its EXECUTION differs: rename it and the
+   * content hash is unchanged, so the gateway dedups it back to the original
+   * and the new name is dropped. The honest answer is to refuse before saving,
+   * the way Streamline does, rather than to report a save that silently did
+   * nothing.
+   *
+   * @returns {boolean} true when a fork would be a no-op
+   */
+  function isUnchangedProfileCopy(builtProfile, originalProfile) {
+    if (!originalProfile) return false;            // nothing to be a copy OF
+    return !profileHasExecutionChanges(builtProfile, originalProfile);
+  }
+
   NSXCore.register({
     normalizeProfileFrame,
     normalizeFrameExit,
@@ -336,5 +381,7 @@
     makeDefaultFrame,
     isUserOwnedProfile,
     profileHasExecutionChanges,
+    isProfileSaveDeduped,
+    isUnchangedProfileCopy,
   });
 })();

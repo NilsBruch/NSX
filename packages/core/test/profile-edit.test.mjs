@@ -366,3 +366,52 @@ test("buildProfileFromDraft: writes profile-global limits fields", () => {
   assert.equal(built.target_weight, 36);
   assert.equal(built.target_volume, 0);
 });
+
+/* ── Content-addressed saves: did the POST create anything? ──────────────────
+ * POST /profiles hashes the execution fields, so a profile whose execution
+ * already exists comes back as the STORED record with a 201. Verified against a
+ * live gateway: re-posting a Decent profile with only the title changed returns
+ * the untouched default. These two guards are what keep that from being
+ * reported as a save.
+ */
+
+test("isProfileSaveDeduped: the record we forked away from coming back is not a save", () => {
+  const deduped = { id: "profile:default", profile: { title: "A-Flow / default" } };
+  assert.equal(
+    NSXCore.isProfileSaveDeduped(deduped, { title: "My A-Flow", avoidId: "profile:default" }),
+    true,
+  );
+});
+
+test("isProfileSaveDeduped: an unrelated hash collision is caught by the title", () => {
+  // A different id, but not the profile we sent — the gateway matched some
+  // other stored record's execution hash.
+  const other = { id: "profile:other", profile: { title: "Someone else's profile" } };
+  assert.equal(NSXCore.isProfileSaveDeduped(other, { title: "My A-Flow", avoidId: "profile:default" }), true);
+});
+
+test("isProfileSaveDeduped: a genuinely new record passes", () => {
+  const fresh = { id: "profile:new", profile: { title: "My A-Flow" } };
+  assert.equal(NSXCore.isProfileSaveDeduped(fresh, { title: "My A-Flow", avoidId: "profile:default" }), false);
+  assert.equal(NSXCore.isProfileSaveDeduped(fresh, { title: "My A-Flow" }), false, "no source to avoid");
+});
+
+test("isProfileSaveDeduped: no record at all is a failed save, not a silent success", () => {
+  assert.equal(NSXCore.isProfileSaveDeduped(null, { title: "My A-Flow" }), true);
+  assert.equal(NSXCore.isProfileSaveDeduped(undefined, { title: "My A-Flow" }), true);
+});
+
+test("isUnchangedProfileCopy: a rename-only copy would dedup, so it is refused up front", () => {
+  const renamed = { ...ORIGINAL, title: "My A-Flow" };
+  assert.equal(NSXCore.isUnchangedProfileCopy(renamed, ORIGINAL), true);
+});
+
+test("isUnchangedProfileCopy: an execution change is a real copy", () => {
+  const changed = JSON.parse(JSON.stringify(ORIGINAL));
+  changed.steps[0].temperature = 95;
+  assert.equal(NSXCore.isUnchangedProfileCopy(changed, ORIGINAL), false);
+});
+
+test("isUnchangedProfileCopy: a brand-new profile has nothing to be a copy of", () => {
+  assert.equal(NSXCore.isUnchangedProfileCopy(ORIGINAL, null), false);
+});

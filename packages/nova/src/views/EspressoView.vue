@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, formatGrinderLabel, profiles, profilesAll, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
+import { showToast } from '../composables/useToast.js';
 import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile, beanForRecipe } from '../composables/useRecipe.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
@@ -118,10 +119,17 @@ async function onProfileEditorSaved({ profile: built, originalProfile }) {
     const savedRecord = await saveLibraryProfile({ record: editingProfileRecord.value, built, originalProfile });
     await applyEditedLibraryProfile(savedRecord);
   } catch (err) {
+    // A refusal is not a failure to log and walk away from: the gateway could
+    // not create what was asked for, and the way out is another edit — so say
+    // why and leave the editor open on the work.
+    if (err?.name === 'ProfileSaveRefused') {
+      showToast(t(`profileEditor.refused_${err.reason}`));
+      return;
+    }
     console.error('[Nova] failed to save profile', err?.message);
-  } finally {
-    showProfileEditor.value = false;
+    showToast(t('profileEditor.saveFailed'));
   }
+  showProfileEditor.value = false;
 }
 
 // The bean the loaded recipe stands on — null for a beanUnlinked recipe (its

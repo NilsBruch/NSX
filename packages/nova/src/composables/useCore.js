@@ -124,19 +124,50 @@ export async function refreshProfilesAll(force = false) {
  *   - user-owned + execution changed -> create the new version, retire the old.
  *   - user-owned + metadata only (title/author/notes) -> PUT in place, same id.
  * Returns the saved, normalized record so callers can adopt its (possibly new) id.
+ * Throws ProfileSaveRefused when the gateway cannot create what was asked for —
+ * see below; a caller should show that message and leave the editor open rather
+ * than treat it as a failure to log.
  */
+export class ProfileSaveRefused extends Error {
+  constructor(reason) {
+    super(reason);
+    this.name = 'ProfileSaveRefused';
+    this.reason = reason; // 'unchangedCopy' | 'deduped'
+  }
+}
+
 export async function saveLibraryProfile({ record, built, originalProfile, fromPreset = false, presetSourceId = null }) {
   const originalId = record?.id ?? null;
   const forceNewCopy = fromPreset || record?.isDefault === true;
+  // A copy exists only because its execution differs: POST /profiles is
+  // content-addressed, so renaming a Decent profile without changing it hashes
+  // to the original and comes back as the original (verified on a live
+  // gateway). Refuse here instead of reporting a save that did nothing.
+  if (forceNewCopy && NSXCore.isUnchangedProfileCopy(built, originalProfile)) {
+    throw new ProfileSaveRefused('unchangedCopy');
+  }
+
+  // Every POST branch below has to prove it created something: a 201 carrying
+  // an EXISTING record is how the gateway reports a content collision.
+  const createdOrThrow = async (payload, avoidId) => {
+    const saved = await NSXApi.createProfile(payload);
+    if (NSXCore.isProfileSaveDeduped(saved, { title: built?.title, avoidId })) {
+      throw new ProfileSaveRefused('deduped');
+    }
+    return saved;
+  };
+
   let saved;
   if (forceNewCopy || !record) {
-    saved = await NSXApi.createProfile({
+    saved = await createdOrThrow({
       profile: built,
       parentId: forceNewCopy ? (fromPreset ? presetSourceId : originalId) : null,
       metadata: { source: 'user' },
-    });
+    }, forceNewCopy ? (fromPreset ? presetSourceId : originalId) : null);
   } else if (NSXCore.profileHasExecutionChanges(built, originalProfile)) {
-    saved = await NSXApi.createProfile({ profile: built, parentId: originalId, metadata: { source: 'user' } });
+    // The retire below is why this one must be guarded hardest: a deduped
+    // answer here is the record we are about to delete.
+    saved = await createdOrThrow({ profile: built, parentId: originalId, metadata: { source: 'user' } }, originalId);
     try { await NSXApi.deleteProfile(originalId); } catch (err) {
       console.error('[Nova] could not retire the previous profile version', err?.message);
     }

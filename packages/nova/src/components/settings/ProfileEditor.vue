@@ -26,6 +26,13 @@ import { dispTemp, toCelsius, tempRange, tempUnitLabel } from '../../composables
 const props = defineProps({
   record: { type: Object, default: null }, // profile record being edited, or null = new
 });
+
+// A Decent-shipped profile is immutable: saving an edit to one creates your own
+// copy and leaves the original where it was (useCore's saveLibraryProfile). The
+// library manager hides Edit for these; the coffee page keeps it, because
+// editing the profile your recipe uses is a reasonable thing to want — so the
+// editor has to say which of the two it is doing before you press Save.
+const isFork = computed(() => props.record?.isDefault === true);
 const emit = defineEmits(['close', 'saved']);
 const { t } = useI18n();
 const { NSXCore } = window;
@@ -279,8 +286,10 @@ function save() {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('common.back') }}
       </button>
       <span class="ov-title">{{ draft.title || t('profilePicker.unnamed') }}</span>
-      <button class="sort-btn accent lg" @click="save">{{ t('common.save') }}</button>
+      <button class="sort-btn accent lg" @click="save">{{ isFork ? t('profileEditor.saveCopy') : t('common.save') }}</button>
     </div>
+
+    <p v-if="isFork" class="pe-fork-note">{{ t('profileEditor.forkNotice') }}</p>
 
     <div class="seg pe-tabseg" :data-pos="activeTab === 'info' ? 2 : activeTab === 'limits' ? 1 : 0">
       <span class="seg-thumb"></span>

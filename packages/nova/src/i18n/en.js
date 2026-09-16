@@ -173,6 +173,13 @@ export default {
     useAsStart: 'Use as starting point',
   },
   profileEditor: {
+    // The gateway derives a profile's id from its steps, so a copy that changes
+    // nothing has no identity of its own and comes back as the original.
+    saveCopy: 'Save copy',
+    forkNotice: 'Decent’s own profiles cannot be changed — saving creates your copy and leaves this one as it is.',
+    refused_unchangedCopy: 'Change a setting to save your own copy',
+    refused_deduped: 'That matches a profile the machine already has — nothing was saved',
+    saveFailed: 'Could not save the profile',
     tabSteps: 'Steps',
     tabLimits: 'Limits',
     tabInfo: 'Info',

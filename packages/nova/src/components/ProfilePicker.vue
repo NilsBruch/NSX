@@ -10,6 +10,7 @@
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { profiles, profilesAll, refreshProfiles, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
+import { showToast } from '../composables/useToast.js';
 import { frames, frameDetailText, frameName } from '../composables/useProfileDisplay.js';
 import { openConfirm, openChooser } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
@@ -311,12 +312,18 @@ async function onEditorSaved({ profile: built, originalProfile }) {
     activeGroup.value = 'user';
     selectedId.value = savedRecord?.id ?? null;
   } catch (err) {
+    // Nothing was created, so there is nothing to land on — keep the editor
+    // open with the user's work in it and say what has to change.
+    if (err?.name === 'ProfileSaveRefused') {
+      showToast(t(`profileEditor.refused_${err.reason}`));
+      return;
+    }
     console.error('[Nova] failed to save profile', err?.message);
-  } finally {
-    showEditor.value = false;
-    editingRecord.value = null;
-    presetSourceId.value = null;
+    showToast(t('profileEditor.saveFailed'));
   }
+  showEditor.value = false;
+  editingRecord.value = null;
+  presetSourceId.value = null;
 }
 </script>
 
