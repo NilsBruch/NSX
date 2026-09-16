@@ -415,3 +415,50 @@ test("isUnchangedProfileCopy: an execution change is a real copy", () => {
 test("isUnchangedProfileCopy: a brand-new profile has nothing to be a copy of", () => {
   assert.equal(NSXCore.isUnchangedProfileCopy(ORIGINAL, null), false);
 });
+
+/* ── Group temperature: resolved, never carried over ─────────────────────────
+ * A DE1 profile states its temperature per STEP; `groupTemp` is this skin
+ * family's own top-level field, so every bundled and imported profile arrives
+ * without one. Both of these tests pin a bug that came from treating it as if
+ * it were always present and always current.
+ */
+
+// A bundled profile as the gateway serves it: per-step temperatures, no groupTemp.
+const BUNDLED = {
+  title: "A-Flow / default",
+  steps: [
+    { name: "Pre Fill", pump: "flow", flow: 8, seconds: 1, temperature: 93, sensor: "coffee" },
+    { name: "Extract", pump: "pressure", pressure: 9, seconds: 20, temperature: 93, sensor: "coffee" },
+  ],
+};
+const draftOf = (profile) => ({
+  title: profile.title, author: profile.author || "", notes: profile.notes || "",
+  beverageType: profile.beverage_type || "espresso",
+  // What the editor seeds: the resolved temperature, since there is no stored one.
+  groupTemp: 93,
+  frames: profile.steps.map(NSXCore.normalizeProfileFrame),
+  limits: NSXCore.normalizeProfileLimits(profile, profile.steps),
+});
+
+test("a bundled profile saved untouched is NOT an execution change", () => {
+  // Regression: the built profile carries a resolved groupTemp and the original
+  // carries none, so comparing the field raw made every untouched save of a
+  // Decent profile fork it — leaving a user copy with the same name beside it.
+  const built = NSXCore.buildProfileFromDraft(draftOf(BUNDLED), BUNDLED);
+  assert.equal(NSXCore.profileHasExecutionChanges(built, BUNDLED), false);
+  assert.equal(NSXCore.isUnchangedProfileCopy(built, BUNDLED), true, "and so the copy is refused");
+});
+
+test("editing frame temperatures moves groupTemp with them", () => {
+  // Regression: the editor's temperature slider edits the SELECTED FRAME, and
+  // draft.groupTemp keeps whatever the profile read as on open. Writing that
+  // back left the profile claiming 93 while its steps ran 95 — and
+  // buildGatewayPayload shifts frames by (dialed - groupTemp), so a recipe
+  // dialed to 95 pushed that profile at 97.
+  const draft = draftOf(BUNDLED);
+  draft.frames.forEach((f) => { f.temperature = 95; });
+  const built = NSXCore.buildProfileFromDraft(draft, BUNDLED);
+  assert.deepEqual(built.steps.map((s) => s.temperature), [95, 95]);
+  assert.equal(built.groupTemp, 95, "the profile must not claim a temperature its steps do not run");
+  assert.equal(NSXCore.profileHasExecutionChanges(built, BUNDLED), true, "and it IS a real change");
+});

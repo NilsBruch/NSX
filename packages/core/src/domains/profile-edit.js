@@ -292,7 +292,17 @@
     profile.title = draft.title;
     profile.author = draft.author;
     profile.notes = draft.notes;
-    profile.groupTemp = draft.groupTemp;
+    // Resolved from the steps that were just built, NOT carried over from
+    // draft.groupTemp. The editor has no group-temperature control — its
+    // temperature slider edits the SELECTED FRAME — so draft.groupTemp still
+    // holds whatever the profile read as when it opened. Writing that back made
+    // the saved profile claim one temperature while its steps ran another, and
+    // buildGatewayPayload takes this field as the baseline it shifts frames
+    // from: a profile edited from 93 to 95, pushed by a recipe dialed to 95,
+    // came out at 97.
+    profile.groupTemp = steps
+      .map((step) => Number(step?.temperature))
+      .find((t) => Number.isFinite(t) && t > 0) ?? draft.groupTemp;
     profile.beverage_type = String(draft.beverageType || orig.beverage_type || "espresso");
     profile.tank_temperature = draft.limits.tankTempEnabled ? draft.limits.tankTempValue : 0;
     profile.target_weight = draft.limits.stopWeightEnabled ? draft.limits.stopWeightValue : 0;
@@ -315,10 +325,30 @@
   // representation details (an omitted `limiter` key becomes an explicit
   // `null`, a profile-global range absent on the original becomes an explicit
   // top-level field once resolved, etc.), and none of that is a REAL change.
+  //
+  // groupTemp is RESOLVED on both sides rather than read off the record.
+  // `groupTemp` is this skin family's own top-level field; a DE1 profile states
+  // its temperature per step, so every bundled and imported profile arrives
+  // without one. Reading it raw compared a resolved 93 on the built side
+  // against a missing 0 on the original — so an untouched save of any bundled
+  // profile read as an execution change, forked it, and left a user copy with
+  // the same name beside the original. Same resolution order the editor's own
+  // draft uses (NSXCore.resolveProfileTemp): the stored value, else the first
+  // frame's temperature.
+  function snapshotGroupTemp(profile) {
+    const stored = Number(profile?.groupTemp);
+    if (Number.isFinite(stored) && stored > 0) return stored;
+    for (const frame of extractFrames(profile)) {
+      const t = Number(frame?.temperature);
+      if (Number.isFinite(t) && t > 0) return t;
+    }
+    return 0;
+  }
+
   function execSnapshot(profile) {
     return JSON.stringify({
       frames: extractFrames(profile).map(normalizeProfileFrame),
-      groupTemp: Number(profile?.groupTemp) || 0,
+      groupTemp: snapshotGroupTemp(profile),
       limits: normalizeProfileLimits(profile),
     });
   }
