@@ -22,12 +22,15 @@
  * offline, rate-limited or no releases all resolve to null, which every caller
  * must read as "nothing to report" rather than "up to date".
  *
+ * It also owns the installed-skin list, and therefore which skin the gateway
+ * serves: switching skins is the same list, asked a different question.
+ *
  * Registered on NSXCore:
  *   Selectors: compareVersions(a, b), parseSkinRepo(skin)
  *   Commands:  fetchLatestRelease(repo, {tagPrefix}), clearReleaseCache(),
  *              checkAppUpdate(),
  *              loadSkins(force), findSkin(skinId), checkSkinUpdate(skinId, opts),
- *              installSkinUpdate()
+ *              installSkinUpdate(), loadActiveSkinId(), switchToSkin(skinId)
  */
 (function () {
   const NSXCore = window.NSXCore;
@@ -231,7 +234,64 @@
     return { updated: !!after && after !== before, version: after.replace(/^v/i, "") };
   }
 
+  /* ── Which skin the gateway serves ─────────────────────── */
+
+  /** The id of the skin the gateway currently serves, or null if it won't say. */
+  async function loadActiveSkinId() {
+    const { fetchDefaultSkin } = window.NSXApi || {};
+    if (typeof fetchDefaultSkin !== "function") return null;
+    const skin = await fetchDefaultSkin().catch(() => null);
+    return skin?.id ?? null;
+  }
+
+  /**
+   * Serve a different skin, and say where the browser should go.
+   *
+   * The gateway binds a FRESH port every time it starts serving a folder, so
+   * the URL this page is on is not where the new skin will be — the port has to
+   * be read back. It takes a moment to come up, so the status is polled briefly
+   * and checked against the requested skin rather than trusted on first answer;
+   * a stale reading would send the user straight back into the skin they just
+   * left.
+   *
+   * The host comes from the configured gateway, not from the status response:
+   * the gateway reports `ip: "localhost"`, which is wrong for every tablet or
+   * phone reaching it across the network.
+   *
+   * @param {string} skinId
+   * @returns {Promise<{url: string|null, port: number|null}>} url is null when
+   *          the new port never showed up — the switch still happened, so the
+   *          caller should say so rather than navigate somewhere wrong.
+   */
+  async function switchToSkin(skinId) {
+    const { setDefaultSkin, fetchWebuiServerStatus } = window.NSXApi || {};
+    if (typeof setDefaultSkin !== "function") throw new Error("NSXApi.setDefaultSkin not available");
+    await setDefaultSkin(skinId);
+    _skins = null; // the list carries which one is served
+
+    const wanted = String(skinId).toLowerCase();
+    let status = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await new Promise((r) => setTimeout(r, 500));
+      status = typeof fetchWebuiServerStatus === "function"
+        ? await fetchWebuiServerStatus().catch(() => null)
+        : null;
+      // `path` is the folder being served; its last segment is the skin id.
+      const serving = String(status?.path || "").replace(/[\/]+$/, "").split(/[\/]/).pop().toLowerCase();
+      if (status?.serving && status?.port && serving === wanted) break;
+      status = null;
+    }
+    if (!status) return { url: null, port: null };
+
+    let host = "";
+    try { host = new URL(window.NSXConfig?.GATEWAY || "").hostname; } catch { /* fall through */ }
+    if (!host) return { url: null, port: status.port };
+    return { url: `http://${host}:${status.port}/?_=${Date.now()}`, port: status.port };
+  }
+
   NSXCore.register({
+    loadActiveSkinId,
+    switchToSkin,
     compareVersions,
     fetchLatestRelease,
     clearReleaseCache,

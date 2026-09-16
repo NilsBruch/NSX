@@ -93,6 +93,10 @@ const state = {
   store: structuredClone(fx.store),
   workflow: structuredClone(fx.currentWorkflow),
   skins: structuredClone(fx.skins),
+  defaultSkinId: fx.skins[0].id,
+  webuiPort: 3000,
+  wifiScales: [],
+  forgotten: new Set(),
   // Simulated shot progression
   shotStartedAt: 0,
   frameOffset: 0,
@@ -125,6 +129,13 @@ function setUpdateState(patch) {
   Object.assign(appUpdateState, patch);
   broadcast("/ws/v1/update", appUpdateState);
 }
+
+/** The two devices this mock pretends are paired — the REST list and the
+ *  WebSocket push below are both built from these, so they cannot disagree. */
+const MOCK_DEVICES = [
+  { name: "MockDe1", id: "MockDe1", type: "machine", state: "connected", available: true },
+  { name: "Mock Scale", id: "MockScale", type: "scale", state: "connected", available: true },
+];
 
 const FLOWING = new Set(["espresso", "steam", "hotWater", "flush"]);
 const FRAME_SECONDS = 6;
@@ -469,6 +480,24 @@ function routeApi(req, res, url, body) {
   if (path === "/api/v1/info") return json(fx.gatewayInfo);
   if (path === "/api/v1/update") return json(appUpdateState);
   if (path === "/api/v1/webui/skins" && method === "GET") return json(state.skins);
+  if (path === "/api/v1/webui/skins/default" && method === "GET") {
+    return json(state.skins.find((s) => s.id === state.defaultSkinId) ?? state.skins[0]);
+  }
+  if (path === "/api/v1/webui/skins/default" && method === "PUT") {
+    // The real gateway re-serves the new folder on a fresh port; the skin reads
+    // that back rather than assuming, so the mock moves the port too.
+    state.defaultSkinId = body?.skinId ?? state.defaultSkinId;
+    state.webuiPort = 3000 + Math.floor(Math.random() * 1000);
+    return json(state.skins.find((s) => s.id === state.defaultSkinId) ?? null);
+  }
+  if (path === "/api/v1/webui/server/status") {
+    return json({
+      serving: true,
+      path: `/web-ui/${state.defaultSkinId}`,
+      port: state.webuiPort,
+      ip: "localhost",
+    });
+  }
   if (path === "/api/v1/webui/skins/update" && method === "POST") {
     // What the real bridge does: re-download from each skin's recorded source.
     // Here, bump whatever SKIN_UPDATE_TO says so the reload path is exercisable.
@@ -481,6 +510,22 @@ function routeApi(req, res, url, body) {
   // ── misc ──
   if (path === "/api/v1/scale/tare") return noContent();
   if (path === "/api/v1/devices/scan") return noContent();
+  // The REST list a settings screen reads (the WebSocket push below is the live
+  // one). A forgotten device is gone from it until a scan finds it again.
+  if (path === "/api/v1/devices" && method === "GET") {
+    return json(MOCK_DEVICES.filter((d) => !state.forgotten.has(d.id)));
+  }
+  // Forgetting drops the pairing: the device leaves the list until a scan finds
+  // it again — which is what makes the confirm in the skin worth having.
+  if (path === "/api/v1/devices/forget" && method === "PUT") {
+    state.forgotten.add(body?.deviceId);
+    return noContent();
+  }
+  if (path === "/api/v1/devices/wifi") {
+    if (method === "POST" && body?.host) state.wifiScales.push(String(body.host));
+    if (method === "DELETE") state.wifiScales = state.wifiScales.filter((h) => h !== body?.host);
+    return json({ endpoints: state.wifiScales });
+  }
   if (path === "/api/v1/presence/schedules") return method === "GET" ? json([]) : json(body ?? {}, 201);
   if (path.startsWith("/api/v1/steams/")) return json({ message: "not found" }, 404);
 
@@ -559,12 +604,7 @@ const broadcast = (path, payload) => {
 
 // Announce connected devices + scale status on connect.
 wss.get("/ws/v1/devices").on("connection", (ws) =>
-  ws.send(JSON.stringify({
-    devices: [
-      { type: "machine", state: "connected" },
-      { type: "scale", state: "connected" },
-    ],
-  })));
+  ws.send(JSON.stringify({ devices: MOCK_DEVICES.filter((d) => !state.forgotten.has(d.id)) })));
 wss.get("/ws/v1/scale/snapshot").on("connection", (ws) => ws.send(JSON.stringify({ status: "connected" })));
 
 /* App-update channel: a snapshot on connect, then one on every state change,

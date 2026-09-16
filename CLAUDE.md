@@ -44,7 +44,7 @@ espresso-skins/                     # repo root (npm workspaces)
 │   │       ├── store.js            # settings store (stable storeSettings object)
 │   │       ├── push.js             # NSXCore.push / debounced helpers
 │   │       └── domains/            # steam, hotwater, flush, schedule, grinder, bean,
-│   │                               #   shot, profile, workflow, machine, mapping, update
+│   │                               #   shot, profile, workflow, machine, mapping, update, units
 │   └── nsx/                         # NSX skin (vanilla JS, no build)
 │       ├── package.json
 │       └── src/                     # <-- served as the web root in dev & ZIP root

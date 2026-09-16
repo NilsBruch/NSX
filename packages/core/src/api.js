@@ -695,6 +695,36 @@ async function fetchSkins() {
 }
 
 /**
+ * GET /api/v1/webui/skins/default
+ * The skin the gateway serves — the one that opens when the Decent app shows
+ * its web UI.
+ * @returns {Promise<object>} the same record shape as fetchSkins()
+ */
+async function fetchDefaultSkin() {
+  return request("/api/v1/webui/skins/default");
+}
+
+/**
+ * PUT /api/v1/webui/skins/default
+ * Switch which skin the gateway serves. It re-serves the new folder on a FRESH
+ * port, so the caller has to read fetchWebuiServerStatus() for where to go
+ * rather than reload the URL it is on.
+ * @param {string} skinId
+ */
+async function setDefaultSkin(skinId) {
+  return request("/api/v1/webui/skins/default", "PUT", { skinId });
+}
+
+/**
+ * GET /api/v1/webui/server/status
+ * `{ serving, path, port, ip }` — `port` changes every time the gateway starts
+ * serving a skin folder, so it is read, never assumed.
+ */
+async function fetchWebuiServerStatus() {
+  return request("/api/v1/webui/server/status");
+}
+
+/**
  * POST /api/v1/webui/skins/update
  * Asks the gateway to re-check every installed skin's source and download
  * whatever is newer, server-side. Returns once that is done — re-read
@@ -1024,6 +1054,37 @@ async function disconnectDevice(deviceId) {
   return request(`/api/v1/devices/disconnect?deviceId=${encodeURIComponent(deviceId)}`, "PUT");
 }
 
+/**
+ * PUT /api/v1/devices/forget
+ * Drop a device's pairing entirely — not just disconnect it. The gateway stops
+ * auto-connecting to it, and it leaves the device list until it is found again.
+ * @param {string} deviceId
+ */
+async function forgetDevice(deviceId) {
+  return request("/api/v1/devices/forget", "PUT", { deviceId });
+}
+
+/**
+ * GET/POST/DELETE /api/v1/devices/wifi
+ * Network scales, reached by host instead of discovered over BLE, so they are
+ * added and removed by hand. All three return the full list.
+ * @returns {Promise<string[]>} the configured hosts
+ */
+async function fetchWifiScales() {
+  const res = await request("/api/v1/devices/wifi");
+  return res?.endpoints ?? [];
+}
+
+async function addWifiScale(host) {
+  const res = await request("/api/v1/devices/wifi", "POST", { host });
+  return res?.endpoints ?? [];
+}
+
+async function removeWifiScale(host) {
+  const res = await request("/api/v1/devices/wifi", "DELETE", { host });
+  return res?.endpoints ?? [];
+}
+
 /** GET /api/v1/plugins */
 async function fetchPlugins() {
   return request("/api/v1/plugins");
@@ -1077,6 +1138,13 @@ window.NSXApi = {
   fetchAppUpdate,
   fetchSkins,
   updateSkins,
+  fetchDefaultSkin,
+  setDefaultSkin,
+  fetchWebuiServerStatus,
+  forgetDevice,
+  fetchWifiScales,
+  addWifiScale,
+  removeWifiScale,
   connectAppUpdate,
   disconnectAppUpdate,
   sendAppUpdateCommand,

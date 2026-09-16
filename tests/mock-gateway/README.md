@@ -77,6 +77,18 @@ Note that "is something newer published" is asked of **GitHub**, not of the mock
 (see `packages/core/src/domains/update.js` for why), so the *badge* still reflects
 real release tags even here — only the install paths are simulated.
 
+## Simulated skins, pairings and network scales
+
+`GET/PUT /webui/skins/default` switches which skin is served, and
+`/webui/server/status` answers on a NEW port each time — the same behaviour the
+real gateway has, and the reason a skin switcher has to read the port back
+instead of reloading the URL it is on.
+
+`PUT /devices/forget` drops a pairing: the device disappears from the REST list
+and the WebSocket push until the server restarts, so "forget" can be told apart
+from "disconnect" by hand. `GET/POST/DELETE /devices/wifi` keeps an in-process
+list of network-scale hosts.
+
 ## Fixtures
 
 `fixtures.mjs` seeds four profiles (one **hidden**, one cleaning profile), two

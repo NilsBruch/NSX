@@ -6,8 +6,15 @@
  * Per-plugin settings are cached by plugin id since a settings screen typically
  * shows one plugin's detail at a time; the plugin list itself is a flat cache.
  *
+ * A plugin also DESCRIBES its own settings: each record carries a `settings`
+ * schema of { type, label, description, secure, default } keyed by the wire
+ * name. getPluginSchema turns that into a list a settings screen can render
+ * generically, so a plugin nobody had heard of when the skin was written still
+ * gets working controls.
+ *
  * Registered on NSXCore:
- *   Selectors: getPlugins(), getPluginSettings(id)
+ *   Selectors: getPlugins(), getPluginSettings(id), getPluginSchema(plugin),
+ *              isPluginSecretSet(values, key), pluginSettingValue(values, field)
  *   Commands:  loadPlugins(), setPluginEnabled(id, enabled),
  *              loadPluginSettings(id), savePluginSetting(id, key, value)
  *   Event:     'pluginsLoaded' -> { plugins }
@@ -58,8 +65,63 @@
     return updatePluginSettings(id, { [key]: value });
   }
 
+  /**
+   * A plugin's settings schema as an ordered list of renderable fields.
+   *
+   * `key` is the wire name (capitalised on most plugins) and `label` is what to
+   * show — falling back to the key when a plugin gives no label, since a
+   * missing label should still leave a usable control rather than an empty row.
+   * Types beyond boolean/number/string are passed through as-is: a caller that
+   * can't render one should skip it rather than guess at a control.
+   *
+   * @param {object} plugin a record from getPlugins()
+   * @returns {Array<{key: string, type: string, label: string, description: string, secure: boolean, default: any}>}
+   */
+  function getPluginSchema(plugin) {
+    const schema = plugin?.settings;
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return [];
+    return Object.entries(schema).map(([key, field]) => ({
+      key,
+      type: String(field?.type || "string"),
+      label: String(field?.label || key),
+      description: String(field?.description || ""),
+      secure: field?.secure === true,
+      default: field?.default,
+    }));
+  }
+
+  /**
+   * Whether a secure field HAS a value, which is all a gateway will say about
+   * one: from Decaid 0.7.17-beta.4 secrets read back as `{ isSet: true }`
+   * rather than the secret. Older gateways answer with the string itself, and
+   * some builds report it in a `secretsSet` envelope — all three are read here
+   * so one skin build works against any of them.
+   */
+  function isPluginSecretSet(values, key) {
+    const v = values?.[key];
+    if (typeof v === "string") return v !== "";
+    if (v && typeof v === "object") return v.isSet === true;
+    return values?.secretsSet?.[key] === true;
+  }
+
+  /**
+   * The value to show for one schema field: what is stored, else the schema's
+   * own default. A redacted secret is never a value — `{ isSet: true }` in a
+   * text box would be shown to the user as their password.
+   */
+  function pluginSettingValue(values, field) {
+    if (!field) return undefined;
+    if (field.secure) return undefined;
+    const v = values?.[field.key];
+    const usable = typeof v === "string" || typeof v === "number" || typeof v === "boolean";
+    return usable ? v : field.default;
+  }
+
   NSXCore.register({
     getPlugins,
+    getPluginSchema,
+    isPluginSecretSet,
+    pluginSettingValue,
     getPluginSettings,
     loadPlugins,
     setPluginEnabled,

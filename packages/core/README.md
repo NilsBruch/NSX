@@ -200,12 +200,28 @@ step exactly.
 - **`devices.js`** — the on-demand REST device list + connect actions a settings
   screen needs (distinct from the always-on `devices` bridged event in
   `core.js`, which is live push status): `getDevices`, `loadDevices`,
-  `scanForDevices`, `connectToDevice(deviceId)`, `disconnectDevice(deviceId)`.
-  Emits `devicesLoaded`.
+  `scanForDevices`, `connectToDevice(deviceId)`, `disconnectDevice(deviceId)`,
+  `forgetDevice(deviceId)`. Emits `devicesLoaded`.
+  **Forgetting is not disconnecting**: it drops the pairing, so the gateway
+  stops reaching for the device and it leaves the list until a scan finds it
+  again — worth a confirmation in the UI.
+  Also the Wi-Fi scales, which are configured rather than discovered (a network
+  scale answers at a host you type in): `getWifiScales`, `loadWifiScales`,
+  `addWifiScale(host)`, `removeWifiScale(host)`, all of which return the full
+  list. Emits `wifiScalesLoaded`.
 - **`plugins.js`** — plugin list + per-plugin settings cache (e.g. the
   Visualizer integration): `getPlugins`, `getPluginSettings(id)`, `loadPlugins`,
   `setPluginEnabled(id, enabled)`, `loadPluginSettings(id)`,
   `savePluginSetting(id, key, value)`. Emits `pluginsLoaded`.
+  A plugin also **describes its own settings** — `{ type, label, description,
+  secure, default }` per wire name — so a settings screen can render controls
+  for a plugin nobody had heard of when the skin was written:
+  `getPluginSchema(plugin)` lists the fields, `pluginSettingValue(values, field)`
+  resolves what to show (stored value, else the schema default, never a
+  secret), and `isPluginSecretSet(values, key)` answers the only question a
+  gateway will answer about a secure field — whether one is stored. It reads all
+  three shapes in the wild (a plain string on older gateways, `{ isSet: true }`
+  since 0.7.17-beta.4, and a `secretsSet` envelope).
 - **`display.js`** — what the gateway's **host platform** can do to the screen,
   from `GET /api/v1/display`'s `platformSupported: { brightness, wakeLock }`:
   `getDisplaySupport()` (sync, cached) and `loadDisplaySupport(force?)`. Emits
@@ -248,6 +264,17 @@ itself. The two halves are answered by different parties on purpose:
   `updated: true` is the skin's cue to reload the page, since the new files are
   on disk while the tab still runs the old bundle.
 
+Switching skins lives here too, since it is the same installed-skin list asked
+a different question: `loadActiveSkinId()` and `switchToSkin(skinId)`. The
+gateway binds a **fresh port** every time it starts serving a folder, so
+`switchToSkin` polls `GET /webui/server/status` until the served path matches the
+skin asked for and returns `{ url, port }` to navigate to — a `url` of `null`
+means the switch happened but the new port never appeared, which the caller
+should say rather than navigate somewhere wrong. The host comes from the
+configured gateway, never from the status response's `ip` (it reports
+`localhost`, which is wrong for every device reaching the machine over the
+network).
+
 Selectors: `compareVersions(a, b)` (semver-ish, tolerates a leading `v`, a
 missing patch segment and prereleases), `parseSkinRepo(skin)` (the `owner/repo`
 out of `reaMetadata.sourceUrl`, or null for a skin not installed from a
@@ -277,6 +304,22 @@ The gateway's own update state, for acting rather than badging, is three
   one-shot read. `phase` is an open set (`idle`, `checking`, `available`,
   `downloading`, `installing`, `upToDate` observed); treat anything unrecognised
   as "nothing to report".
+
+### Display units — `units.js` (owns **no state at all**)
+
+The gateway is Celsius-only — profile frames, steam/flush targets, the live
+group temperature — so a skin offering Fahrenheit converts at its edges and
+never stores or sends one. That boundary is here: `celsiusToDisplay(c, unit)`,
+`displayToCelsius(v, unit)`, `formatTemperature(c, unit, digits?)`,
+`temperatureUnitLabel(unit)` and `temperatureRange(minC, maxC, unit)` for a
+control's bounds. The unit is passed in on every call rather than held here: the
+skin's own settings store is already the one place that remembers preferences.
+
+`displayToCelsius` rounds to one decimal on purpose — a whole °F is about
+0.56 °C, so without it a frame edited twice in Fahrenheit would walk a tenth of
+a degree at a time. Anything non-numeric (`null`, `undefined`, `''`) is handed
+straight back instead of being coerced: `Number(null)` is 0, which would render
+a missing reading as a freezing one.
 
 ### Profile rendering — `profile-render.js` (owns **no state at all**)
 
