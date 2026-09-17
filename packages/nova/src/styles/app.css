@@ -1507,6 +1507,11 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    .pd-stage: ProfilePicker's stage list shares .pd-stage and is meant to stay
    dense. */
 .bag-row { min-height: 68px; align-items: center; }
+/* The wizard's bag step (BatchPicker.vue) borrows the bag manager's row so the
+   two lists of the same bags look alike. There the row is a container and the
+   tap target sits inside it; here the whole row IS the button, so it takes
+   back the pointer .batch-row drops. */
+.bag-pick-row { cursor: pointer; }
 /* The one .pd-stage-main that reads across instead of down: a bag is a date
    and how old it is, and the overlay has width to spare. Baseline-aligned so
    the quiet age sits on the date's line rather than beside its middle. */

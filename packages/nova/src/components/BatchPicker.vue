@@ -18,7 +18,7 @@
  */
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { formatShortDate } from '../composables/useCore.js';
+import { formatLongDate } from '../composables/useCore.js';
 import { useBeanBatches } from '../composables/useBeanBatches.js';
 import RoastDatePicker from './RoastDatePicker.vue';
 
@@ -65,9 +65,13 @@ async function onRoastConfirm(iso) {
     </div>
 
     <div class="pd-stages-list">
-      <button v-for="b in batches" :key="b.id" class="pd-stage bag-row" @click="pickExisting(b)">
-        <div class="pd-stage-main">
-          <span class="pd-stage-name">{{ b.roastDate ? formatShortDate(b.roastDate) : t('diary.empty') }}</span>
+      <!-- Row for row what the Diary's bag manager shows (BagsPanel.vue): the
+           written-out date with the age beside it on one line. The two screens
+           list the same bags, so they must read the same; only the action
+           differs (pick here, edit there). -->
+      <button v-for="b in batches" :key="b.id" class="pd-stage batch-row bag-row bag-pick-row" @click="pickExisting(b)">
+        <div class="pd-stage-main bag-row-main">
+          <span class="pd-stage-name">{{ b.roastDate ? formatLongDate(b.roastDate) : t('diary.empty') }}</span>
           <span class="pd-stage-detail">{{ b.roastDate ? NSXCore.getBatchAge(b.roastDate) : '' }}<template v-if="b.archived"> · {{ t('diary.archive') }}</template></span>
         </div>
       </button>
