@@ -287,13 +287,20 @@ function save() {
       <button class="sort-btn accent lg" @click="save">{{ isFork ? t('profileEditor.saveCopy') : t('common.save') }}</button>
     </div>
 
-    <p v-if="isFork" class="pe-fork-note">{{ t('profileEditor.forkNotice') }}</p>
-
-    <div class="seg pe-tabseg" :data-pos="activeTab === 'info' ? 2 : activeTab === 'limits' ? 1 : 0">
-      <span class="seg-thumb"></span>
-      <button :class="{ on: activeTab === 'steps' }" @click="activeTab = 'steps'">{{ t('profileEditor.tabSteps') }}</button>
-      <button :class="{ on: activeTab === 'limits' }" @click="activeTab = 'limits'">{{ t('profileEditor.tabLimits') }}</button>
-      <button :class="{ on: activeTab === 'info' }" @click="activeTab = 'info'">{{ t('profileEditor.tabInfo') }}</button>
+    <!-- The tabs stay centred with the fork notice beside them, not above: a
+         line of its own pushed every tab's content down whenever a Decent
+         profile was open. Three columns so the side the notice is NOT on is
+         the same width as the side it is, which is what keeps the tabs in the
+         middle. -->
+    <div class="pe-tabrow">
+      <span aria-hidden="true"></span>
+      <div class="seg pe-tabseg" :data-pos="activeTab === 'info' ? 2 : activeTab === 'limits' ? 1 : 0">
+        <span class="seg-thumb"></span>
+        <button :class="{ on: activeTab === 'steps' }" @click="activeTab = 'steps'">{{ t('profileEditor.tabSteps') }}</button>
+        <button :class="{ on: activeTab === 'limits' }" @click="activeTab = 'limits'">{{ t('profileEditor.tabLimits') }}</button>
+        <button :class="{ on: activeTab === 'info' }" @click="activeTab = 'info'">{{ t('profileEditor.tabInfo') }}</button>
+      </div>
+      <p v-if="isFork" class="pe-fork-note">{{ t('profileEditor.forkNotice') }}</p>
     </div>
 
     <div v-if="activeTab === 'steps'" class="pick-body pe-body">

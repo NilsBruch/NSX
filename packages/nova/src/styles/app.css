@@ -1515,11 +1515,20 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    its own width per position. .seg.pe-tabseg (two classes) is used so the width
    overrides the generic two-tab .seg .seg-thumb rule that comes later in the
    file; data-pos=1 reuses the generic translateX(100%), data-pos=2 is ours. */
+/* The tab row: tabs in the middle column, the fork notice in the right one, an
+   empty left column of equal width so the tabs stay centred whether or not the
+   notice is there. */
+.pe-tabrow { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; margin: 2px 0 0; }
 /* Says that Save will fork rather than overwrite (a Decent-shipped profile is
-   immutable). Above the tabs, because it is true of the whole editor, and in
-   the accent so it reads as what this session IS rather than as a warning. */
-.pe-fork-note { align-self: center; max-width: 520px; margin: 6px 0 0; text-align: center; font-size: var(--fs-sm); font-weight: 500; color: var(--accent); }
-.seg.pe-tabseg { align-self: center; width: 340px; flex: none; margin: 2px 0 0; padding: 7px; }
+   immutable). Beside the tabs, so opening one never pushes the content down;
+   in the accent so it reads as what this session IS rather than as a warning.
+   Clamped to the tabs' own height for the same reason. */
+.pe-fork-note {
+  margin: 0; justify-self: start; text-align: left;
+  font-size: var(--fs-xs); font-weight: 500; line-height: 1.35; color: var(--accent);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.seg.pe-tabseg { align-self: center; width: 340px; flex: none; margin: 0; padding: 7px; }
 .seg.pe-tabseg .seg-thumb { top: 7px; bottom: 7px; left: 7px; width: calc(33.333% - 4.667px); }
 .seg.pe-tabseg[data-pos="2"] .seg-thumb { transform: translateX(200%); }
 .seg.pe-tabseg button { padding: 14px 0; min-width: 0; }

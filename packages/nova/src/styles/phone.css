@@ -336,6 +336,11 @@ body[data-phone="true"] .pe-body .pick-list { width: 100%; min-width: 0; }
    close enough to a small phone's own width that it was one bezel case away
    from actually overflowing. */
 body[data-phone="true"] .seg.pe-tabseg { width: 100%; }
+/* Full-width tabs leave no side to put the fork notice on, so the row is just
+   the tabs; the Save button's own "Save copy" carries the message. */
+body[data-phone="true"] .pe-tabrow { grid-template-columns: 1fr; }
+body[data-phone="true"] .pe-tabrow > span[aria-hidden],
+body[data-phone="true"] .pe-fork-note { display: none; }
 
 /* .sort-btn.icon-only (Diary/Recipes header buttons) is 38px on the tablet,
    where a stylus-precision touch and a bigger screen make that fine — on a
