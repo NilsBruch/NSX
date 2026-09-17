@@ -508,6 +508,7 @@ export default {
     graphExpert: 'Expert',
     showTags: 'Recipe tags',
     showTagsSub: 'Show tags on recipes and on the shots pulled with them',
+    dyeButton: 'DYE button', dyeButtonSub: 'Reach a shot’s full record — notes, TDS, people — from the history view',
     tabColors: 'Colour by tab',
     tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',

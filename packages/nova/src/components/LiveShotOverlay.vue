@@ -143,6 +143,9 @@ watch(historyIndex, () => { scrub.value = null; });
 // how you read the same field across several shots.
 const dyeOpen = ref(false);
 watch(phase, () => { dyeOpen.value = false; });
+// Turning the button off (Skin & Display) also takes the page away, rather
+// than leaving it open with nothing left to reopen it.
+watch(() => skinSettings.dyeButton, (on) => { if (!on) dyeOpen.value = false; });
 const fmt = (v, dec = 1) => (Number.isFinite(v) ? v.toFixed(dec) : '—');
 
 async function confirmDeleteShot() {
@@ -331,7 +334,7 @@ async function editGrindSetting() {
         <!-- Bottom left, opposite Delete: the way DOWN into the rest of this
              shot's record. Everything the graph page has no room for lives
              there (ShotDyePage.vue). -->
-        <button class="shot-dye" @click="dyeOpen = true">
+        <button v-if="skinSettings.dyeButton" class="shot-dye" @click="dyeOpen = true">
           {{ t('dye.open') }}
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" /></svg>
         </button>

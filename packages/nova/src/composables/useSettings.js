@@ -465,6 +465,11 @@ export const skinSettings = reactive({
   // button at the bottom, instead of the single-recipe dial layout. OFF by
   // default so the classic page is what everyone keeps seeing.
   coffeeGraph: false,
+  // false hides the DYE button under the history graph, for anyone who only
+  // ever rates a shot and reads its numbers. The page and everything on it
+  // stays — a shot keeps its note, TDS and the rest, and turning this back on
+  // reaches them again.
+  dyeButton: true,
   // 'C' | 'F' — the unit every temperature in the skin is SHOWN and ENTERED in.
   // The gateway is Celsius-only, so this never leaves the skin: core's units
   // domain converts at the edges (see useUnits.js).
@@ -490,6 +495,7 @@ const SKIN_KEYS = {
   graphMode: 'nova_graph_mode',
   showTags: 'nova_show_tags',
   coffeeGraph: 'nova_coffee_graph',
+  dyeButton: 'nova_dye_button',
   tempUnit: 'nova_temp_unit',
   uiScale: 'nova_ui_scale',
 };
@@ -520,6 +526,7 @@ export function loadSkinSettings() {
   skinSettings.graphMode = s.nova_graph_mode || 'normal';
   skinSettings.showTags = s.nova_show_tags !== false; // default on
   skinSettings.coffeeGraph = s.nova_coffee_graph === true; // default off
+  skinSettings.dyeButton = s.nova_dye_button !== false; // default on
   skinSettings.tempUnit = s.nova_temp_unit === 'F' ? 'F' : 'C';
   skinSettings.uiScale = s.nova_ui_scale != null ? Number(s.nova_ui_scale) : 100;
 }
