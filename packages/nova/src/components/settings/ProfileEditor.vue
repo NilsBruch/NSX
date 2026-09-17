@@ -57,16 +57,6 @@ const draft = reactive({
 });
 if (!draft.frames.length) draft.frames.push(NSXCore.makeDefaultFrame(null));
 
-// The Limits tab keeps ONE flow-range/pressure-range value for the whole
-// profile (matches every real profile observed — see profile-edit.js's file
-// header). A profile that genuinely diverges per step would have that
-// collapsed to a single value the moment it's saved here, so — cheap
-// insurance for a case nothing in practice hits — warn instead of silently
-// doing that.
-if (NSXCore.hasDivergentLimiterRanges(rawFrames, 'flow') || NSXCore.hasDivergentLimiterRanges(rawFrames, 'pressure')) {
-  showToast(t('profileEditor.divergentLimiterRanges'));
-}
-
 // Dirty tracking covers EVERY persisted field (title/author/notes/frames/
 // limits) — NSX's own snapshot omitted tank-temp and limiter ranges, so
 // changing only those never marked dirty and silently failed to persist.
@@ -244,8 +234,6 @@ async function editLimitField(getter, setter, title, unit) {
 function setTankTemp(v) { draft.limits.tankTempValue = v; draft.limits.tankTempEnabled = v > 0; }
 function setStopVolumeStart(v) { draft.limits.stopVolumeStartIndex = v; }
 function setStopVolume(v) { draft.limits.stopVolumeValue = v; draft.limits.stopVolumeEnabled = v > 0; }
-function setLimiterFlowRange(v) { draft.limits.limiterFlowRange = v || 0.6; }
-function setLimiterPressureRange(v) { draft.limits.limiterPressureRange = v || 0.6; }
 function setStopWeight(v) { draft.limits.stopWeightValue = v; draft.limits.stopWeightEnabled = v > 0; }
 
 const editTankTemp = () => editTempField(() => draft.limits.tankTempValue, setTankTemp, t('profileEditor.preheat'));
@@ -259,8 +247,6 @@ const stopVolumeStartFrameName = computed(() => {
   return f ? frameName(f, idx, t) : String(idx);
 });
 const editStopVolume = () => editLimitField(() => draft.limits.stopVolumeValue, setStopVolume, t('profileEditor.stopVolume'), 'ml');
-const editLimiterFlowRange = () => editLimitField(() => draft.limits.limiterFlowRange, setLimiterFlowRange, t('profileEditor.limitFlowRange'), 'ml/s');
-const editLimiterPressureRange = () => editLimitField(() => draft.limits.limiterPressureRange, setLimiterPressureRange, t('profileEditor.limitPressureRange'), 'bar');
 const editStopWeight = () => editLimitField(() => draft.limits.stopWeightValue, setStopWeight, t('profileEditor.stopWeight'), 'g');
 
 // ── Save ────────────────────────────────────────────────────────────────
@@ -448,6 +434,21 @@ function save() {
                 @change="setFrameValue('limiterValue', 'limiterEnabled', $event)"
                 @edit="editFrameValueField('limiterValue', 'limiterEnabled', limitLabel, limitUnit)"
               />
+              <!-- How softly that limit engages, for THIS step: the DE1 keeps a
+                   range on every limiter, and profiles do vary it step to step
+                   (Decent's own Baseline ones hold one step hard at 0 while
+                   another eases in). Only shown when there is a limit to soften
+                   — a range under an "off" limiter is a control with no effect.
+                   0 is a real setting here, so it reads "hard" rather than
+                   "off": the limiter is still on. -->
+              <SettingSlider
+                v-if="selectedFrame.limiterEnabled"
+                :label="t('profileEditor.limitRange')" :model-value="selectedFrame.limiterRange"
+                :min="0" :max="5" :step="0.1" :decimals="1" :unit="limitUnit"
+                :off-label="t('profileEditor.limitRangeHard')"
+                @change="selectedFrame.limiterRange = $event"
+                @edit="editFrameField('limiterRange', t('profileEditor.limitRange'), limitUnit)"
+              />
               <div class="pe-seg-row">
                 <span class="pe-seg-label">{{ t('profileEditor.transition') }}</span>
                 <div class="seg pe-seg-sm" :data-pos="selectedFrame.transition === 'smooth' ? 1 : 0">
@@ -503,20 +504,6 @@ function save() {
           :label="t('profileEditor.stopVolume')" :model-value="draft.limits.stopVolumeValue"
           :min="0" :max="1000" :step="10" unit=" ml" :off-label="t('common.off')"
           @change="setStopVolume" @edit="editStopVolume"
-        />
-      </div>
-
-      <!-- Flow/pressure limiter range — the two halves of the same limiter. -->
-      <div class="pe-group">
-        <SettingSlider
-          :label="t('profileEditor.limitFlowRange')" :model-value="draft.limits.limiterFlowRange"
-          :min="0.1" :max="3" :step="0.1" :decimals="1" unit=" ml/s"
-          @change="setLimiterFlowRange" @edit="editLimiterFlowRange"
-        />
-        <SettingSlider
-          :label="t('profileEditor.limitPressureRange')" :model-value="draft.limits.limiterPressureRange"
-          :min="0.1" :max="3" :step="0.1" :decimals="1" unit=" bar"
-          @change="setLimiterPressureRange" @edit="editLimiterPressureRange"
         />
       </div>
 

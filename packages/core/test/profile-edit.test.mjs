@@ -13,7 +13,6 @@ const LIMITS_DEFAULT = {
   tankTempEnabled: false, tankTempValue: 0,
   stopWeightEnabled: false, stopWeightValue: 0,
   stopVolumeEnabled: false, stopVolumeValue: 0, stopVolumeStartIndex: 0,
-  limiterFlowRange: 0.6, limiterPressureRange: 0.6,
 };
 
 test("isUserOwnedProfile: isDefault wins, then metadata.source", () => {
@@ -135,42 +134,26 @@ test("normalizeProfileFrame: a profile-level target never leaks onto a frame", (
   assert.equal(f._rest.target_volume, undefined);
 });
 
-// --- hasDivergentLimiterRanges ---
+// --- per-frame limiter range ---
 
-test("hasDivergentLimiterRanges: false when every active limiter of a mode shares one range (the real-world case)", () => {
-  const frames = [
-    { pump: "pressure", limiter: { value: 6, range: 1 } },
-    { pump: "pressure", limiter: { value: 4.5, range: 1 } },
-  ];
-  assert.equal(NSXCore.hasDivergentLimiterRanges(frames, "pressure"), false);
+test("normalizeProfileFrame: a step keeps its OWN limiter range", () => {
+  // The shape nine of 73 profiles on a real machine have: two steps that limit
+  // with different ranges. One range for the whole profile rewrote the other.
+  const soft = NSXCore.normalizeProfileFrame({ pump: "flow", limiter: { value: 3, range: 0.6 } });
+  const hard = NSXCore.normalizeProfileFrame({ pump: "pressure", limiter: { value: 2.5, range: 3.5 } });
+  assert.equal(soft.limiterRange, 0.6);
+  assert.equal(hard.limiterRange, 3.5);
 });
 
-test("hasDivergentLimiterRanges: false with only one active limiter step (nothing to diverge against)", () => {
-  // The exact shape of Baseline • Low Contact • 4 Bar: two disabled steps
-  // (value 0) and one real one — a single real range, so no divergence.
-  const frames = [
-    { pump: "flow", limiter: { value: 0, range: 0 } },
-    { pump: "flow", limiter: { value: 0, range: 0 } },
-    { pump: "pressure", limiter: { value: 2.5, range: 3.5 } },
-  ];
-  assert.equal(NSXCore.hasDivergentLimiterRanges(frames, "pressure"), false);
-  assert.equal(NSXCore.hasDivergentLimiterRanges(frames, "flow"), false);
-});
-
-test("hasDivergentLimiterRanges: true when two ACTIVE limiters of the same mode genuinely differ", () => {
-  const frames = [
-    { pump: "pressure", limiter: { value: 6, range: 1 } },
-    { pump: "pressure", limiter: { value: 4.5, range: 2 } },
-  ];
-  assert.equal(NSXCore.hasDivergentLimiterRanges(frames, "pressure"), true);
-});
-
-test("hasDivergentLimiterRanges: a disabled step's stale range doesn't count as divergence", () => {
-  const frames = [
-    { pump: "pressure", limiter: { value: 6, range: 1 } },
-    { pump: "pressure", limiter: { value: 0, range: 2 } }, // disabled — never written back, so irrelevant
-  ];
-  assert.equal(NSXCore.hasDivergentLimiterRanges(frames, "pressure"), false);
+test("normalizeProfileFrame: range 0 is a real value, an ABSENT range is what defaults", () => {
+  // Decent's Baseline profiles use range 0 for a hard limit — defaulting that
+  // to 0.6 would soften a limiter the profile means to be abrupt.
+  const zero = NSXCore.normalizeProfileFrame({ pump: "pressure", limiter: { value: 6, range: 0 } });
+  assert.equal(zero.limiterRange, 0);
+  const missing = NSXCore.normalizeProfileFrame({ pump: "pressure", limiter: { value: 6 } });
+  assert.equal(missing.limiterRange, 0.6);
+  const none = NSXCore.normalizeProfileFrame({ pump: "pressure" });
+  assert.equal(none.limiterRange, 0.6, "a step with no limiter still needs a value for the control");
 });
 
 test("makeDefaultFrame: seeds from the previous frame, or sensible defaults for the first", () => {
@@ -188,7 +171,7 @@ test("makeDefaultFrame: seeds from the previous frame, or sensible defaults for 
 
 // --- normalizeProfileLimits ---
 
-test("normalizeProfileLimits: reads profile-global fields with correct enabled/default logic", () => {
+test("normalizeProfileLimits: reads the profile-wide fields, and only those", () => {
   const limits = NSXCore.normalizeProfileLimits({
     tank_temperature: 80, target_weight: 40, target_volume: 0,
     target_volume_count_start: 2, limiter_flow_range: 0.9, limiter_pressure_range: 1.2,
@@ -198,23 +181,7 @@ test("normalizeProfileLimits: reads profile-global fields with correct enabled/d
     stopWeightEnabled: true, stopWeightValue: 40,
     stopVolumeEnabled: false, stopVolumeValue: 0,
     stopVolumeStartIndex: 2,
-    limiterFlowRange: 0.9, limiterPressureRange: 1.2,
-  });
-});
-
-test("normalizeProfileLimits: falls back to scanning per-frame limiter.range when no top-level range field exists", () => {
-  // A real profile with no limiter_flow_range/limiter_pressure_range at all —
-  // only per-frame limiter objects (pre-dates, or was never written through,
-  // this editor's profile-global-range model).
-  const profile = {
-    steps: [
-      { pump: "pressure", limiter: { value: 8, range: 0.9 } }, // pressure-pump limiter caps flow -> flow range
-      { pump: "flow", limiter: { value: 6, range: 1.1 } }, // flow-pump limiter caps pressure -> pressure range
-    ],
-  };
-  const limits = NSXCore.normalizeProfileLimits(profile, profile.steps);
-  assert.equal(limits.limiterFlowRange, 0.9, "must not silently default to 0.6 and clobber the real per-frame range");
-  assert.equal(limits.limiterPressureRange, 1.1);
+  }, "the limiter ranges belong to the frames now, not here");
 });
 
 test("normalizeProfileLimits: defaults for an empty/new profile", () => {
@@ -272,14 +239,38 @@ test("buildProfileFromDraft: preserves flow/pressure key shape against the origi
   assert.equal("flow" in built.steps[0], false, "no flow key should be invented for a pressure-only original step");
 });
 
-test("buildProfileFromDraft: enabling a frame's limiter uses the profile-global range for its pump's opposite axis", () => {
+test("buildProfileFromDraft: a frame's limiter is written with that frame's own range", () => {
   const draft = draftFromOriginal();
   draft.frames[0].limiterEnabled = true;
   draft.frames[0].limiterValue = 8.0;
-  draft.limits.limiterFlowRange = 0.9;
+  draft.frames[0].limiterRange = 0.9;
+  draft.frames[1].limiterEnabled = true;
+  draft.frames[1].limiterValue = 2.5;
+  draft.frames[1].limiterRange = 3.5;
   const built = NSXCore.buildProfileFromDraft(draft, ORIGINAL);
-  // frame 0's pump is "pressure" -> limiter caps flow -> uses limiterFlowRange
   assert.deepEqual(built.steps[0].limiter, { value: 8.0, range: 0.9 });
+  assert.deepEqual(built.steps[1].limiter, { value: 2.5, range: 3.5 }, "the second range survives the first");
+});
+
+test("buildProfileFromDraft: a profile with two different limiter ranges round-trips untouched", () => {
+  // The regression in one line: open a profile like Soup 58 (ranges 3 and 5),
+  // save it without touching anything, and both steps used to come back with
+  // whichever range was seen first.
+  const varied = {
+    title: "Soup 58", version: "2",
+    steps: [
+      { name: "a", pump: "pressure", pressure: 6, seconds: 10, temperature: 93, sensor: "coffee", limiter: { value: 3, range: 3 } },
+      { name: "b", pump: "pressure", pressure: 4, seconds: 20, temperature: 93, sensor: "coffee", limiter: { value: 2, range: 5 } },
+    ],
+  };
+  const draft = {
+    title: varied.title, author: "", notes: "", beverageType: "espresso", groupTemp: 93,
+    frames: varied.steps.map(NSXCore.normalizeProfileFrame),
+    limits: NSXCore.normalizeProfileLimits(varied),
+  };
+  const built = NSXCore.buildProfileFromDraft(draft, varied);
+  assert.deepEqual(built.steps.map((s) => s.limiter), [{ value: 3, range: 3 }, { value: 2, range: 5 }]);
+  assert.equal(NSXCore.profileHasExecutionChanges(built, varied), false, "and it is not an edit");
 });
 
 test("buildProfileFromDraft: disabling a frame's limiter preserves the original step's limiter verbatim", () => {

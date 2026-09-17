@@ -19,17 +19,20 @@
  * is the inverse: it re-serializes that shape back into a real DE1 profile,
  * always writing the canonical NESTED exit object (never the flattened one).
  *
- * Limiter RANGE (the PID transition softness) is genuinely profile-global in
- * the stock DE1 app's own Limits page — one flow-range and one pressure-range
- * slider for the whole profile, not per step. Only the limiter VALUE (the
- * absolute cap) is per-frame. That split is intentional, not a simplification.
+ * Limiter RANGE (the PID transition softness) is PER FRAME, because that is
+ * where the DE1 keeps it: every step carries its own `limiter: { value, range }`.
+ * This editor used to hold one range per pump mode for the whole profile — the
+ * stock app's Limits page presents it that way — and collapsed every frame onto
+ * it on save. Nine of the 73 profiles on one real machine carry more than one
+ * range across their frames (0 and 2.5 in the Baseline profiles, 3 and 5 in
+ * Soup 58, 0.6 and 1.0 in the Turbo ones), so that collapse rewrote profiles
+ * the user never edited.
  *
  * Registered on NSXCore:
  *   normalizeProfileFrame(raw) -> editor frame
  *   normalizeFrameExit(frame) -> { enabled, type, value }
  *   frameExitToObject(type, value) -> nested { type, condition, value }
  *   normalizeProfileLimits(profile) -> Limits-tab state object
- *   hasDivergentLimiterRanges(frames, pumpMode) -> bool
  *   buildProfileFromDraft(draft, originalProfile) -> profile JSON
  *   makeDefaultFrame(lastFrame) -> a new editor frame seeded from the last one
  *   isUserOwnedProfile(record) -> bool
@@ -124,6 +127,12 @@
       sensor: sensor === "water" ? "water" : "coffee",
       limiterEnabled: limiter && typeof limiter === "object" ? Number(limiter.value) > 0 : false,
       limiterValue: limiter && typeof limiter === "object" && Number(limiter.value) > 0 ? Number(limiter.value) : 0,
+      // The step's own PID transition range. 0 is a real value the DE1 ships
+      // (the Baseline profiles use it for a hard limit), so an ABSENT range is
+      // what gets the 0.6 default — not a zero one.
+      limiterRange: limiter && typeof limiter === "object" && Number.isFinite(Number(limiter.range))
+        ? Math.max(0, Number(limiter.range))
+        : 0.6,
       // 0 IS "off" for these (see the *Enabled flags right here, and
       // frameToStep, which writes 0 for a disabled one). Seeding an unset
       // field with a plausible-looking number instead made every step of
@@ -154,6 +163,7 @@
       sensor: lastFrame?.sensor ?? "coffee",
       limiterEnabled: false,
       limiterValue: 0,
+      limiterRange: 0.6,
       volumeEnabled: false,
       volumeValue: 0,
       weightEnabled: false,
@@ -166,52 +176,15 @@
   }
 
   // ── Profile-level "Limits" (stock app's Limits tab) ─────────────────────
-  // limiter_flow_range/limiter_pressure_range are profile-level fields in the
-  // stock app's OWN editing model, but a real (imported, or pre-dating this
-  // model) profile may carry no such top-level field at all — only per-frame
-  // limiter.range values. Falling straight back to a generic 0.6 in that case
-  // would silently overwrite every frame's actual range the first time
-  // someone opens the editor and saves without touching Limits at all.
-  // Scanning the frames for an existing range keeps that round-trip lossless.
-  function rangeFromFrames(frames, pumpMode) {
-    for (const f of frames) {
-      const mode = f?.pump === "flow" ? "flow" : "pressure";
-      if (mode === pumpMode && f?.limiter && typeof f.limiter === "object" && Number(f.limiter.range) > 0) {
-        return Number(f.limiter.range);
-      }
-    }
-    return null;
-  }
-  /**
-   * True when this profile's ACTIVE (value > 0) limiter steps of the given
-   * pump mode carry more than one distinct non-zero range. The editor keeps
-   * exactly one range per pump mode (see the file header) — matching every
-   * profile actually observed in the wild, including Decent's own bundled
-   * ones and third-party profiles (an audit of 90 real profiles found zero
-   * with genuine per-step divergence). This exists so a profile that DOES
-   * diverge can be flagged instead of silently collapsed to whichever range
-   * rangeFromFrames happens to see first.
-   */
-  function hasDivergentLimiterRanges(frames, pumpMode) {
-    const ranges = new Set();
-    for (const f of frames || []) {
-      const mode = f?.pump === "flow" ? "flow" : "pressure";
-      if (mode !== pumpMode) continue;
-      if (f?.limiter && typeof f.limiter === "object" && Number(f.limiter.value) > 0 && Number(f.limiter.range) > 0) {
-        ranges.add(Number(f.limiter.range));
-      }
-    }
-    return ranges.size > 1;
-  }
-
-  function normalizeProfileLimits(profile, frames) {
-    const rawFrames = Array.isArray(frames) ? frames : extractFrames(profile);
+  // Everything here is genuinely one value for the whole profile: the preheat
+  // temperature and the stop-at targets. The limiter RANGES used to live here
+  // too, one per pump mode, and were written onto every frame on save — see the
+  // file header for why they went back to the frames they came from.
+  function normalizeProfileLimits(profile) {
     const tank = Number(profile?.tank_temperature);
     const weight = Number(profile?.target_weight);
     const volume = Number(profile?.target_volume);
     const volumeStart = Number(profile?.target_volume_count_start);
-    const flowRange = Number(profile?.limiter_flow_range);
-    const pressureRange = Number(profile?.limiter_pressure_range);
     return {
       tankTempEnabled: tank > 0,
       tankTempValue: tank > 0 ? tank : 0,
@@ -220,9 +193,6 @@
       stopVolumeEnabled: volume > 0,
       stopVolumeValue: volume > 0 ? volume : 0,
       stopVolumeStartIndex: Number.isFinite(volumeStart) && volumeStart >= 0 ? volumeStart : 0,
-      // A pressure-goal frame's limiter caps FLOW, so its range is the "flow range".
-      limiterFlowRange: Number.isFinite(flowRange) && flowRange > 0 ? flowRange : (rangeFromFrames(rawFrames, "pressure") ?? 0.6),
-      limiterPressureRange: Number.isFinite(pressureRange) && pressureRange > 0 ? pressureRange : (rangeFromFrames(rawFrames, "flow") ?? 0.6),
     };
   }
 
@@ -231,7 +201,7 @@
   // flow/pressure are included if the original step had that key, OR the
   // frame's own pump mode needs it (a fresh/duplicated frame has no original
   // to match, so its pump mode alone decides).
-  function frameToStep(frame, originalStep, limits) {
+  function frameToStep(frame, originalStep) {
     const step = { ...(frame._rest || {}) };
     step.name = frame.name;
     step.pump = frame.pump;
@@ -247,9 +217,9 @@
 
     if (frame.limiterEnabled) {
       // The DE1 limits the OPPOSITE axis from the pump mode: a pressure-goal
-      // frame's limiter caps flow, and vice versa.
-      const range = frame.pump === "flow" ? limits.limiterPressureRange : limits.limiterFlowRange;
-      step.limiter = { value: frame.limiterValue, range };
+      // frame's limiter caps flow, and vice versa. Both the cap and its range
+      // are this step's own.
+      step.limiter = { value: frame.limiterValue, range: Math.max(0, Number(frame.limiterRange) || 0) };
     } else if (originalStep && "limiter" in originalStep) {
       step.limiter = originalStep.limiter;
     } else {
@@ -267,8 +237,7 @@
    *   title, author, notes, groupTemp, beverageType,
    *   frames: [editorFrame, ...],
    *   limits: { tankTempEnabled, tankTempValue, stopWeightEnabled, stopWeightValue,
-   *             stopVolumeEnabled, stopVolumeValue, stopVolumeStartIndex,
-   *             limiterFlowRange, limiterPressureRange },
+   *             stopVolumeEnabled, stopVolumeValue, stopVolumeStartIndex },
    * }
    * originalProfile: the raw profile this draft started from (or null, for a
    * brand-new profile) — supplies the base for unmodeled fields (beverage_type,
@@ -284,7 +253,7 @@
     const stepsKey = Array.isArray(orig.frames) && !Array.isArray(orig.steps) ? "frames" : "steps";
     const otherKey = stepsKey === "steps" ? "frames" : "steps";
 
-    const steps = draft.frames.map((f, i) => frameToStep(f, origFrames[i], draft.limits));
+    const steps = draft.frames.map((f, i) => frameToStep(f, origFrames[i]));
 
     const profile = { ...orig };
     delete profile[otherKey];
@@ -305,8 +274,6 @@
     profile.target_weight = draft.limits.stopWeightEnabled ? draft.limits.stopWeightValue : 0;
     profile.target_volume = draft.limits.stopVolumeEnabled ? draft.limits.stopVolumeValue : 0;
     profile.target_volume_count_start = draft.limits.stopVolumeStartIndex;
-    profile.limiter_flow_range = draft.limits.limiterFlowRange;
-    profile.limiter_pressure_range = draft.limits.limiterPressureRange;
     profile.version = String((Number(orig.version) || 1) + 1);
     return profile;
   }
@@ -403,7 +370,6 @@
     normalizeFrameExit,
     frameExitToObject,
     normalizeProfileLimits,
-    hasDivergentLimiterRanges,
     buildProfileFromDraft,
     makeDefaultFrame,
     isUserOwnedProfile,

@@ -230,10 +230,10 @@ export default {
     preheat: 'Preheat water tank',
     volumeCountStart: 'Track volume starting with',
     stopVolume: 'Stop at volume',
-    limitFlowRange: 'Limit flow range',
-    limitPressureRange: 'Limit pressure range',
     stopWeight: 'Stop at weight',
-    divergentLimiterRanges: 'This profile has different limiter ranges per step — saving here will make them all match.',
+    // Per step, under its limit: how softly that limit engages. 0 means the
+    // limiter is hard, not off — the limit itself is still in force.
+    limitRange: 'Limit range', limitRangeHard: 'Hard',
   },
   steam: {
     intensity: 'Intensity',
