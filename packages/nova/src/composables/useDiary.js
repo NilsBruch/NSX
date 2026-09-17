@@ -97,7 +97,10 @@ export const beansInRoaster = computed(() => {
   return sortByNameOrder(list, diaryState.sort);
 });
 
-function shotMatchesBean(shot, bean) {
+/** Does this shot come from that bean? Exported because the recipe wizard's
+ *  bean step asks the same question to work out which beans were brewed most
+ *  recently (BeanChooser.vue). */
+export function shotMatchesBean(shot, bean) {
   const beanBatchId = shot?.workflow?.context?.beanBatchId;
   if (beanBatchId && batchToBean.value.has(beanBatchId)) {
     return batchToBean.value.get(beanBatchId) === bean.id;

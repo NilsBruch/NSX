@@ -82,16 +82,47 @@ watch(
   { immediate: true }
 );
 
+/** The shot the review and its DYE page are on. */
+export const reviewShot = computed(() => historyShots.value[historyIndex.value] ?? null);
+
+/**
+ * Patch the shot's ANNOTATIONS — everything recorded AFTER the pour: the
+ * corrected dose and yield, TDS/EY, the note, the rating, and `extras`
+ * (favourite, tags). The API merges `extras` field by field, so a patch
+ * touching one of its keys leaves the others alone.
+ *
+ * Every edit refetches the full record, because updateShot invalidates the
+ * cached one and the screen reads its values back from there.
+ */
+export async function setShotAnnotations(patch) {
+  cancelReviewAutoClose();
+  const shot = reviewShot.value;
+  if (!shot) return;
+  await NSXCore.updateShot(shot.id, { annotations: patch });
+  currentFullShot.value = await NSXCore.getShotDetails(shot.id);
+}
+
+/**
+ * Patch the shot's WORKFLOW CONTEXT — the recipe as it stood when the shot was
+ * pulled (bean, grinder, targets, barista/drinker). Corrections here rewrite
+ * what this ONE shot says about itself; the recipe it came from is untouched.
+ * Core merges the patch into the whole workflow before the PUT, which would
+ * otherwise replace the embedded profile with nothing.
+ */
+export async function setShotContext(patch) {
+  cancelReviewAutoClose();
+  const shot = reviewShot.value;
+  if (!shot) return;
+  await NSXCore.updateShotWorkflowContext(shot.id, patch);
+  currentFullShot.value = await NSXCore.getShotDetails(shot.id);
+}
+
 /** Records a corrected dose-in for the shot currently in review — the DE1
  *  never measures dose itself, so this is the same editable annotation NSX's
  *  shot review lets the user set (falls back to the recipe's target dose
  *  until edited). Refetches the full detail since updateShot invalidates it. */
 export async function setActualDose(doseWeight) {
-  cancelReviewAutoClose();
-  const shot = historyShots.value[historyIndex.value];
-  if (!shot) return;
-  await NSXCore.updateShot(shot.id, { annotations: { actualDoseWeight: doseWeight } });
-  currentFullShot.value = await NSXCore.getShotDetails(shot.id);
+  return setShotAnnotations({ actualDoseWeight: doseWeight });
 }
 
 /** Records a corrected OUTPUT weight for the shot in review. Same override
@@ -99,16 +130,10 @@ export async function setActualDose(doseWeight) {
  *  and the scale samples, so a value entered here wins over all of them — for
  *  the shots where the scale was absent, bumped, or the cup got topped up. */
 export async function setActualYield(yieldWeight) {
-  cancelReviewAutoClose();
-  const shot = historyShots.value[historyIndex.value];
-  if (!shot) return;
   // extras merges at field level, so clearing virtualScale here costs nothing
   // else: a hand-entered yield is a measurement, and must stop rendering with
   // the "estimated" asterisk resolveActualYield would otherwise keep on it.
-  await NSXCore.updateShot(shot.id, {
-    annotations: { actualYield: yieldWeight, extras: { virtualScale: false } },
-  });
-  currentFullShot.value = await NSXCore.getShotDetails(shot.id);
+  return setShotAnnotations({ actualYield: yieldWeight, extras: { virtualScale: false } });
 }
 
 /** The grind setting recorded WITH the shot. Not an annotation: it's part of
@@ -128,11 +153,7 @@ export const grindSetting = computed(() => {
  *  record therefore carries the previous number. Edits the SHOT only; the
  *  recipe's current setting is untouched. */
 export async function setGrindSetting(value) {
-  cancelReviewAutoClose();
-  const shot = historyShots.value[historyIndex.value];
-  if (!shot) return;
-  await NSXCore.updateShotWorkflowContext(shot.id, { grinderSetting: value });
-  currentFullShot.value = await NSXCore.getShotDetails(shot.id);
+  return setShotContext({ grinderSetting: value });
 }
 
 /** Wall-clock shot start — exported so the live strip chart can scroll its

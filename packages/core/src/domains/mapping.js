@@ -611,6 +611,40 @@
       });
   }
 
+  /**
+   * The things a shot list most recently pointed at, newest first and without
+   * repeats — "the beans you last brewed", "the profiles you last used".
+   * What a picker puts at the top so the common case is one tap instead of a
+   * search through the whole library.
+   *
+   * `resolve(shot)` says what a shot points at (a bean, a profile record, a
+   * string); anything it can't answer for is skipped, so a shot whose bean has
+   * since been deleted drops out rather than leaving a hole. Sorting is by
+   * timestamp here, not assumed from the caller's order.
+   *
+   * @param {Array} shots
+   * @param {(shot: any) => any} resolve
+   * @param {{limit?: number, keyOf?: (item: any) => any}} [opts] keyOf decides
+   *        what counts as the same thing (default: its `id`, else the value).
+   */
+  function recentFromShots(shots, resolve, { limit = 3, keyOf = (x) => x?.id ?? x } = {}) {
+    if (!Array.isArray(shots) || typeof resolve !== "function") return [];
+    const out = [];
+    const seen = new Set();
+    const newestFirst = [...shots].sort(
+      (a, b) => (Date.parse(b?.timestamp || 0) || 0) - (Date.parse(a?.timestamp || 0) || 0));
+    for (const shot of newestFirst) {
+      if (out.length >= limit) break;
+      const item = resolve(shot);
+      if (item == null) continue;
+      const key = keyOf(item);
+      if (key == null || seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+    return out;
+  }
+
   // Max enjoyment rating across a shot list, plus how many shots share that
   // maximum (NOT the total number of rated shots). Returns {max, count}.
   function computeMaxRating(shotList) {
@@ -766,6 +800,7 @@
     buildShotDiffData,
     buildWorkflowItemsFromShots,
     computeMaxRating,
+    recentFromShots,
     findShotsForWorkflow,
     resolveActualDose,
     resolveActualYield,

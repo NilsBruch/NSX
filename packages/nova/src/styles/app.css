@@ -1507,6 +1507,11 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    .pd-stage: ProfilePicker's stage list shares .pd-stage and is meant to stay
    dense. */
 .bag-row { min-height: 68px; align-items: center; }
+/* The one .pd-stage-main that reads across instead of down: a bag is a date
+   and how old it is, and the overlay has width to spare. Baseline-aligned so
+   the quiet age sits on the date's line rather than beside its middle. */
+.bag-row-main { flex-direction: row; align-items: baseline; gap: 10px; }
+.bag-row-main .pd-stage-name { font-size: var(--fs-base); }
 
 /* ===== Profile editor (ProfileEditor.vue) — reuses .pick-body/.pick-list/
    .pick-detail/.pick-plot/.setting-row/.settings-scroll from the picker and
@@ -2003,7 +2008,97 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .date-nav.browse-nav .date-time { font-weight: 600; font-size: var(--fs-xs); color: var(--muted); }
 
+/* ===== The shot's two pages: graph on top, DYE underneath (LiveShotOverlay +
+   ShotDyePage.vue). The pair is twice the viewport tall and slides by exactly
+   one page, so "down to DYE" is a move in one direction rather than a screen
+   being replaced by another. The host keeps the overlay's padding; the slider
+   owns the height and clips the page that is off-screen. ===== */
+/* The wizard's shortcuts: the beans and profiles most recently brewed, above
+   the library and divided from it by a hairline rather than a heading — they
+   are the same list, just the part you are most likely to want.
+   (BeanChooser.vue / ProfilePicker.vue, filled by core's recentFromShots.) */
+.list-split { height: 1px; margin: 6px 14px; background: var(--line); }
+/* "Recent" / "Library" over each half of the bean list, so the shortcut at the
+   top is legible as one rather than as three beans of unclear provenance. */
+.list-label {
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--faint); padding: 10px 18px 4px;
+}
+.pick-recent { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+
+/* The viewport is the window the pages move behind, and the ONLY thing that
+   decides what is visible: it clips its own box, so the page waiting below
+   cannot show through the overlay's padding the way it did when the clipping
+   lived on the overlay itself. */
+.dye-viewport { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+/* The slider fills that window exactly and carries the second page BELOW
+   itself (top: 100%), so translating it by its own height lands that page
+   precisely where the first one was. Laying the two out as flex children
+   instead let them keep their content height and overlap. */
+.dye-slider {
+  position: absolute; inset: 0;
+  transform: translateY(0);
+  transition: transform 0.32s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+.dye-slider.is-dye { transform: translateY(-100%); }
+.dye-slide {
+  position: absolute; left: 0; right: 0; top: 0; height: 100%;
+  display: flex; flex-direction: column; gap: 14px;
+}
+/* The page underneath: one page down, and the slide brings it up. */
+.dye-slide + .dye-slide { top: 100%; }
+@media (prefers-reduced-motion: reduce) { .dye-slider { transition: none; } }
+
+/* The fields scroll; the header stays. */
+.dye-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+/* Two columns of sections, each headed by its subject the way DYE's own editor
+   is (beans, extraction, equipment, people). `align-items: start` so a short
+   section doesn't stretch to its neighbour's height; auto-flow stays row, so
+   the reading order down the page is the order in the markup. */
+.dye-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; align-items: start; }
+.dye-sect { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 10px 0 4px; }
+/* An icon and the subject, not a card title: the section is the group of
+   tiles under it, and the head is what says which group it is. */
+.dye-head { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
+.dye-head span {
+  font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted);
+}
+.dye-head svg {
+  flex: none; width: 26px; height: 26px;
+  stroke: var(--faint); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+/* Tiles, as many per row as fit: each field is a label and a short value, so a
+   full-width row spent most of itself on nothing. */
+.dye-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
+.dye-tile {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  background: var(--card-bg); border: none; border-radius: var(--r-md);
+  padding: 9px 13px; text-align: left; font-family: inherit; color: var(--text);
+  cursor: pointer;
+}
+/* Read-only fields: same tile, no press affordance. */
+.dye-tile.static { cursor: default; }
+.dye-tile .dl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.dye-tile .dv {
+  font-size: var(--fs-sm); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dye-tile .dv.muted { color: var(--muted); font-weight: 500; }
+/* The note sits under both columns and wraps, being the one field that runs on. */
+.dye-note { margin-top: 10px; }
+.dye-tile .dv.wrap { white-space: normal; line-height: 1.35; min-height: 2.7em; }
+
 .shot-done { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 26px; position: relative; }
+/* Bottom left, mirroring Delete at bottom right — same type and padding as
+   .ov-back for the same reason that one gives (opposite corners of one screen). */
+.shot-dye {
+  position: absolute; left: 0; display: inline-flex; align-items: center; gap: 8px;
+  background: var(--card-bg); border: none; border-radius: var(--r-md); padding: 11px 16px;
+  color: var(--text); font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+}
+.shot-dye svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .rate-stars { display: inline-flex; gap: 8px; }
 /* Delete pinned to the right so the star rating stays visually centred. */
 /* Type and padding are copied from .ov-back on purpose, not tuned to match it:
@@ -2197,7 +2292,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 a.sw-update { text-decoration: none; }
 /* The status line under each heading: quiet by default, accent when there is
    something newer — the same two-state signal the button opposite it carries. */
-.sw-upd-line { margin: 6px 0 0; font-size: var(--fs-sm); font-weight: 500; color: var(--muted); }
+/* min-height, because the line is rendered even when it is empty: the card
+   holds its height whether or not a release is waiting (see UpdateWidget). */
+.sw-upd-line { margin: 6px 0 0; min-height: 1.3em; font-size: var(--fs-sm); font-weight: 500; color: var(--muted); }
 .sw-upd-line.sw-accent { color: var(--accent); }
 /* App and skin as two columns of one card, split by a hairline: the same
    question asked about two things, not two settings. Equal widths so neither
@@ -2266,6 +2363,10 @@ a.sw-update { text-decoration: none; }
 .setting-row .sr-main { display: flex; flex-direction: column; gap: 3px; }
 .setting-row .sr-name { font-size: var(--fs-base); font-weight: 600; }
 .setting-row .sr-sub { font-size: var(--fs-xs); color: var(--muted); line-height: 1.35; }
+/* The grinder list carries a grinder's whole record on two lines under its
+   model (GrinderPanel.vue). Each stays ONE line, cut with an ellipsis, so
+   every row is the same height whatever a grinder has filled in. */
+.grinder-row .sr-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .setting-row.as-btn { border: none; cursor: pointer; font-family: inherit; color: var(--text); text-align: left; width: 100%; }
 .setting-row.as-btn.danger .sr-name { color: var(--alert); }
 .setting-row .sr-value { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -2736,6 +2837,7 @@ a.sw-update { text-decoration: none; }
 .tile,
 .setting-row.as-btn,
 .metric.as-btn,
+button.dye-tile,
 .rp-card,
 .recipe-title,
 .rov-bubble {
@@ -2744,6 +2846,7 @@ a.sw-update { text-decoration: none; }
 .tile:active,
 .setting-row.as-btn:active,
 .metric.as-btn:active,
+button.dye-tile:active,
 .rp-card:active,
 .recipe-title:active,
 .rov-bubble:active {
@@ -2776,7 +2879,7 @@ a.sw-update { text-decoration: none; }
   .btn, .rbtn, .rate-btn, .sort-btn, .scan-btn, .filter-chip, .npad-key,
   .tf-suggest, .tf-tag, .seg button, .chooser-item, .pick-item,
   .modal-actions button, .star, .kb-key, .tile, .setting-row.as-btn,
-  .metric.as-btn, .rp-card, .recipe-title, .rov-bubble {
+  .metric.as-btn, button.dye-tile, .rp-card, .recipe-title, .rov-bubble {
     transition: filter 0.09s ease;
   }
   .btn:active, .rbtn:active, .rate-btn:active, .sort-btn:active,

@@ -57,7 +57,12 @@ internals:
   object (mutated **in place**, never reassigned), so app.js can hold
   `const storeSettings = NSXCore.getStore()` and ~80 reads stay valid.
   API: `getStore`, `patchStore`, `replaceStore`, `saveActivePresetName`,
-  `migrateLegacyStore`, `loadStore`.
+  `migrateLegacyStore`, `importFromNamespace`, `loadStore`.
+  `importFromNamespace(sourceNs, { keys, defaults, markerKey })` is the one-time
+  copy of another skin's data (recipes, presets) into this skin's namespace —
+  Nova uses it to take over an NSX user's library. Runs only while the target has
+  no marker and no recipes, copies only when the source has recipes, never
+  overwrites a key the target has, and never writes the source.
 - **`push.js`** — `NSXCore.push(payload)` (calls `NSXApi.pushWorkflow`; on error
   `emit('toast', msg)`) and `NSXCore.debounced(key, fn, ms)`.
 
@@ -351,7 +356,8 @@ Recommended startup sequence in the skin (mirrors what NSX does):
 1. **Subscribe to the events you need** with `NSXCore.on(...)` — do this early (at
    module load) so nothing is missed; WS messages may already be arriving.
 2. `await NSXCore.migrateLegacyStore()` — one-time migration of legacy localStorage
-   settings into the store (safe no-op once migrated).
+   settings into the store (safe no-op once migrated). A skin taking over from
+   another one calls `await NSXCore.importFromNamespace(...)` just before this.
 3. `await NSXCore.loadStore()` — load the persisted settings object.
 4. `NSXCore.hydrateSteam()`, `hydrateHotwater()`, `hydrateFlush()`,
    `hydrateSchedule()` — seed the machine-function domains from the loaded store.

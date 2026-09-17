@@ -7,6 +7,7 @@ import { skinSettings } from '../composables/useSettings.js';
 import { machine, currentWorkflow } from '../composables/useCore.js';
 import { openNumberPad, openConfirm } from '../composables/useModals.js';
 import { showToast } from '../composables/useToast.js';
+import ShotDyePage from './ShotDyePage.vue';
 import { formatClock } from '../utils/clock.js';
 import { isPhone } from '../composables/useLayout.js';
 import ShotStripChart from './ShotStripChart.vue';
@@ -136,6 +137,12 @@ function setRating(n) {
 // inline in the legend. Cleared (null) on release and whenever the shot changes.
 const scrub = ref(null);
 watch(historyIndex, () => { scrub.value = null; });
+
+// The DYE page sits UNDER the graph page and slides the pair up (see the
+// .dye-slider rule). Stepping to another shot leaves it open on purpose: it is
+// how you read the same field across several shots.
+const dyeOpen = ref(false);
+watch(phase, () => { dyeOpen.value = false; });
 const fmt = (v, dec = 1) => (Number.isFinite(v) ? v.toFixed(dec) : '—');
 
 async function confirmDeleteShot() {
@@ -267,7 +274,13 @@ async function editGrindSetting() {
     </div>
   </div>
 
-  <div v-else-if="phase === 'history'" class="overlay-full">
+  <!-- Two pages stacked vertically, the graph on top and DYE underneath: the
+       DYE button slides the pair up rather than swapping screens, so the graph
+       is still where it was when you come back. -->
+  <div v-else-if="phase === 'history'" class="overlay-full dye-host">
+   <div class="dye-viewport">
+    <div class="dye-slider" :class="{ 'is-dye': dyeOpen }">
+    <div class="dye-slide">
     <div class="ov-top">
       <button class="ov-back" @click="closeHistory">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('liveShot.back') }}
@@ -315,6 +328,13 @@ async function editGrindSetting() {
         <div class="metric"><div class="ml">{{ t('liveShot.mTime') }}</div><div class="mv">{{ durationLabel }}<small>s</small></div></div>
       </div>
       <div class="shot-done">
+        <!-- Bottom left, opposite Delete: the way DOWN into the rest of this
+             shot's record. Everything the graph page has no room for lives
+             there (ShotDyePage.vue). -->
+        <button class="shot-dye" @click="dyeOpen = true">
+          {{ t('dye.open') }}
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" /></svg>
+        </button>
         <div class="rate-stars">
           <button v-for="n in 5" :key="n" class="star" :class="{ on: n <= rating }" @click="setRating(n)">{{ n <= rating ? '★' : '☆' }}</button>
         </div>
@@ -325,5 +345,9 @@ async function editGrindSetting() {
       </div>
     </template>
     <div v-else class="list"><div class="list-row"><span class="rsub">{{ t('liveShot.noShotsYet') }}</span></div></div>
+    </div>
+    <ShotDyePage class="dye-slide" @close="dyeOpen = false" />
+    </div>
+   </div>
   </div>
 </template>

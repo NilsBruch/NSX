@@ -13,7 +13,7 @@
  * Registered on NSXCore:
  *   Selectors:  getStore()
  *   Commands:   patchStore(patch), replaceStore(data), saveActivePresetName(key, name),
- *               migrateLegacyStore(), loadStore()
+ *               migrateLegacyStore(), importFromNamespace(sourceNs, opts), loadStore()
  */
 (function () {
   const NSXCore = window.NSXCore;
@@ -263,6 +263,59 @@
   }
 
   /**
+   * One-time import of another skin's data into this skin's namespace — how a
+   * user switching skins (NSX -> Nova) keeps their recipes and presets. Call it
+   * BEFORE migrateLegacyStore/loadStore/loadRecipes so those read the copy.
+   *
+   *   sourceNs  namespace to read from (e.g. "NSX"); never written to, so the
+   *             user can go back to the old skin with its data intact.
+   *   keys      store keys to copy when the source has them.
+   *   defaults  extra key/values written only when an import happens (skin
+   *             settings that make the new skin feel like the old one).
+   *   markerKey written last; its presence means "already decided, never again".
+   *
+   * Runs only if this namespace has neither the marker nor any recipes. The
+   * source counts as a real user only when it holds recipes; otherwise just the
+   * marker is written and the skin keeps its own defaults. Keys this namespace
+   * already has are never overwritten, and the marker goes last, so a run that
+   * fails halfway simply resumes on the next boot. A failed read returns
+   * "error" without writing anything.
+   *
+   * Returns "imported" | "nothing" | "skipped" | "error".
+   */
+  async function importFromNamespace(sourceNs, { keys = [], defaults = {}, markerKey } = {}) {
+    const { getStoreNamespace, setStoreValue } = api();
+    if (!markerKey || typeof getStoreNamespace !== "function" || typeof setStoreValue !== "function") return "skipped";
+    try {
+      const target = (await getStoreNamespace(ns())) || {};
+      const hasRecipes = (d) => Array.isArray(d?.recipes) && d.recipes.length > 0;
+      if (markerKey in target || hasRecipes(target)) return "skipped";
+
+      const source = (await getStoreNamespace(sourceNs)) || {};
+      if (!hasRecipes(source)) {
+        await setStoreValue(ns(), markerKey, { from: sourceNs, imported: false, at: Date.now() });
+        return "nothing";
+      }
+
+      const toWrite = {};
+      for (const key of keys) if (key in source && key !== "recipes") toWrite[key] = source[key];
+      Object.assign(toWrite, defaults);
+      // Recipes go last (before the marker): their presence is what skips a
+      // later run, so writing them first would strand an interrupted import.
+      if (keys.includes("recipes")) toWrite.recipes = source.recipes;
+      for (const [key, value] of Object.entries(toWrite)) {
+        if (key in target || value === null || value === undefined) continue;
+        await setStoreValue(ns(), key, value);
+      }
+      await setStoreValue(ns(), markerKey, { from: sourceNs, imported: true, at: Date.now() });
+      return "imported";
+    } catch (err) {
+      console.debug("Import from namespace failed:", sourceNs, err?.message || err);
+      return "error";
+    }
+  }
+
+  /**
    * Load the persisted settings from the gateway into the store (in place).
    * Reads the whole namespace (ETag-backed ?full=1) and keeps only the nsx_*
    * settings keys. Falls back to the legacy single blob if the namespace read
@@ -300,6 +353,7 @@
     threeWayMerge,
     saveActivePresetName,
     migrateLegacyStore,
+    importFromNamespace,
     loadStore,
   });
 })();

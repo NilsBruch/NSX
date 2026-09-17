@@ -215,6 +215,25 @@ export function formatShortDate(iso) {
 }
 
 /**
+ * A date written out — "08. September 2026" — for the few places with room for
+ * it, where "09/08/26" is a puzzle: which number is the month, and of what
+ * year. The bag list is the first (BagsPanel.vue).
+ *
+ * The month NAME comes from the locale; the ORDER does not. Day-first is fixed
+ * here because these dates are read next to each other in a list, where one
+ * shared shape scans faster than each locale's own — and because en-US's
+ * "September 8, 2026" puts the part that differs between two bags last.
+ */
+export function formatLongDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const locale = window.NSXI18n?.getLocale?.() ?? 'en-US';
+  const month = new Intl.DateTimeFormat(locale, { month: 'long' }).format(d);
+  return `${String(d.getDate()).padStart(2, '0')}. ${month} ${d.getFullYear()}`;
+}
+
+/**
  * The same instant split for a date RAIL — { day: '3', month: 'Sep', time:
  * '07:04' } — where formatShortDate returns one glued string. A list of shots
  * is mostly same-month, so a rail can shout the day and whisper the rest,
@@ -339,6 +358,22 @@ NSXCore.on('liveShot', (snap) => {
 /** Startup sequence, in the order the core README prescribes. */
 export async function bootCore() {
   try {
+    // An NSX user's first Nova start: bring their recipes and presets across
+    // (NSX's own data stays untouched) and start in the settings closest to
+    // NSX. The schedule is not copied — it lives in the gateway schedule API,
+    // and the lookup below picks it up. Must run before loadStore/loadRecipes.
+    await NSXCore.importFromNamespace('NSX', {
+      markerKey: 'nova_nsx_import',
+      keys: [
+        'recipes',
+        'profile-favorites',
+        'nsx_steam_presets', 'nsx_steam_active_preset', 'nsx_steam_enabled',
+        'nsx_steam_timer_enabled', 'nsx_steam_calibration', 'nsx_pitcher_presets',
+        'nsx_hotwater_presets', 'nsx_hotwater_active_preset',
+        'nsx_flush_presets', 'nsx_flush_active_preset', 'nsx_flush_timer_enabled',
+      ],
+      defaults: { nova_theme: 'midnight', nova_graph_mode: 'expert', nova_coffee_graph: true },
+    });
     await NSXCore.migrateLegacyStore();
     await NSXCore.loadStore();
 

@@ -11,7 +11,7 @@
  */
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { formatShortDate } from '../composables/useCore.js';
+import { formatLongDate } from '../composables/useCore.js';
 import { useBeanBatches } from '../composables/useBeanBatches.js';
 import { addBatch, setBatchRoastDate, confirmAndDeleteBatch } from '../composables/useBeanActions.js';
 import RoastDatePicker from './RoastDatePicker.vue';
@@ -74,8 +74,11 @@ async function deleteBatchRow(batch) {
              DiaryView.vue's .row-main / .row-edit pairing) — Delete is the
              only action that still needs its own button, so it's the only
              one left, and bigger for being the sole target now. -->
-        <button class="pd-stage-main" @click="openEditBatch(b)">
-          <span class="pd-stage-name">{{ b.roastDate ? formatShortDate(b.roastDate) : t('diary.empty') }}</span>
+        <!-- Date and age on ONE line: a bag row carries two short facts and a
+             whole overlay's width to put them on, so stacking them made a
+             two-line row out of half a line of text. -->
+        <button class="pd-stage-main bag-row-main" @click="openEditBatch(b)">
+          <span class="pd-stage-name">{{ b.roastDate ? formatLongDate(b.roastDate) : t('diary.empty') }}</span>
           <span class="pd-stage-detail">{{ b.roastDate ? NSXCore.getBatchAge(b.roastDate) : '' }}<template v-if="b.archived"> · {{ t('diary.archive') }}</template></span>
         </button>
         <button class="batch-row-delete" :aria-label="t('common.delete')" @click="deleteBatchRow(b)">

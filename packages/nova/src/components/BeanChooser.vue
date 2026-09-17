@@ -10,13 +10,15 @@
  *  swap an existing recipe's bean — where "Step 1 of 2" was simply untrue. */
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { beans } from '../composables/useCore.js';
+import { beans, shots } from '../composables/useCore.js';
+import { shotMatchesBean } from '../composables/useDiary.js';
 import { vScrollEdges } from '../composables/useScrollEdges.js';
 import { openTextField } from '../composables/useModals.js';
 import BeanEditor from './BeanEditor.vue';
 
 const emit = defineEmits(['pick', 'back']);
 const { t } = useI18n();
+const { NSXCore } = window;
 
 const showEditor = ref(false);
 
@@ -48,6 +50,22 @@ const matches = (bean, q) =>
 const foundBeans = computed(() => {
   const q = query.value.trim().toLowerCase();
   return q ? activeBeans.value.filter((b) => matches(b, q)) : activeBeans.value;
+});
+
+/**
+ * The three beans most recently brewed, above the library — starting a recipe
+ * is usually about the bag already open, and finding it meant a roaster tap
+ * and then a bean tap every time. Read from the shot history (core's
+ * recentFromShots), not from the recipes, so it follows what was actually
+ * pulled. Archived beans are out for the same reason they are out of the list
+ * below. Hidden while searching: a search is already a narrower question.
+ */
+const recentBeans = computed(() => {
+  if (query.value.trim()) return [];
+  return NSXCore.recentFromShots(
+    shots.value,
+    (shot) => activeBeans.value.find((b) => shotMatchesBean(shot, b)) ?? null,
+  );
 });
 
 const roasterGroups = computed(() => {
@@ -113,6 +131,21 @@ async function openSearch() {
       <Transition :name="drill">
         <div v-if="!roaster" key="roasters" v-scroll-edges class="list list-cards">
           <div class="lc-inner">
+            <!-- Straight to the bean, skipping the roaster step: these are the
+                 bags actually in use. A hairline, not a heading with a gap,
+                 keeps them part of the same list rather than a second one. -->
+            <template v-if="recentBeans.length">
+              <span class="list-label">{{ t('common.recent') }}</span>
+              <button v-for="bean in recentBeans" :key="`recent-${bean.id}`" class="list-row" @click="emit('pick', bean)">
+                <span class="rmeta rmeta-inline">
+                  <span class="bean-name">{{ bean.name }}</span>
+                  <span class="rsub">{{ bean.roaster || '—' }}</span>
+                </span>
+                <span class="chev">›</span>
+              </button>
+              <div class="list-split"></div>
+              <span class="list-label">{{ t('common.library') }}</span>
+            </template>
             <button v-for="g in roasterGroups" :key="g.name" class="list-row" @click="enterRoaster(g.name)">
               <span class="rmeta">{{ g.name }}<span class="rsub">{{ g.beans.length }} bean{{ g.beans.length !== 1 ? 's' : '' }}</span></span>
               <span class="chev">›</span>

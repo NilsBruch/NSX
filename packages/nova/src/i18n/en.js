@@ -1,5 +1,8 @@
 export default {
   common: {
+    // The two halves of a picker that leads with what you last used
+    // (BeanChooser.vue / ProfilePicker.vue).
+    recent: 'Recent', library: 'Library',
     cancel: 'Cancel',
     confirm: 'Confirm',
     replace: 'Replace',
@@ -303,6 +306,32 @@ export default {
     deleteTitle: 'Delete shot',
     deleteMessage: 'Permanently delete this shot from history?',
   },
+  // The DYE page (ShotDyePage.vue) — the shot's own record, in full.
+  dye: {
+    title: 'Describe your espresso',
+    open: 'DYE',
+    backToGraph: 'Graph',
+    secBeans: 'Beans', secEquipment: 'Equipment',
+    secExtraction: 'Extraction', secPeople: 'People',
+    roaster: 'Roaster', bean: 'Bean', roastDate: 'Roast date',
+    dose: 'Dose', grinder: 'Grinder', grind: 'Grind', targetYield: 'Target',
+    profile: 'Profile', temperature: 'Temperature',
+    barista: 'Barista', drinker: 'Drinker', beverage: 'Beverage',
+    beverage_espresso: 'Espresso', beverage_filter: 'Filter',
+    beverage_lungo: 'Lungo', beverage_americano: 'Americano',
+    time: 'Time', yield: 'Yield', ratio: 'Ratio', tds: 'TDS %', ey: 'EY %',
+    stopReason: 'Stopped by', favorite: 'Favourite',
+    notes: 'Tasting note', notesEmpty: 'No note yet',
+    notesPlaceholder: 'How did it taste?',
+  },
+  // Why a shot ended, as the record's stopReason names it. An unknown value
+  // from a newer gateway falls back to `generic`.
+  shotStop: {
+    targetWeight: 'Target weight', targetVolume: 'Target volume',
+    apiStop: 'Stopped remotely', appStop: 'Stopped in the app',
+    machineEnded: 'Machine ended the shot', error: 'Error',
+    generic: 'Shot ended',
+  },
   diary: {
     roasters: 'Roasters',
     beans: 'Beans',
@@ -383,10 +412,12 @@ export default {
     connection: 'Connection', noDevices: 'No devices paired',
     appTitle: 'App', checkUpdates: 'Check for updates', upToDate: 'Up to date',
     updateAvailable: '{version} available',
-    skinTitle: 'Skin', updateApp: 'Update app', updateSkin: 'Update skin',
+    skinTitle: 'Skin',
     download: 'Download', updating: 'Updating',
+    appNotInstallable: 'The app cannot update itself here — download it from GitHub or your app store.',
     checking: 'Checking…', checkFailed: 'Could not check',
     skinUpdating: 'Downloading…', skinUpdated: 'Updated to {version} — reloading…',
+    skinUpdatedNoReload: 'Updated to {version}',
   },
   beanManager: {
     batches: 'Bags',

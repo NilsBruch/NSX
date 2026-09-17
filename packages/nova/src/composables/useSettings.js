@@ -306,6 +306,32 @@ export function installAppUpdate() {
   }
 }
 
+/**
+ * Install the app update if this host can — and wait for the answer before
+ * concluding it can't.
+ *
+ * `installable` is the gateway's own verdict, and it only turns true once ITS
+ * checker has run. Ours comes from GitHub and is usually there first, so a
+ * press right after opening the card used to read the still-empty gateway state
+ * as "this platform can't install" — on Android too, where it can (that is the
+ * GitHub page opening instead of an install). So: ask, then give the answer a
+ * few seconds to arrive, and only then say no.
+ *
+ * Returns 'installing' when the command went out, 'unavailable' when this host
+ * genuinely has no in-app path (desktop, or the gateway never answered).
+ */
+export async function requestAppInstall() {
+  if (!appUpdate.value?.installable) {
+    sendAppUpdateCheck();
+    for (let i = 0; i < 10 && !appUpdate.value?.installable; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  if (!appUpdate.value?.installable) return 'unavailable';
+  installAppUpdate();
+  return 'installing';
+}
+
 /* ── Which skin the gateway serves ────────────────────────────────────────── */
 
 export const installedSkins = ref([]);
@@ -361,11 +387,14 @@ export async function forgetDevice(deviceId) {
  * changed, so pressing this with nothing new leaves the screen alone.
  * @returns {Promise<{updated: boolean, version: string}>}
  */
-export async function runSkinUpdate() {
+export async function runSkinUpdate({ reload = true } = {}) {
   const result = await NSXCore.installSkinUpdate(SKIN_ID);
   if (result.updated) {
     skinRelease.value = { ...(skinRelease.value || {}), installed: result.version, updateAvailable: false };
-    setTimeout(() => window.location.reload(), 1500);
+    // `reload: false` is for the press that also started an app install: that
+    // one restarts the app (and so this page) by itself, and reloading into the
+    // new skin mid-install would tear down the progress the user is watching.
+    if (reload) setTimeout(() => window.location.reload(), 1500);
   }
   return result;
 }

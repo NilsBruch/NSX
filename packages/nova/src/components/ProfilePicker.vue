@@ -9,7 +9,7 @@
  */
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { profiles, profilesAll, refreshProfiles, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
+import { profiles, profilesAll, refreshProfiles, refreshProfilesAll, saveLibraryProfile, shots } from '../composables/useCore.js';
 import { showToast } from '../composables/useToast.js';
 import { frames, frameDetailText, frameName } from '../composables/useProfileDisplay.js';
 import { openConfirm, openChooser } from '../composables/useModals.js';
@@ -48,6 +48,24 @@ const sourceList = computed(() => (
 ));
 const myProfiles = computed(() => sourceList.value.filter(isUserOwned));
 const decentProfiles = computed(() => sourceList.value.filter((p) => !isUserOwned(p)));
+
+/**
+ * The three profiles most recently brewed with, above the library — the same
+ * shortcut the bean step has (BeanChooser.vue), and for the same reason: a new
+ * recipe is usually a variation on what you have been pulling, which otherwise
+ * means finding it again among tabs, type filters and every Decent default.
+ *
+ * Matched by TITLE, which is what a shot records; a profile since edited into
+ * a new record still resolves, and one deleted from the library drops out.
+ * Only in pick mode — the library screen is for managing, not repeating.
+ */
+const recentProfiles = computed(() => {
+  if (props.mode !== 'pick') return [];
+  return NSXCore.recentFromShots(shots.value, (shot) => {
+    const title = shot?.workflow?.profile?.title || shot?.workflow?.context?.profileTitle;
+    return title ? sourceList.value.find((p) => (p.profile?.title || '') === title) ?? null : null;
+  });
+});
 
 const selectedId = ref(
   profiles.value.find((p) => (p.profile?.title || '') === props.currentTitle)?.id ?? null
@@ -362,6 +380,23 @@ async function onEditorSaved({ profile: built, originalProfile }) {
           <span>{{ t('profilePicker.pickingSourceHint') }}</span>
           <button class="btn" @click="pickingSource = false">{{ t('common.cancel') }}</button>
         </div>
+        <!-- Above the tabs, because it belongs to neither of them: these are
+             the profiles you have actually been brewing, wherever they live.
+             A hairline under them, then the library as it was. -->
+        <div v-if="recentProfiles.length" class="pick-recent">
+          <span class="pick-group-label">{{ t('common.recent') }}</span>
+          <button
+            v-for="p in recentProfiles"
+            :key="`recent-${p.id}`"
+            class="pick-item"
+            :class="{ sel: p.id === selectedId }"
+            @click="selectedId = p.id"
+          >
+            <span class="pname">{{ p.profile?.title || '—' }}</span>
+            <span v-if="p.profile?.title === currentTitle" class="cur">{{ t('common.current') }}</span>
+          </button>
+        </div>
+        <span v-if="recentProfiles.length" class="pick-group-label">{{ t('common.library') }}</span>
         <div class="seg seg-tall" :data-pos="activeGroup === 'user' ? 1 : 0">
           <span class="seg-thumb"></span>
           <button :class="{ on: activeGroup === 'decent' }" @click="activeGroup = 'decent'">{{ t('profilePicker.decentProfiles') }}</button>
