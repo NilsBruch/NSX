@@ -88,7 +88,12 @@ function selectFrame(idx) {
 }
 
 function plotSvg() {
-  return NSXCore.renderProfileSpark({ title: draft.title, steps: draft.frames }, {
+  // beverage_type rides along because it picks the PUCK the preview is
+  // simulated through (see core's profile-simulate): switch the type to
+  // pour-over and the pressure line drops to nothing, as it would on the
+  // machine. The draft's type, not the saved one — this previews what is
+  // being edited.
+  return NSXCore.renderProfileSpark({ title: draft.title, steps: draft.frames, beverage_type: draft.beverageType }, {
     // See ProfilePicker.plotSvg — pinned to 'dark', the preview came out as a
     // dark slab on the light theme.
     theme: skinSettings.theme === 'light' ? 'light' : 'dark', showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,

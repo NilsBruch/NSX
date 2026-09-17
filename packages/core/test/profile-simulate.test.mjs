@@ -211,3 +211,50 @@ test("the x axis follows the simulated length, not the sum of the frames", () =>
   const svg = NSXCore.renderProfileSpark(early, { showXTicks: true });
   assert.doesNotMatch(svg, />60s</, "60s was never reached, so it must not be an axis label");
 });
+
+// ── The puck is not the same puck in every beverage ─────────────────────────
+// A pour-over bed is coarse coffee in an open basket: the water runs through
+// it, so pressure never builds however hard the pump works. Simulating one
+// through the espresso puck drew a filter profile climbing to several bar.
+
+const pourFrames = {
+  steps: [
+    { name: "Bloom", pump: "flow", flow: 4, seconds: 10, temperature: 94 },
+    { name: "Pour", pump: "flow", flow: 6, seconds: 40, temperature: 94 },
+  ],
+};
+
+test("a pour-over profile brews at essentially no pressure", () => {
+  const sim = NSXCore.simulateShot({ ...pourFrames, beverage_type: "pourover" });
+  assert.ok(max(sim.pressure) < 1, `pour-over peaked at ${max(sim.pressure).toFixed(2)} bar`);
+  // The water still goes somewhere: a filter bed that stops the flow would be
+  // as wrong as one that builds 9 bar.
+  assert.ok(max(sim.flow) > 3, "flow follows the commanded 4-6 ml/s");
+});
+
+test("the same frames as espresso do build pressure", () => {
+  const espresso = NSXCore.simulateShot({ ...pourFrames, beverage_type: "espresso" });
+  assert.ok(max(espresso.pressure) > 3, "an espresso puck answers flow with pressure");
+});
+
+test("an untyped profile is treated as espresso, as the rest of the skin does", () => {
+  const untyped = max(NSXCore.simulateShot(pourFrames).pressure);
+  const espresso = max(NSXCore.simulateShot({ ...pourFrames, beverage_type: "espresso" }).pressure);
+  assert.equal(untyped, espresso);
+});
+
+test("an unknown beverage type falls back to espresso rather than to no puck", () => {
+  const odd = max(NSXCore.simulateShot({ ...pourFrames, beverage_type: "cortado-ish" }).pressure);
+  assert.ok(odd > 3);
+});
+
+test("opts.beverageType overrides the profile's own, for a preview of an unsaved edit", () => {
+  const sim = NSXCore.simulateShot({ ...pourFrames, beverage_type: "espresso" }, { beverageType: "pourover" });
+  assert.ok(max(sim.pressure) < 1);
+});
+
+test("cleaning runs through an empty basket: less resistance still than a filter bed", () => {
+  const cleaning = max(NSXCore.simulateShot({ ...pourFrames, beverage_type: "cleaning" }).pressure);
+  const pour = max(NSXCore.simulateShot({ ...pourFrames, beverage_type: "pourover" }).pressure);
+  assert.ok(cleaning < pour, `cleaning ${cleaning.toFixed(3)} should be under pour-over ${pour.toFixed(3)}`);
+});

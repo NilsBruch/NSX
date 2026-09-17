@@ -69,6 +69,43 @@
   // puck gives ~4.5 ml/s; and 9 bar through a saturated one gives ~2 ml/s.
   const R_DRY = 0.004;       // P/Q² of a dry bed — essentially no back-pressure
   const R_WET = 2.25;        // P/Q² once saturated and compacted
+
+  /**
+   * The bed is not the same bed in every beverage. An espresso puck is fine,
+   * dosed deep and tamped, and that is where 9 bar comes from; a pour-over is
+   * coarse coffee in an open basket the water runs THROUGH, so it develops
+   * essentially no back-pressure however hard you pump. Simulating both with
+   * the espresso puck drew a pour-over preview climbing to several bar, which
+   * is the one thing a pour-over never does.
+   *
+   * Only the saturated resistance changes. Dry behaviour, absorption and
+   * erosion are the same story in every basket, and a coarse bed still soaks
+   * up its own weight in water before anything reaches the cup.
+   *
+   * Keyed by Profile.beverage_type. Anything unlisted (and anything with no
+   * type at all) is treated as espresso, which is what the rest of the skin
+   * assumes of an untyped profile.
+   *
+   *   pourover        — a filter bed: 4 ml/s costs ~0.2 bar, i.e. nothing.
+   *   tea_portafilter — leaf in water, less restrictive still.
+   *   cleaning /
+   *   calibrate       — an empty basket or a blind disc's bypass; there is no
+   *                     coffee in the way at all.
+   *   manual          — left as espresso: it is a normal puck, driven by hand.
+   */
+  const R_WET_BY_BEVERAGE = {
+    espresso: R_WET,
+    manual: R_WET,
+    pourover: 0.012,
+    tea_portafilter: 0.006,
+    cleaning: 0.002,
+    calibrate: 0.002,
+  };
+
+  function wetResistanceFor(beverageType) {
+    const key = String(beverageType || "").trim().toLowerCase();
+    return R_WET_BY_BEVERAGE[key] ?? R_WET;
+  }
   // The exponent is the shape of the whole preinfusion. A low one starts
   // building resistance from the first drop of water and puts pressure on the
   // puck almost at once; s⁴ keeps the bed open until it is nearly full and
@@ -133,12 +170,16 @@
    * same moment. This one approaches its limit and never hits it, so the
    * shoulder is smooth.
    */
-  function puckResistance(inflowRatio, brewT) {
+  function puckResistance(inflowRatio, brewT, rWet = R_WET) {
     const x = Math.max(0, inflowRatio);
     const saturation = 1 - Math.exp(-Math.pow(x, SATURATION_EXP));
-    const base = R_DRY + (R_WET - R_DRY) * saturation;
+    const base = R_DRY + (rWet - R_DRY) * saturation;
     const erosion = Math.min(EROSION_MAX, Math.max(0, brewT) * EROSION_PER_S);
-    return Math.max(0.02, base * (1 - erosion));
+    // The floor is a fraction of this bed's own resistance, not a fixed 0.02:
+    // as an absolute it was above everything a pour-over basket ever reaches,
+    // so every filter profile came out at the espresso floor instead of at
+    // its own near-nothing.
+    return Math.max(Math.min(0.02, rWet * 0.5), base * (1 - erosion));
   }
 
   function extractFrames(profile) {
@@ -184,6 +225,10 @@
    *   puck swallows before the first drop, so it moves the whole curve.
    * @param {number} [opts.dt=0.1] - simulation step in seconds.
    * @param {number} [opts.maxDuration=120]
+   * @param {string} [opts.beverageType] - overrides the profile's own
+   *   `beverage_type`, which is what normally picks the puck (see
+   *   R_WET_BY_BEVERAGE): a pour-over bed develops no pressure worth drawing,
+   *   an espresso puck develops all of it.
    * @returns {{t:number[],pressure:number[],flow:number[],weight:number[],
    *            temperature:number[],targetPressure:(number|null)[],
    *            targetFlow:(number|null)[],
@@ -194,7 +239,8 @@
    *   there rather than plot a zero.
    */
   function simulateShot(profile, opts = {}) {
-    const { dose = 18, dt = DT, maxDuration = MAX_DURATION } = opts;
+    const { dose = 18, dt = DT, maxDuration = MAX_DURATION, beverageType } = opts;
+    const rWet = wetResistanceFor(beverageType ?? profile?.beverage_type);
 
     const raw = extractFrames(profile);
     const normalize = NSXCore.normalizeProfileFrame;
@@ -250,7 +296,7 @@
         const targetP = fromP + (goalP - fromP) * ramp;
         const targetQ = fromQ + (goalQ - fromQ) * ramp;
 
-        const R = puckResistance(inflow / absorbMl, brewT);
+        const R = puckResistance(inflow / absorbMl, brewT, rWet);
 
         // Where the pair WANTS to be this instant. Only one of the two is
         // commanded; the puck's R fixes the other, and a limiter can override
