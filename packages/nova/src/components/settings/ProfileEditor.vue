@@ -375,10 +375,11 @@ function save() {
 
         <div class="pe-groups">
           <!-- Two independently-stacked columns rather than a 2x2 grid: a grid
-               row would force Temperature to match Goal's (taller) height, and
-               Maximum's (taller) height to match Exit's — leaving Temperature
-               half-empty. Stacked columns let each tile size to its own
-               content instead. -->
+               row would force each tile to match the height of the one beside
+               it, leaving the shorter one half-empty. Stacked columns let each
+               tile size to its own content instead. Read down each column:
+               1 Temperature, 2 Goal on the left; 3 Maximum, 4 Move on if on the
+               right. -->
           <div class="pe-col">
             <div class="pe-group">
               <span class="pd-panel-label">{{ t('profileEditor.groupTemperature') }}</span>
@@ -397,29 +398,6 @@ function save() {
               </div>
             </div>
 
-            <div class="pe-group">
-              <span class="pd-panel-label">{{ t('profileEditor.groupMax') }}</span>
-              <SettingSlider
-                :label="t('profileEditor.time')" :model-value="selectedFrame.seconds"
-                :min="0" :max="30" :step="1" unit=" s"
-                @change="selectedFrame.seconds = $event" @edit="editFrameField('seconds', t('profileEditor.time'), ' s')"
-              />
-              <SettingSlider
-                :label="t('profileEditor.volume')" :model-value="selectedFrame.volumeValue"
-                :min="0" :max="50" :step="1" unit=" ml" :off-label="t('common.off')"
-                @change="setFrameValue('volumeValue', 'volumeEnabled', $event)"
-                @edit="editFrameValueField('volumeValue', 'volumeEnabled', t('profileEditor.volume'), ' ml')"
-              />
-              <SettingSlider
-                :label="t('profileEditor.weight')" :model-value="selectedFrame.weightValue"
-                :min="0" :max="50" :step="1" unit=" g" :off-label="t('common.off')"
-                @change="setFrameValue('weightValue', 'weightEnabled', $event)"
-                @edit="editFrameValueField('weightValue', 'weightEnabled', t('profileEditor.weight'), ' g')"
-              />
-            </div>
-          </div>
-
-          <div class="pe-col">
             <div class="pe-group">
               <span class="pd-panel-label">{{ t('profileEditor.groupGoal') }}</span>
               <div class="pe-seg-row">
@@ -464,6 +442,29 @@ function save() {
                   <button :class="{ on: selectedFrame.transition === 'smooth' }" @click="setTransition('smooth')">{{ t('profileEditor.transitionSmooth') }}</button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div class="pe-col">
+            <div class="pe-group">
+              <span class="pd-panel-label">{{ t('profileEditor.groupMax') }}</span>
+              <SettingSlider
+                :label="t('profileEditor.time')" :model-value="selectedFrame.seconds"
+                :min="0" :max="30" :step="1" unit=" s"
+                @change="selectedFrame.seconds = $event" @edit="editFrameField('seconds', t('profileEditor.time'), ' s')"
+              />
+              <SettingSlider
+                :label="t('profileEditor.volume')" :model-value="selectedFrame.volumeValue"
+                :min="0" :max="50" :step="1" unit=" ml" :off-label="t('common.off')"
+                @change="setFrameValue('volumeValue', 'volumeEnabled', $event)"
+                @edit="editFrameValueField('volumeValue', 'volumeEnabled', t('profileEditor.volume'), ' ml')"
+              />
+              <SettingSlider
+                :label="t('profileEditor.weight')" :model-value="selectedFrame.weightValue"
+                :min="0" :max="50" :step="1" unit=" g" :off-label="t('common.off')"
+                @change="setFrameValue('weightValue', 'weightEnabled', $event)"
+                @edit="editFrameValueField('weightValue', 'weightEnabled', t('profileEditor.weight'), ' g')"
+              />
             </div>
 
             <div class="pe-group">
