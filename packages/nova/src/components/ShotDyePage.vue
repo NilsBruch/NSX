@@ -397,15 +397,19 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
             </button>
             <!-- The profile is the one thing a shot cannot be re-described into:
                  the record carries the frames that were actually run.
-                 Its own row, two tiles wide, and wrapping: profile names are
-                 long ("D-Flow / Q") and a single tile cut them off. -->
-            <div class="dye-tile static dye-profile">
-              <span class="dl">{{ t('dye.profile') }}</span>
-              <span class="dv fit" :class="{ muted: !profileTitle }">{{ dash(profileTitle) }}</span>
-            </div>
-            <div class="dye-tile static">
-              <span class="dl">{{ t('dye.temperature') }}</span>
-              <span class="dv" :class="{ muted: !groupTemp }">{{ dash(groupTemp) }}</span>
+                 Profile and temperature share a row of their own, whatever
+                 the grid's column count: the profile takes what the
+                 temperature leaves, and wraps when even that is not enough —
+                 profile names are long ("D-Flow / Q"). -->
+            <div class="dye-pair">
+              <div class="dye-tile static">
+                <span class="dl">{{ t('dye.profile') }}</span>
+                <span class="dv fit" :class="{ muted: !profileTitle }">{{ dash(profileTitle) }}</span>
+              </div>
+              <div class="dye-tile static">
+                <span class="dl">{{ t('dye.temperature') }}</span>
+                <span class="dv" :class="{ muted: !groupTemp }">{{ dash(groupTemp) }}</span>
+              </div>
             </div>
           </div>
         </section>

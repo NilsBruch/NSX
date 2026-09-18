@@ -2104,10 +2104,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 /* A tile that takes its grid's full width — the bean's tasting notes, which
    can run long and wrap (.dv.fit) instead of being cut. */
 .dye-span { grid-column: 1 / -1; }
-/* The profile: always starts a row (column 1) and spans two tiles, so the
-   next tile — the temperature — sits beside it where the grid has three
-   columns, and drops below it where it has two. */
-.dye-profile { grid-column: 1 / span 2; }
+/* Profile and temperature on one row of their own, whatever the grid's column
+   count: the row spans the grid, the temperature takes the width its value
+   needs, and the profile takes the rest. Spanning two grid tiles instead put
+   the temperature on a row of its own wherever the grid had only two. */
+.dye-pair { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.dye-pair > .dye-tile:last-child { min-width: 120px; }
 /* A value that wraps when it must but, unlike .wrap, reserves no second line —
    for a name that usually fits and only sometimes doesn't. */
 .dye-tile .dv.fit { white-space: normal; line-height: 1.3; }
