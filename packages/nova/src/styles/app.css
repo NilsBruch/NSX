@@ -2255,13 +2255,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    the cards are sized to fit the panel; one card per column may grow into the
    leftover height so both columns end level. */
 /* `flex: 0 1 auto`, not `flex: 1`: the row is as tall as its TALLEST column
-   rather than the whole page, so the grid's own stretch makes both columns
-   exactly that height and the shorter one has a known amount of slack. */
-.settings-body { flex: 0 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-/* That slack goes into the gaps rather than into one card, so both columns end
-   flush without a card carrying an empty region to pay for it. In the taller
-   column there is nothing to distribute and this is a no-op. */
-.sw-col { min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
+   rather than the whole page. Each column is as tall as its own cards
+   (align-items: start) and stacks them from the top at one steady gap, so
+   the two can end at different heights. They used to be stretched to the
+   taller one with the slack spread between the shorter one's cards
+   (space-between), which kept both columns flush at the bottom but opened
+   ever wider gaps on smaller screens. */
+.settings-body { flex: 0 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.sw-col { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
 
 /* A widget card: the page's own unit, holding rows rather than being one.
    Its rows are therefore transparent with a hairline between them -- a
