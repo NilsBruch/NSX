@@ -1091,8 +1091,16 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    runs the full height down to the page's bottom edge, past where the graph
    column's own content stops, with a fade (.rp-list::after) suggesting more
    recipes queued up just out of view. */
-.espresso-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(230px, 28%) 1fr; gap: 18px; }
+/* The card column and the cards in it at 90% of their original size
+   (230px / 28%, and `zoom: 0.9` on the list below), so the graph column
+   takes the width they gave up. */
+.espresso-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(207px, 25.2%) 1fr; gap: 18px; }
 .browse-list { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
+/* Zoom, not font-size: the cards are sized in rem, which a container's font
+   size cannot reach, and zoom scales the whole card — type, padding, gaps,
+   icons — by the same 10% at once. Only this list, not the recipe picker's
+   own cards. */
+.browse-list .rp-list-scroll { zoom: 0.9; }
 /* The non-scrolling shell that carries the bottom fade — .rp-list-scroll
    (below) is the part that actually scrolls, exactly like NSX's own
    recipe-list-shell/recipe-list-scroll split, so the fade stays pinned to the
