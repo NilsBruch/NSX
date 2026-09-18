@@ -133,7 +133,24 @@ export async function setShotContext(patch) {
  *  shot review lets the user set (falls back to the recipe's target dose
  *  until edited). Refetches the full detail since updateShot invalidates it. */
 export async function setActualDose(doseWeight) {
-  return setShotAnnotations({ actualDoseWeight: doseWeight });
+  const yieldW = currentFullShot.value ? NSXCore.resolveActualYield(currentFullShot.value)?.value : null;
+  return setShotAnnotations({ actualDoseWeight: doseWeight, ...eyInStep(doseWeight, yieldW) });
+}
+
+/**
+ * The shot's EY, recomputed for a new dose or yield — as a patch to write in
+ * the SAME request as the correction, or an empty one when nothing moves.
+ *
+ * EY is derived: TDS is the refractometer reading and EY = TDS × yield ÷ dose
+ * (core's eyFromTds). Correct the dose or the yield and the reading still
+ * stands, but the EY computed from it no longer matches; this keeps the two in
+ * step from whichever page made the correction (graph or DYE). A shot with no
+ * TDS, or whose EY can't be computed, is left as it is.
+ */
+function eyInStep(doseWeight, yieldWeight) {
+  const ann = currentFullShot.value?.annotations ?? {};
+  const ey = NSXCore.eyFromTds(ann.drinkTds, doseWeight, yieldWeight);
+  return ey != null && ey !== Number(ann.drinkEy) ? { drinkEy: ey } : {};
 }
 
 /** Records a corrected OUTPUT weight for the shot in review. Same override
@@ -144,7 +161,8 @@ export async function setActualYield(yieldWeight) {
   // extras merges at field level, so clearing virtualScale here costs nothing
   // else: a hand-entered yield is a measurement, and must stop rendering with
   // the "estimated" asterisk resolveActualYield would otherwise keep on it.
-  return setShotAnnotations({ actualYield: yieldWeight, extras: { virtualScale: false } });
+  const doseW = currentFullShot.value ? NSXCore.resolveActualDose(currentFullShot.value) : null;
+  return setShotAnnotations({ actualYield: yieldWeight, extras: { virtualScale: false }, ...eyInStep(doseW, yieldWeight) });
 }
 
 /** The grind setting recorded WITH the shot. Not an annotation: it's part of

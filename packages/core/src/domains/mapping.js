@@ -14,6 +14,7 @@
  * Registered on NSXCore:
  *   uniqueFieldValuesByRecency(items, pick), rankSuggestions(values, query),
  *   formatMmSs(ms), calcRatio(dose, yield_), resolveProfileTemp(profile),
+ *   eyFromTds(tds, dose, beverageWeight), tdsFromEy(ey, dose, beverageWeight),
  *   mapApiWorkflowToDisplay(wf), mapShotToWorkflow(shot),
  *   normalizeWorkflowKeyPart(value), getWorkflowKey(workflow),
  *   normalizeShotData(shot), getShotDurationSeconds(fullShot),
@@ -41,6 +42,35 @@
 
   function calcRatio(dose, yield_) {
     return dose > 0 ? `1:${(yield_ / dose).toFixed(1)}` : "—";
+  }
+
+  // TDS and extraction yield are one measurement seen two ways: how much of
+  // the cup is dissolved coffee, and how much of the dry dose that is.
+  //
+  //     EY % = TDS % × beverage weight ÷ dry dose
+  //
+  // So either one, with the dose and the beverage weight, gives the other.
+  // Both return null when they can't — a missing or non-positive dose or
+  // weight, or a negative reading — rather than a number from bad input.
+  // Rounded to two decimals, a refractometer's own resolution.
+  const round2 = (v) => Math.round(v * 100) / 100;
+  const positive = (v) => Number.isFinite(Number(v)) && Number(v) > 0;
+  // null / '' are "no reading", not zero — Number(null) is 0, which would turn
+  // a cleared field into a real 0 % extraction.
+  const reading = (v) => (v == null || v === "" ? NaN : Number(v));
+
+  /** Extraction yield (%) from a TDS reading (%), dose (g) and beverage weight (g). */
+  function eyFromTds(tds, dose, beverageWeight) {
+    const v = reading(tds);
+    if (!Number.isFinite(v) || v < 0 || !positive(dose) || !positive(beverageWeight)) return null;
+    return round2((v * Number(beverageWeight)) / Number(dose));
+  }
+
+  /** TDS (%) from an extraction yield (%), dose (g) and beverage weight (g). */
+  function tdsFromEy(ey, dose, beverageWeight) {
+    const v = reading(ey);
+    if (!Number.isFinite(v) || v < 0 || !positive(dose) || !positive(beverageWeight)) return null;
+    return round2((v * Number(dose)) / Number(beverageWeight));
   }
 
   // A shot's `annotations.enjoyment` is 0-100 in the real API, NOT 1-5 — NSX
@@ -787,6 +817,8 @@
     sortRecipesByLastUsed,
     formatMmSs,
     calcRatio,
+    eyFromTds,
+    tdsFromEy,
     enjoymentToStars,
     starsToEnjoyment,
     resolveProfileTemp,

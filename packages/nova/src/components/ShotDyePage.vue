@@ -241,8 +241,32 @@ async function editBeverage() {
   if (v != null) await setShotContext({ finalBeverageType: v });
 }
 
-const editTds = () => editNumber(t('dye.tds'), ann.value.drinkTds, (v) => setShotAnnotations({ drinkTds: v }), '%');
-const editEy = () => editNumber(t('dye.ey'), ann.value.drinkEy, (v) => setShotAnnotations({ drinkEy: v }), '%');
+/**
+ * TDS and EY are one measurement (core's eyFromTds / tdsFromEy): enter
+ * either and, with the shot's dose and yield, the other is filled in and
+ * saved in the same write. Without a dose or a yield only the entered one is
+ * saved — there is nothing to derive the other from. Clearing one clears
+ * both, since the other was derived from it.
+ *
+ * TDS is what a refractometer actually measures, so it is the one that stays
+ * put: when the dose or the yield is corrected later, EY is recomputed from
+ * the TDS, never the other way round (useLiveShot's setActualDose/Yield —
+ * there, so the graph page's own dose/yield edits keep it in step too).
+ */
+const dose = () => actualDose.value;
+const beverage = () => actualYield.value.value;
+
+const editTds = () => editNumber(t('dye.tds'), ann.value.drinkTds, (tds) => setShotAnnotations(
+  tds == null
+    ? { drinkTds: null, drinkEy: null }
+    : { drinkTds: tds, drinkEy: NSXCore.eyFromTds(tds, dose(), beverage()) ?? ann.value.drinkEy ?? null },
+), '%');
+
+const editEy = () => editNumber(t('dye.ey'), ann.value.drinkEy, (ey) => setShotAnnotations(
+  ey == null
+    ? { drinkTds: null, drinkEy: null }
+    : { drinkEy: ey, drinkTds: NSXCore.tdsFromEy(ey, dose(), beverage()) ?? ann.value.drinkTds ?? null },
+), '%');
 
 async function editNotes() {
   const v = await openTextField({ title: t('dye.notes'), value: notes.value, multiline: true, placeholder: t('dye.notesPlaceholder') });
