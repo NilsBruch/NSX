@@ -759,7 +759,13 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 /* ===== Status island: a centred, notch-like pill floating over the page top. ===== */
 .status-island {
   position: absolute; top: 22px; left: 50%; transform: translateX(-50%); z-index: 6;
-  width: min(660px, 76%);
+  /* The third term keeps the island clear of the sleep button, which shares
+     its row (.power-btn: rail + 30px from the right edge, 96px wide) — a 12px
+     gap on each side, doubled because the island is centred and has to stop
+     short on both sides to stay centred. Without it the island ran into the
+     button on screens below about 1,100px wide. Moving the button down
+     instead would have put it on the pages' title row. */
+  width: min(660px, 76%, calc(100% - 2 * (var(--rail-w) + 30px + 96px + 12px)));
   /* 3-column grid: left group | clock | right group. The auto middle column
      keeps the clock TRULY centred in the island regardless of how wide the two
      side groups get (a space-between flex let it drift). */
