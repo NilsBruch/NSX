@@ -2584,6 +2584,9 @@ a.sw-update { text-decoration: none; }
    labels keep the same air, and a third of the padded inner width is
    (100% - 6px)/3 — .seg-3 above already supplies the data-pos="2" travel. */
 .seg.seg-setting.seg-3 { width: 264px; }
+/* A two-up whose labels are phrases, not words ("Recipe list with graph" —
+   the coffee-page layout): each half gets the room of one on a single line. */
+.seg.seg-setting.seg-wide { width: 340px; }
 .seg.seg-setting.seg-3 .seg-thumb { width: calc(33.333% - 2px); }
 .seg.seg-setting button { min-width: 0; font-size: var(--fs-xs); padding: 9px 0; }
 @media (prefers-reduced-motion: reduce) { .seg .seg-thumb { transition: none; } }

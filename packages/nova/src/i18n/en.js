@@ -516,7 +516,8 @@ export default {
     tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',
     showTargets: 'Profile targets', showTargetsSub: "Draw the profile's pressure and flow targets in the shot graph",
-    coffeeGraph: 'Show graph on coffee page', coffeeGraphSub: 'Browse recipe cards next to the selected one’s shot graph, instead of the single-recipe dial layout',
+    coffeeGraph: 'Coffee page', coffeeGraphSub: 'One recipe with its dials, or your recipes as cards beside the selected one’s shot graph',
+    coffeeSingle: 'Single recipe', coffeeList: 'Recipe list with graph',
     reviewAutoCloseOff: 'Stay open', reviewAutoCloseSec: 'After {n}s',
   },
   grinderEditor: {

@@ -170,6 +170,25 @@ async function pickSkin(skin) {
           <button :class="{ on: skinSettings.graphMode === 'expert' }" @click="saveSkinSetting('graphMode', 'expert')">{{ t('skinSettings.graphExpert') }}</button>
         </div>
       </div>
+      <!-- The coffee page's two layouts, as a choice between them rather than
+           a switch that turns one of them "on": the single-recipe dial layout,
+           or a browser — recipe cards on the left, the selected one's shot
+           graph on the right, a shot stepper and Edit Recipe at the bottom.
+           Under Shot graph because it decides where that graph appears.
+           Still the one boolean underneath (coffeeGraph), so nothing stored
+           changes. Wider than a plain two-up (.seg-wide): its labels are. On a
+           phone the pair takes a line of its own under the label (.sr-wrap). -->
+      <div class="setting-row sr-wrap">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('skinSettings.coffeeGraph') }}</span>
+          <span class="sr-sub">{{ t('skinSettings.coffeeGraphSub') }}</span>
+        </span>
+        <div class="seg seg-setting seg-wide" :data-pos="skinSettings.coffeeGraph ? 1 : 0">
+          <span class="seg-thumb"></span>
+          <button :class="{ on: !skinSettings.coffeeGraph }" @click="saveSkinSetting('coffeeGraph', false)">{{ t('skinSettings.coffeeSingle') }}</button>
+          <button :class="{ on: skinSettings.coffeeGraph }" @click="saveSkinSetting('coffeeGraph', true)">{{ t('skinSettings.coffeeList') }}</button>
+        </div>
+      </div>
       <!-- Display only: the tags stay on the recipes and keep being recorded on
            every shot either way, so turning this back on shows what was saved
            while it was off. -->
@@ -198,16 +217,6 @@ async function pickSkin(skin) {
           <span class="sr-sub">{{ t('skinSettings.tabColorsSub') }}</span>
         </span>
         <button class="switch" :class="{ on: skinSettings.tabColors }" role="switch" :aria-checked="skinSettings.tabColors" @click="saveSkinSetting('tabColors', !skinSettings.tabColors)"></button>
-      </div>
-      <!-- Swaps the coffee page's single-recipe dial layout for a browser:
-           recipe cards on the left, the selected one's shot graph on the
-           right, a shot stepper + Edit Recipe at the bottom. -->
-      <div class="setting-row">
-        <span class="sr-main">
-          <span class="sr-name">{{ t('skinSettings.coffeeGraph') }}</span>
-          <span class="sr-sub">{{ t('skinSettings.coffeeGraphSub') }}</span>
-        </span>
-        <button class="switch" :class="{ on: skinSettings.coffeeGraph }" role="switch" :aria-checked="skinSettings.coffeeGraph" @click="saveSkinSetting('coffeeGraph', !skinSettings.coffeeGraph)"></button>
       </div>
 
       <span class="setting-group-label">{{ t('skinSettings.lockscreen') }}</span>

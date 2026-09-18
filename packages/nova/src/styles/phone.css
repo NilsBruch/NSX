@@ -410,6 +410,11 @@ body[data-phone="true"] .shot-metrics { grid-template-columns: repeat(3, 1fr); }
    the left. Left-align the stars instead — delete stays pinned right, so the
    two now sit at opposite screen edges. */
 body[data-phone="true"] .shot-done { justify-content: flex-start; }
+/* A settings row whose control is too wide to share a phone line with its
+   label (the coffee-page layout's .seg-wide): the control drops to a line of
+   its own and takes the width, rather than squeezing the label to nothing. */
+body[data-phone="true"] .setting-row.sr-wrap { flex-wrap: wrap; row-gap: 10px; }
+body[data-phone="true"] .setting-row.sr-wrap .seg-wide { width: 100%; }
 body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }
 
 /* LiveShotOverlay's `live` phase — new territory for the phone as of this
