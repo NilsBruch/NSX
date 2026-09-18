@@ -163,6 +163,10 @@ const shotBean = computed(() => {
   return beans.value.find((b) => shotMatchesBean(shot, b)) ?? null;
 });
 
+/** Origin as one line: the country, and the region when the bean has one. */
+const beanOrigin = computed(() =>
+  [shotBean.value?.country, shotBean.value?.region].filter(Boolean).join(' · ') || null);
+
 function editBean() { picking.value = 'bean'; }
 function editBag() {
   if (!shotBean.value) { picking.value = 'bean'; return; }
@@ -286,6 +290,29 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
               <span class="dl">{{ t('dye.bag') }}</span>
               <span class="dv" :class="{ muted: !roastLabel }">{{ dash(roastLabel) }}</span>
             </button>
+            <!-- The bean's own properties, read from the library bean the shot
+                 is linked to. Read-only: they describe the BEAN, not this shot,
+                 and belong to the Diary's bean editor — change the coffee
+                 above to change them here. -->
+            <div class="dye-tile static">
+              <span class="dl">{{ t('dye.origin') }}</span>
+              <span class="dv" :class="{ muted: !beanOrigin }">{{ dash(beanOrigin) }}</span>
+            </div>
+            <div class="dye-tile static">
+              <span class="dl">{{ t('dye.process') }}</span>
+              <span class="dv" :class="{ muted: !shotBean?.processing }">{{ dash(shotBean?.processing) }}</span>
+            </div>
+            <div class="dye-tile static">
+              <span class="dl">{{ t('dye.variety') }}</span>
+              <span class="dv" :class="{ muted: !shotBean?.variety }">{{ dash(shotBean?.variety) }}</span>
+            </div>
+            <!-- Tasting notes can run long, so they take the grid's full width and
+                 wrap when they must — but reserve no second line (.fit), so a
+                 short list sits at the height of the tiles beside it. -->
+            <div class="dye-tile static dye-span">
+              <span class="dl">{{ t('dye.beanNotes') }}</span>
+              <span class="dv fit" :class="{ muted: !shotBean?.notes }">{{ dash(shotBean?.notes) }}</span>
+            </div>
           </div>
         </section>
 

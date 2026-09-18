@@ -2101,6 +2101,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .dye-tile .dv.muted { color: var(--muted); font-weight: 500; }
 /* The note sits under both columns and wraps, being the one field that runs on. */
 .dye-note { margin-top: 10px; }
+/* A tile that takes its grid's full width — the bean's tasting notes, which
+   can run long and wrap (.dv.fit) instead of being cut. */
+.dye-span { grid-column: 1 / -1; }
 /* The profile: always starts a row (column 1) and spans two tiles, so the
    next tile — the temperature — sits beside it where the grid has three
    columns, and drops below it where it has two. */

@@ -314,6 +314,7 @@ export default {
     secBeans: 'Beans', secEquipment: 'Equipment',
     secExtraction: 'Extraction', secPeople: 'People',
     roaster: 'Roaster', bean: 'Bean', bag: 'Bag',
+    origin: 'Origin', process: 'Process', variety: 'Variety', beanNotes: 'Bean notes',
     dose: 'Dose', grinder: 'Grinder', grind: 'Grind', targetYield: 'Target',
     profile: 'Profile', temperature: 'Temperature',
     barista: 'Barista', drinker: 'Drinker', beverage: 'Beverage',
