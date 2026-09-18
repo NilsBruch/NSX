@@ -98,6 +98,9 @@ body[data-phone="true"] {
      thumb needs, not what looks right as a glyph. */
   width: 44px; height: 44px; border-radius: var(--r-sm);
   background: var(--card-bg); border: none; color: var(--text);
+  /* Never shrinks: as a flex item it otherwise could, and did — a long
+     title beside it in a header squeezed the back button to a sliver. */
+  flex: none;
 }
 .phone-back svg, .phone-icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* Same on/off pair as .sort-btn.accent and .rbtn.accent (app.css) — the
@@ -201,8 +204,17 @@ body[data-phone="true"] {
 
 .phone-badge { flex: none; background: var(--accent); color: var(--on-accent); border-radius: var(--r-pill); padding: 3px 10px; font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 
-.phone-detail-footer { display: flex; gap: 10px; padding-top: 4px; }
-.phone-detail-footer .btn { flex: 1; height: 52px; justify-content: center; white-space: nowrap; }
+/* Recipe detail (RecipeDetail.vue): the title below the back-button row, not
+   in it; the badge pushed to that row's far end. flex: none because the
+   overlay is a column, where a growing item would take the page's height. */
+.phone-detail-title { flex: none; min-width: 0; }
+.phone-head-end { margin-left: auto; }
+/* Two rows: Load — the page's main action — across the full width, then Pin
+   and Delete side by side. Three in one row left each too narrow for its
+   label on a phone. */
+.phone-detail-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 4px; }
+.phone-detail-footer .btn { height: 52px; justify-content: center; white-space: nowrap; }
+.phone-detail-footer .btn.accent { grid-column: 1 / -1; }
 
 /* A recipe's identity (roaster, bean, [grinder,] profile) dot-joined on one
    NOWRAP line — .recipe-row-id's tablet behaviour — ellipsised on a phone
@@ -409,12 +421,20 @@ body[data-phone="true"] .shot-metrics { grid-template-columns: repeat(3, 1fr); }
    doesn't skew the centering); on a narrow phone that leaves an odd gap on
    the left. Left-align the stars instead — delete stays pinned right, so the
    two now sit at opposite screen edges. */
-body[data-phone="true"] .shot-done { justify-content: flex-start; }
-/* A settings row whose control is too wide to share a phone line with its
-   label (the coffee-page layout's .seg-wide): the control drops to a line of
-   its own and takes the width, rather than squeezing the label to nothing. */
-body[data-phone="true"] .setting-row.sr-wrap { flex-wrap: wrap; row-gap: 10px; }
-body[data-phone="true"] .setting-row.sr-wrap .seg-wide { width: 100%; }
+/* The history view's bottom row on a phone: DYE, the stars, Delete — one
+   line, left / centre / right. The tablet pins the two buttons to the
+   corners over a centred star row (position: absolute), which on a phone's
+   width put the stars underneath the DYE button. Here all three sit in the
+   flow instead, smaller: a shorter row, tighter buttons, smaller stars, and
+   Delete as its icon alone (it keeps its aria-label) — the word is what did
+   not fit. */
+body[data-phone="true"] .shot-done { height: 48px; justify-content: space-between; gap: 8px; }
+body[data-phone="true"] .shot-dye,
+body[data-phone="true"] .shot-delete { position: static; align-self: stretch; padding: 0 12px; letter-spacing: 0.04em; }
+body[data-phone="true"] .shot-delete { font-size: 0; gap: 0; }
+body[data-phone="true"] .shot-delete svg { width: 18px; height: 18px; }
+body[data-phone="true"] .rate-stars { gap: 2px; }
+body[data-phone="true"] .star { font-size: var(--fs-lg); }
 body[data-phone="true"] .glabel { flex-wrap: wrap; row-gap: 4px; }
 
 /* LiveShotOverlay's `live` phase — new territory for the phone as of this

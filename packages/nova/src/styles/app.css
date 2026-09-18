@@ -412,14 +412,15 @@ html, body {
    gets the same treatment .wheel already had. One shared rule rather than
    repeating scrollbar-width/::-webkit-scrollbar on each container. */
 .kb-modal .text-field-textarea, .tf-tags, .tf-suggests, .chooser, .rp-list-scroll,
-.pick-items, .pd-stages-list, .pd-text, .pe-detail, .list, .bean-fields, .settings-scroll {
+.pick-items, .pd-stages-list, .pd-text, .pe-detail, .list, .bean-fields, .settings-scroll,
+.dye-scroll, .phone-main {
   scrollbar-width: none; -ms-overflow-style: none;
 }
 .kb-modal .text-field-textarea::-webkit-scrollbar, .tf-tags::-webkit-scrollbar,
 .tf-suggests::-webkit-scrollbar, .chooser::-webkit-scrollbar, .rp-list-scroll::-webkit-scrollbar,
 .pick-items::-webkit-scrollbar, .pd-stages-list::-webkit-scrollbar, .pd-text::-webkit-scrollbar,
 .pe-detail::-webkit-scrollbar, .list::-webkit-scrollbar, .bean-fields::-webkit-scrollbar,
-.settings-scroll::-webkit-scrollbar {
+.settings-scroll::-webkit-scrollbar, .dye-scroll::-webkit-scrollbar, .phone-main::-webkit-scrollbar {
   display: none;
 }
 

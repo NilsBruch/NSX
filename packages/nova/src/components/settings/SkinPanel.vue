@@ -13,6 +13,7 @@ import {
   installedSkins, activeSkinId, loadInstalledSkins, switchSkin,
 } from '../../composables/useSettings.js';
 import { showToast } from '../../composables/useToast.js';
+import { isPhone } from '../../composables/useLayout.js';
 
 const emit = defineEmits(['close']);
 const { t } = useI18n();
@@ -176,9 +177,10 @@ async function pickSkin(skin) {
            graph on the right, a shot stepper and Edit Recipe at the bottom.
            Under Shot graph because it decides where that graph appears.
            Still the one boolean underneath (coffeeGraph), so nothing stored
-           changes. Wider than a plain two-up (.seg-wide): its labels are. On a
-           phone the pair takes a line of its own under the label (.sr-wrap). -->
-      <div class="setting-row sr-wrap">
+           changes. Wider than a plain two-up (.seg-wide): its labels are.
+           Not on the phone: it has no coffee page (its Recipes tab stands in
+           for one), so there the choice would change nothing. -->
+      <div v-if="!isPhone" class="setting-row">
         <span class="sr-main">
           <span class="sr-name">{{ t('skinSettings.coffeeGraph') }}</span>
           <span class="sr-sub">{{ t('skinSettings.coffeeGraphSub') }}</span>

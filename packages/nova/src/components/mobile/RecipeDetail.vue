@@ -177,23 +177,25 @@ async function removeThis() {
 
 <template>
   <div class="overlay-full">
+    <!-- The back button's row holds nothing that can crowd it: the title
+         used to share it, and a long roaster/bean name pushed the button
+         down to a sliver nobody could hit. The Loaded badge stays up here,
+         at the far end. -->
     <div class="phone-head">
       <button class="phone-back" :aria-label="t('common.back')" @click="emit('close')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       </button>
-      <!-- Stacked, not dot-joined on one line: a 4-part identity (roaster /
-           bean / grinder / profile) ran out of room on a phone-width header
-           and ellipsised the very part — the profile — that tells two rows
-           for the same bean apart. Full room here, so each part gets its own
-           line instead. -->
-      <span class="phone-crumb phone-identity-stack">
-        <!-- Roaster and bean are one identity (the coffee) and share this
-             line's weight; only grinder/profile beyond them step down to
-             .rsub. -->
-        <span v-for="(part, i) in titleParts" :key="i" :class="i < 2 ? 'phone-identity-line' : 'rsub'">{{ part }}</span>
-      </span>
-      <span v-if="isLoaded" class="phone-badge">{{ t('phone.loaded') }}</span>
+      <span v-if="isLoaded" class="phone-badge phone-head-end">{{ t('phone.loaded') }}</span>
     </div>
+    <!-- The title on a line of its own, below. Stacked, not dot-joined: a
+         4-part identity (roaster / bean / grinder / profile) on one line ran
+         out of room and ellipsised the very part — the profile — that tells
+         two recipes for the same bean apart, so each part gets its own line.
+         Roaster and bean are one identity (the coffee) and share this line's
+         weight; only grinder/profile beyond them step down to .rsub. -->
+    <span class="phone-identity-stack phone-detail-title">
+      <span v-for="(part, i) in titleParts" :key="i" :class="i < 2 ? 'phone-identity-line' : 'rsub'">{{ part }}</span>
+    </span>
 
     <div class="phone-list">
       <button class="phone-list-row" @click="editDose">
