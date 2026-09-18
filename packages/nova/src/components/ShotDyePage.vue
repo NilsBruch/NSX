@@ -345,10 +345,12 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
               <span class="dv" :class="{ muted: grindSetting == null }">{{ dash(grindSetting) }}</span>
             </button>
             <!-- The profile is the one thing a shot cannot be re-described into:
-                 the record carries the frames that were actually run. -->
-            <div class="dye-tile static">
+                 the record carries the frames that were actually run.
+                 Its own row, two tiles wide, and wrapping: profile names are
+                 long ("D-Flow / Q") and a single tile cut them off. -->
+            <div class="dye-tile static dye-profile">
               <span class="dl">{{ t('dye.profile') }}</span>
-              <span class="dv" :class="{ muted: !profileTitle }">{{ dash(profileTitle) }}</span>
+              <span class="dv fit" :class="{ muted: !profileTitle }">{{ dash(profileTitle) }}</span>
             </div>
             <div class="dye-tile static">
               <span class="dl">{{ t('dye.temperature') }}</span>
