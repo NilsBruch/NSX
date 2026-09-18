@@ -1092,10 +1092,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    runs the full height down to the page's bottom edge, past where the graph
    column's own content stops, with a fade (.rp-list::after) suggesting more
    recipes queued up just out of view. */
-/* The card column and the cards in it at 90% of their original size
-   (230px / 28%, and `zoom: 0.9` on the list below), so the graph column
-   takes the width they gave up. */
-.espresso-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(207px, 25.2%) 1fr; gap: 18px; }
+/* The card column is one fixed width — the narrowest the cards work at (the
+   original 230px minimum, at the list's 0.9 zoom below) — and stays that
+   width however wide the screen is. It used to be a share of the screen as
+   well (a quarter), so a wider screen only made wider cards; now all the
+   extra width goes to the graph column. */
+.espresso-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: 207px 1fr; gap: 18px; }
 .browse-list { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
 /* Zoom, not font-size: the cards are sized in rem, which a container's font
    size cannot reach, and zoom scales the whole card — type, padding, gaps,
