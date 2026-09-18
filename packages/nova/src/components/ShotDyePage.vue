@@ -116,6 +116,23 @@ const stopLabel = computed(() => {
 const favorite = computed(() => ann.value.extras?.favorite === true);
 const notes = computed(() => ann.value.espressoNotes || '');
 
+/** The analysis strip: preinfusion and extraction water when the recording
+ *  has a preinfusion phase, one total when it doesn't, then the averages. */
+const analysisItems = computed(() => {
+  const full = currentFullShot.value;
+  const a = full ? NSXCore.analyzeShot(NSXCore.normalizeShotData(full)) : null;
+  if (!a) return [];
+  const items = a.hasPhases
+    ? [
+      { key: 'pre', label: t('dye.preinfusionWater'), value: `${a.preinfusionMl.toFixed(1)} ml` },
+      { key: 'ext', label: t('dye.extractionWater'), value: `${a.extractionMl.toFixed(1)} ml` },
+    ]
+    : [{ key: 'total', label: t('dye.totalWater'), value: `${a.totalMl.toFixed(1)} ml` }];
+  if (a.avgPressure != null) items.push({ key: 'bar', label: t('dye.avgPressure'), value: `${a.avgPressure.toFixed(1)} bar` });
+  if (a.avgFlow != null) items.push({ key: 'flow', label: t('dye.avgFlow'), value: `${a.avgFlow.toFixed(1)} ml/s` });
+  return items;
+});
+
 // ── Edits ──
 // Names already used on other shots, so the same barista/drinker is spelled
 // one way across a history — the same reason the bean editor offers its own
@@ -380,6 +397,19 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
             </button>
           </div>
         </section>
+
+        <!-- What the shot's own recording says about it: the water and the
+             pressure/flow it ran at. A row of its own across both columns,
+             between the coffee-and-extraction row and the equipment-and-people
+             one — it follows from the first and sits before the second.
+             Read-only tiles: computed (core's analyzeShot, the same numbers
+             NSX's shot review shows), not entered. -->
+        <div v-if="analysisItems.length" class="dye-analysis">
+          <div v-for="a in analysisItems" :key="a.key" class="dye-tile static">
+            <span class="dl">{{ a.label }}</span>
+            <span class="dv">{{ a.value }}</span>
+          </div>
+        </div>
 
         <section class="dye-sect">
           <header class="dye-head">

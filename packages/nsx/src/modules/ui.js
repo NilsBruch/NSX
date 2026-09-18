@@ -738,74 +738,21 @@ function renderShotDiffCard(reserveEl, diffRows) {
   }
 }
 
+// The numbers come from core (NSXCore.analyzeShot) — the same calculation Nova
+// uses, moved there from here unchanged. This keeps the labels and formatting,
+// which are the skin's, and the order the review has always listed them in.
 function renderShotAnalysis(normalized) {
-  const elapsed   = normalized?.elapsed   || [];
-  const pressure  = normalized?.pressure  || [];
-  const flow      = normalized?.flow      || [];
-  const substates = normalized?.substates || [];
-  if (!elapsed.length) return [];
-
-  // Split samples into preinfusion vs extraction by substate
-  const preinfusionIdx = new Set();
-  for (let i = 0; i < substates.length; i++) {
-    if (substates[i] === 'preinfusion') preinfusionIdx.add(i);
-  }
-  const hasPhases = preinfusionIdx.size > 0;
-
-  function integFlow(fromIdx, toIdx) {
-    let vol = 0;
-    for (let i = Math.max(1, fromIdx); i <= toIdx && i < elapsed.length; i++) {
-      const dt = elapsed[i] - elapsed[i - 1];
-      const f  = ((flow[i] || 0) + (flow[i - 1] || 0)) / 2;
-      vol += Math.max(0, f) * dt;
-    }
-    return vol;
-  }
-
-  function avgInSet(arr, idxSet, minVal = 0) {
-    let sum = 0, n = 0;
-    idxSet.forEach(i => {
-      const v = arr[i];
-      if (Number.isFinite(v) && v > minVal) { sum += v; n++; }
-    });
-    return n > 0 ? sum / n : null;
-  }
-
-  const lastIdx = elapsed.length - 1;
-  const extractionIdx = new Set();
-  for (let i = 0; i <= lastIdx; i++) {
-    if (!preinfusionIdx.has(i)) extractionIdx.add(i);
-  }
-
-  // Preinfusion end index (for integration boundary)
-  let preEndIdx = -1;
-  for (let i = lastIdx; i >= 0; i--) {
-    if (preinfusionIdx.has(i)) { preEndIdx = i; break; }
-  }
-  let exStartIdx = preEndIdx + 1;
-
+  const a = NSXCore.analyzeShot(normalized);
+  if (!a) return [];
   const rows = [];
-
-  if (hasPhases) {
-    const volPre = integFlow(0, preEndIdx);
-    const volEx  = integFlow(exStartIdx, lastIdx);
-    rows.push({ label: t('analysis.preinfusionWater'), value: `${volPre.toFixed(1)} ml` });
-    rows.push({ label: t('analysis.extractionWater'),  value: `${volEx.toFixed(1)} ml` });
-
-    const avgP = avgInSet(pressure, extractionIdx, 0.5);
-    const avgF = avgInSet(flow,     extractionIdx, 0.1);
-    if (avgP != null) rows.push({ label: t('analysis.avgPressure'), value: `${avgP.toFixed(1)} bar` });
-    if (avgF != null) rows.push({ label: t('analysis.avgFlow'),     value: `${avgF.toFixed(1)} ml/s` });
+  if (a.hasPhases) {
+    rows.push({ label: t('analysis.preinfusionWater'), value: `${a.preinfusionMl.toFixed(1)} ml` });
+    rows.push({ label: t('analysis.extractionWater'),  value: `${a.extractionMl.toFixed(1)} ml` });
   } else {
-    const volTotal = integFlow(0, lastIdx);
-    const allIdx   = new Set(Array.from({ length: elapsed.length }, (_, i) => i));
-    const avgP = avgInSet(pressure, allIdx, 0.5);
-    const avgF = avgInSet(flow,     allIdx, 0.1);
-    rows.push({ label: t('analysis.totalWater'), value: `${volTotal.toFixed(1)} ml` });
-    if (avgP != null) rows.push({ label: t('analysis.avgPressure'), value: `${avgP.toFixed(1)} bar` });
-    if (avgF != null) rows.push({ label: t('analysis.avgFlow'),     value: `${avgF.toFixed(1)} ml/s` });
+    rows.push({ label: t('analysis.totalWater'), value: `${a.totalMl.toFixed(1)} ml` });
   }
-
+  if (a.avgPressure != null) rows.push({ label: t('analysis.avgPressure'), value: `${a.avgPressure.toFixed(1)} bar` });
+  if (a.avgFlow != null)     rows.push({ label: t('analysis.avgFlow'),     value: `${a.avgFlow.toFixed(1)} ml/s` });
   return rows;
 }
 

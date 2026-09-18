@@ -2110,6 +2110,16 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    the temperature on a row of its own wherever the grid had only two. */
 .dye-pair { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .dye-pair > .dye-tile:last-child { min-width: 120px; }
+
+/* The analysis row: a row of the section grid (.dye-cols) spanning both of
+   its columns, between Beans|Extraction and Equipment|People. Ordinary
+   read-only tiles, as many across as fit — all four on the tablet. The
+   padding lines it up with the sections' own tiles above and below. */
+.dye-analysis {
+  grid-column: 1 / -1;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;
+  padding: 8px 0 4px;
+}
 /* A value that wraps when it must but, unlike .wrap, reserves no second line —
    for a name that usually fits and only sometimes doesn't. */
 .dye-tile .dv.fit { white-space: normal; line-height: 1.3; }

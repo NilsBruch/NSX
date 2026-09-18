@@ -15,6 +15,7 @@
  *   uniqueFieldValuesByRecency(items, pick), rankSuggestions(values, query),
  *   formatMmSs(ms), calcRatio(dose, yield_), resolveProfileTemp(profile),
  *   eyFromTds(tds, dose, beverageWeight), tdsFromEy(ey, dose, beverageWeight),
+ *   analyzeShot(normalized),
  *   mapApiWorkflowToDisplay(wf), mapShotToWorkflow(shot),
  *   normalizeWorkflowKeyPart(value), getWorkflowKey(workflow),
  *   normalizeShotData(shot), getShotDurationSeconds(fullShot),
@@ -71,6 +72,87 @@
     const v = reading(ey);
     if (!Number.isFinite(v) || v < 0 || !positive(dose) || !positive(beverageWeight)) return null;
     return round2((v * Number(dose)) / Number(beverageWeight));
+  }
+
+  /**
+   * How much water a shot used and how hard it pushed — from its recorded
+   * samples, as NSX's shot review has always shown it (moved here from NSX's
+   * ui.js so every skin computes the same numbers from one copy).
+   *
+   * Takes the output of normalizeShotData. Samples the machine marked
+   * `preinfusion` are preinfusion; everything else is extraction. Water is
+   * flow integrated over time (trapezoids), in ml. The averages skip readings
+   * at or below a floor (0.5 bar, 0.1 ml/s), so a pause doesn't drag them
+   * towards zero; they cover the extraction samples when the shot has a
+   * preinfusion phase, and the whole shot when it doesn't.
+   *
+   * Numbers only — labels and formatting are the skin's.
+   *
+   * @returns {null | {hasPhases: boolean, preinfusionMl: number|null,
+   *   extractionMl: number|null, totalMl: number, avgPressure: number|null,
+   *   avgFlow: number|null}} null when the shot has no samples.
+   *   preinfusionMl/extractionMl are null without a preinfusion phase.
+   */
+  function analyzeShot(normalized) {
+    const elapsed = normalized?.elapsed || [];
+    const pressure = normalized?.pressure || [];
+    const flow = normalized?.flow || [];
+    const substates = normalized?.substates || [];
+    if (!elapsed.length) return null;
+
+    const lastIdx = elapsed.length - 1;
+    const preinfusion = new Set();
+    for (let i = 0; i < substates.length; i++) {
+      if (substates[i] === "preinfusion") preinfusion.add(i);
+    }
+    const hasPhases = preinfusion.size > 0;
+
+    // Water between two sample indices, inclusive of the step INTO fromIdx.
+    const integFlow = (fromIdx, toIdx) => {
+      let vol = 0;
+      for (let i = Math.max(1, fromIdx); i <= toIdx && i < elapsed.length; i++) {
+        const dt = elapsed[i] - elapsed[i - 1];
+        const f = ((flow[i] || 0) + (flow[i - 1] || 0)) / 2;
+        vol += Math.max(0, f) * dt;
+      }
+      return vol;
+    };
+    const avgOver = (arr, indices, floor) => {
+      let sum = 0, n = 0;
+      for (const i of indices) {
+        const v = arr[i];
+        if (Number.isFinite(v) && v > floor) { sum += v; n++; }
+      }
+      return n > 0 ? sum / n : null;
+    };
+
+    const all = Array.from({ length: elapsed.length }, (_, i) => i);
+    if (!hasPhases) {
+      return {
+        hasPhases: false,
+        preinfusionMl: null,
+        extractionMl: null,
+        totalMl: integFlow(0, lastIdx),
+        avgPressure: avgOver(pressure, all, 0.5),
+        avgFlow: avgOver(flow, all, 0.1),
+      };
+    }
+
+    let preEndIdx = -1;
+    for (let i = lastIdx; i >= 0; i--) {
+      if (preinfusion.has(i)) { preEndIdx = i; break; }
+    }
+    const extraction = all.filter((i) => !preinfusion.has(i));
+    const preinfusionMl = integFlow(0, preEndIdx);
+    const extractionMl = integFlow(preEndIdx + 1, lastIdx);
+    return {
+      hasPhases: true,
+      preinfusionMl,
+      extractionMl,
+      totalMl: preinfusionMl + extractionMl,
+      avgPressure: avgOver(pressure, extraction, 0.5),
+      avgFlow: avgOver(flow, extraction, 0.1),
+    };
   }
 
   // A shot's `annotations.enjoyment` is 0-100 in the real API, NOT 1-5 — NSX
@@ -819,6 +901,7 @@
     calcRatio,
     eyFromTds,
     tdsFromEy,
+    analyzeShot,
     enjoymentToStars,
     starsToEnjoyment,
     resolveProfileTemp,

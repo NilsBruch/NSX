@@ -175,6 +175,19 @@ gateway stamps beans, grinders and profiles with it). `pick` is a dotted path
 (`'roaster'`, `'profile.title'`) or a function, and either may return an array
 (a bean's `variety`). Items without a parseable `createdAt` rank behind all
 dated ones, keeping their relative order.
+`recentFromShots(shots, resolve, {limit, keyOf})` is the other direction: the
+most recent DISTINCT things a shot list points at (Nova's "Recent" beans and
+profiles in the recipe wizard), newest first by `timestamp`, skipping shots
+`resolve` can't answer for.
+`eyFromTds(tds, dose, weight)` / `tdsFromEy(ey, dose, weight)` convert between
+the two with EY % = TDS % × beverage weight ÷ dose, rounded to two decimals, and
+return null when the inputs can't give a number (a cleared field is no reading,
+not 0 %).
+`analyzeShot(normalized)` is the shot-review analysis — preinfusion/extraction
+water (or one total without a preinfusion phase) and average extraction
+pressure and flow — as numbers only, from `normalizeShotData`'s output. Moved
+from NSX's `ui.js`, which now only labels and formats it; a test holds it to
+the old numbers on the mock gateway's recorded shots.
 `resolveActualDose(shot)` / `resolveActualYield(fullShot)` back the shot-review
 ratio: dose falls back from an `annotations.actualDoseWeight` the user recorded
 to the recipe's planned target (the DE1 never measures dose-in, only output);
