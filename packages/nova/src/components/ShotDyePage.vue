@@ -34,6 +34,9 @@ import { openTextField, openNumberPad, openChooser } from '../composables/useMod
 // Section icons from Lucide. Named imports, so only these four end up in the
 // build; the style (colour, size, stroke) comes from .dye-head in app.css.
 import { PaperBag, Coffee, LensConcave, Users } from '@lucide/vue';
+import { shotMatchesBean } from '../composables/useDiary.js';
+import BeanChooser from './BeanChooser.vue';
+import BatchPicker from './BatchPicker.vue';
 
 defineEmits(['close']);
 const { t } = useI18n();
@@ -133,13 +136,55 @@ async function editNumber(title, current, apply, unit = '') {
   if (v != null) await apply(v === '' ? null : parseFloat(v));
 }
 
-const editRoaster = () => editText(t('dye.roaster'), ctx.value.coffeeRoaster,
-  (v) => setShotContext({ coffeeRoaster: v }),
-  [...new Set(beans.value.map((b) => b.roaster).filter(Boolean))]);
+/**
+ * The coffee is picked, not typed: the same two screens the recipe wizard
+ * uses — a bean from the library, then the bag it came from. What a shot
+ * really links to is the BAG (`beanBatchId`); the roaster and name are the
+ * display strings that ride along. Typing them only ever changed the strings
+ * and left the link pointing at the old bag, so the shot said one coffee and
+ * belonged to another.
+ *
+ *   Roaster / Bean tile -> bean, then bag
+ *   Bag tile            -> bag only, of the bean the shot already has (or the
+ *                          bean step first, for a shot linked to none)
+ *
+ * The bag step's own "Back" returns to the bean step when it came from there,
+ * and closes otherwise — the same way back you came in.
+ */
+const picking = ref(null);       // null | 'bean' | 'bag'
+const pickedBean = ref(null);    // the bean whose bags the bag step lists
+const bagFromBean = ref(false);  // did the bag step come from the bean step?
 
-const editBean = () => editText(t('dye.bean'), ctx.value.coffeeName,
-  (v) => setShotContext({ coffeeName: v }),
-  [...new Set(beans.value.map((b) => b.name).filter(Boolean))]);
+/** The library bean this shot is linked to: through its bag when it has one,
+ *  else by roaster and name (shots from before bags existed). */
+const shotBean = computed(() => {
+  const shot = currentFullShot.value ?? reviewShot.value;
+  if (!shot) return null;
+  return beans.value.find((b) => shotMatchesBean(shot, b)) ?? null;
+});
+
+function editBean() { picking.value = 'bean'; }
+function editBag() {
+  if (!shotBean.value) { picking.value = 'bean'; return; }
+  pickedBean.value = shotBean.value;
+  bagFromBean.value = false;
+  picking.value = 'bag';
+}
+function onBeanPicked(bean) {
+  pickedBean.value = bean;
+  bagFromBean.value = true;
+  picking.value = 'bag';
+}
+function onBagBack() { picking.value = bagFromBean.value ? 'bean' : null; }
+async function onBagPicked(bag) {
+  const bean = pickedBean.value;
+  picking.value = null;
+  // The bag is the link; the strings follow it so the shot reads right in
+  // every list that shows them without resolving the bag.
+  if (bean && bag?.id) {
+    await setShotContext({ beanBatchId: bag.id, coffeeRoaster: bean.roaster ?? null, coffeeName: bean.name ?? null });
+  }
+}
 
 async function editDose() {
   const v = await openNumberPad({ title: t('dye.dose'), unit: 'g', value: actualDose.value == null ? '' : String(actualDose.value) });
@@ -225,7 +270,8 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
             <span>{{ t('dye.secBeans') }}</span>
           </header>
           <div class="dye-grid">
-            <button class="dye-tile" @click="editRoaster">
+            <!-- Both open the bean-then-bag pick (see editBean). -->
+            <button class="dye-tile" @click="editBean">
               <span class="dl">{{ t('dye.roaster') }}</span>
               <span class="dv" :class="{ muted: !ctx.coffeeRoaster }">{{ dash(ctx.coffeeRoaster) }}</span>
             </button>
@@ -233,13 +279,13 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
               <span class="dl">{{ t('dye.bean') }}</span>
               <span class="dv" :class="{ muted: !ctx.coffeeName }">{{ dash(ctx.coffeeName) }}</span>
             </button>
-            <!-- Read-only: the roast date belongs to the BAG (Diary > Bags), not
-                 to one shot pulled from it — editing it here would silently
-                 rewrite every other shot's age too. -->
-            <div class="dye-tile static">
-              <span class="dl">{{ t('dye.roastDate') }}</span>
+            <!-- Picks which BAG the shot came from — it never edits a bag's
+                 roast date, which belongs to the bag (Diary > Bags) and would
+                 change every other shot from it too. -->
+            <button class="dye-tile" @click="editBag">
+              <span class="dl">{{ t('dye.bag') }}</span>
               <span class="dv" :class="{ muted: !roastLabel }">{{ dash(roastLabel) }}</span>
-            </div>
+            </button>
           </div>
         </section>
 
@@ -347,5 +393,14 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
         <span class="dv wrap" :class="{ muted: !notes }">{{ notes || t('dye.notesEmpty') }}</span>
       </button>
     </div>
+
+    <!-- The recipe wizard's own two screens. Teleported to <body>: this page
+         sits inside the history view's slider, whose transform would otherwise
+         become the frame these fixed, full-screen overlays position against —
+         they would open inside the slide instead of over the screen. -->
+    <Teleport to="body">
+      <BeanChooser v-if="picking === 'bean'" @pick="onBeanPicked" @back="picking = null" />
+      <BatchPicker v-if="picking === 'bag' && pickedBean" :bean="pickedBean" @pick="onBagPicked" @back="onBagBack" />
+    </Teleport>
   </div>
 </template>

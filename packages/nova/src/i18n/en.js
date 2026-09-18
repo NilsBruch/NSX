@@ -313,7 +313,7 @@ export default {
     backToGraph: 'Graph',
     secBeans: 'Beans', secEquipment: 'Equipment',
     secExtraction: 'Extraction', secPeople: 'People',
-    roaster: 'Roaster', bean: 'Bean', roastDate: 'Roast date',
+    roaster: 'Roaster', bean: 'Bean', bag: 'Bag',
     dose: 'Dose', grinder: 'Grinder', grind: 'Grind', targetYield: 'Target',
     profile: 'Profile', temperature: 'Temperature',
     barista: 'Barista', drinker: 'Drinker', beverage: 'Beverage',
