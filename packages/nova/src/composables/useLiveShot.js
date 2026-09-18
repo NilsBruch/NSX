@@ -115,6 +115,17 @@ export async function setShotContext(patch) {
   if (!shot) return;
   await NSXCore.updateShotWorkflowContext(shot.id, patch);
   currentFullShot.value = await NSXCore.getShotDetails(shot.id);
+  // The context is what decides which recipe a shot belongs to (roaster,
+  // bean, grinder, profile — see core's findShotsForWorkflow), and every list
+  // that groups shots reads the shared `shots` reference list, not this one
+  // record. Refreshed here, directly: without it a shot moved to another bean
+  // stayed under its old recipe on the coffee page until a reload. Not the
+  // throttled revalidateSharedData — a throttle could skip exactly this call.
+  //
+  // The history list open right now (historyShots) is deliberately left
+  // alone: re-deriving it would pull the shot being edited out from under the
+  // user the moment it stopped matching this recipe.
+  await Promise.allSettled([loadShots(200), refreshHistoryIfActive()]);
 }
 
 /** Records a corrected dose-in for the shot currently in review — the DE1
