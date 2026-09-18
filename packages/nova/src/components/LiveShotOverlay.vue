@@ -241,7 +241,7 @@ async function editGrindSetting() {
       </span>
     </div>
     <div class="shot-graph">
-      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" :temp-anchor="liveTempAnchor" />
+      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" :temp-anchor="liveTempAnchor" :stopped="savingShot" />
       <!-- Inside the plot, top right, rather than on a row of its own below it:
            a legend is a caption for the graph, and it was costing a full row of
            the column for three short words.

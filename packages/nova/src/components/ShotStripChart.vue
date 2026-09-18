@@ -70,6 +70,18 @@ const props = defineProps({
   // first sample. Fixes the right-hand scale for the whole shot — see
   // tempRange(). Without it a live chart falls back to fitting the data.
   tempAnchor: { type: Number, default: null },
+  // Scroll mode: the shot is over. The viewport stops where it was instead of
+  // scrolling on into time where nothing more will arrive.
+  stopped: { type: Boolean, default: false },
+});
+
+// The viewport's right edge at the moment `stopped` came on, in shot-elapsed
+// seconds — the wall-clock `now` frozen, NOT the last sample's time: snapping
+// back to the last sample would visibly jerk the curve right by however long
+// the final sample was ago.
+let frozenNow = null;
+watch(() => props.stopped, (on) => {
+  frozenNow = on ? (Date.now() - props.originMs) / 1000 : null;
 });
 // Touch-and-hold scrubbing (static/history mode only): emits the sample under
 // the finger so the legend can read out pressure/flow/weight-flow at that point,
@@ -165,9 +177,13 @@ function geometry(w, h) {
   const ts = props.series.elapsed, n = ts.length;
   const live = props.mode === 'scroll';
   // `now` = the right edge of the viewport in shot-elapsed seconds. Live:
-  // real wall-clock elapsed. Static: the shot's own last sample — the whole
-  // duration fills the canvas exactly once, no scroll.
-  const now = live ? (Date.now() - props.originMs) / 1000 : (n ? ts[n - 1] : 0);
+  // real wall-clock elapsed, until the shot has stopped — then held where it
+  // was, so saving the shot (which can take a few seconds) doesn't scroll the
+  // finished curve off to the left. Static: the shot's own last sample — the
+  // whole duration fills the canvas exactly once, no scroll.
+  const now = live
+    ? (frozenNow ?? (Date.now() - props.originMs) / 1000)
+    : (n ? ts[n - 1] : 0);
   const span = live ? props.windowS : Math.max(now, 1);
   const pps = pw / span;
   return {
