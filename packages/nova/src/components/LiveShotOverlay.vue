@@ -44,6 +44,12 @@ const phaseNames = computed(() => {
   const p = currentWorkflow.value?.profile;
   return profileFrames({ profile: p }).map((f, i) => frameName(f, i, t));
 });
+// The live chart's temperature scale is fixed around this for the whole shot
+// (ShotStripChart's tempRange). From the workflow the machine is actually
+// running — same source as the phase names above — and the recipe's own
+// temperature only if that has not arrived yet.
+const liveTempAnchor = computed(() =>
+  NSXCore.resolveProfileTemp(currentWorkflow.value?.profile) ?? (recipe.groupTemp > 0 ? recipe.groupTemp : null));
 // profileFrame is 0-based into that same list (core's normalizeShotData
 // indexes frames[profileFrame] directly); null until the first snapshot.
 const phaseIndex = computed(() => liveFrame.value ?? 0);
@@ -235,7 +241,7 @@ async function editGrindSetting() {
       </span>
     </div>
     <div class="shot-graph">
-      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" />
+      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" :temp-anchor="liveTempAnchor" />
       <!-- Inside the plot, top right, rather than on a row of its own below it:
            a legend is a caption for the graph, and it was costing a full row of
            the column for three short words.

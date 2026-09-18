@@ -66,6 +66,10 @@ const props = defineProps({
   showTargets: { type: Boolean, default: false },
   // true = the axes-and-lines rendering described above.
   expert: { type: Boolean, default: false },
+  // Scroll mode: the temperature the shot is brewed at (°C), known before the
+  // first sample. Fixes the right-hand scale for the whole shot — see
+  // tempRange(). Without it a live chart falls back to fitting the data.
+  tempAnchor: { type: Number, default: null },
 });
 // Touch-and-hold scrubbing (static/history mode only): emits the sample under
 // the finger so the legend can read out pressure/flow/weight-flow at that point,
@@ -174,9 +178,24 @@ function geometry(w, h) {
 }
 
 /** The right-hand temperature scale. Snapped to 5° boundaries with at least a
- *  10° span, so a live shot's axis doesn't re-label itself every time the
- *  group drifts a tenth of a degree. */
+ *  10° span.
+ *
+ *  A LIVE shot does not fit its data. Fitting is right for a finished shot
+ *  (every value is in, the range is computed once and stays), but live it is
+ *  recomputed every frame from a series that keeps growing — the dip at the
+ *  start of preinfusion, then the climb back — so the axis re-scaled itself
+ *  mid-shot and every curve on it jumped. Live, the scale comes from the
+ *  brewing temperature instead, which is known before the first sample, and
+ *  never moves. The band sits mostly BELOW the anchor, because that is where a
+ *  shot spends its time: the puck and the incoming water pull the reading
+ *  down from the setpoint. A reading outside it is pinned to the edge (see
+ *  yTemp) rather than widening the axis. */
 function tempRange() {
+  if (props.mode === 'scroll' && Number.isFinite(props.tempAnchor) && props.tempAnchor > 0) {
+    const lo = Math.floor((props.tempAnchor - 8) / 5) * 5;
+    const hi = Math.ceil((props.tempAnchor + 4) / 5) * 5;
+    return [lo, Math.max(hi, lo + 10)];
+  }
   const arr = props.series.temperature || [];
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < arr.length; i++) {
@@ -394,7 +413,11 @@ function drawExpert(g, gridColor, windowStart) {
   const ts = props.series.elapsed, n = ts.length;
   const axisText = themeColor('--muted', 'rgba(233,237,242,0.55)');
   const [tlo, thi] = tempRange();
-  const yTemp = (v) => py + ph - ((v - tlo) / (thi - tlo)) * ph;
+  // Clamped: on a fixed live scale a reading can fall outside the band (a
+  // cold start, a preheat spike), and it belongs on the edge of the plot, not
+  // drawn over the axis labels. A fitted scale always contains its data, so
+  // the clamp never bites there.
+  const yTemp = (v) => py + ph - ((Math.min(Math.max(v, tlo), thi) - tlo) / (thi - tlo)) * ph;
 
   ctx.font = '10px system-ui, -apple-system, sans-serif';
   ctx.lineWidth = 1;
