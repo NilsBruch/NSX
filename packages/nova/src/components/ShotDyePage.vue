@@ -31,6 +31,9 @@ import {
 } from '../composables/useLiveShot.js';
 import { beans, grinders, shots, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
 import { openTextField, openNumberPad, openChooser } from '../composables/useModals.js';
+// Section icons from Lucide. Named imports, so only these four end up in the
+// build; the style (colour, size, stroke) comes from .dye-head in app.css.
+import { PaperBag, Coffee, LensConcave, Users } from '@lucide/vue';
 
 defineEmits(['close']);
 const { t } = useI18n();
@@ -218,10 +221,7 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
       <div class="dye-cols">
         <section class="dye-sect">
           <header class="dye-head">
-            <svg viewBox="0 0 32 32" aria-hidden="true">
-              <ellipse cx="16" cy="16" rx="8" ry="12" transform="rotate(-35 16 16)" />
-              <path d="M10.5 21.5c3-2 4.5-3.5 4.5-5.5s-1.5-3.5-4.5-5.5" />
-            </svg>
+            <PaperBag aria-hidden="true" />
             <span>{{ t('dye.secBeans') }}</span>
           </header>
           <div class="dye-grid">
@@ -245,11 +245,7 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
 
         <section class="dye-sect">
           <header class="dye-head">
-            <svg viewBox="0 0 32 32" aria-hidden="true">
-              <path d="M11 6h10l-1 5H12z" />
-              <path d="M12 11c-2 3-2 9 0 12h8c2-3 2-9 0-12" />
-              <path d="M13 27h6" />
-            </svg>
+            <Coffee aria-hidden="true" />
             <span>{{ t('dye.secExtraction') }}</span>
           </header>
           <div class="dye-grid">
@@ -290,10 +286,7 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
 
         <section class="dye-sect">
           <header class="dye-head">
-            <svg viewBox="0 0 32 32" aria-hidden="true">
-              <path d="M12 4h8v7l3 4v13H9V15l3-4z" />
-              <path d="M13.5 18h5v5h-5z" />
-            </svg>
+            <LensConcave aria-hidden="true" />
             <span>{{ t('dye.secEquipment') }}</span>
           </header>
           <div class="dye-grid">
@@ -320,11 +313,7 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
 
         <section class="dye-sect">
           <header class="dye-head">
-            <svg viewBox="0 0 32 32" aria-hidden="true">
-              <circle cx="12" cy="11" r="5" />
-              <path d="M3.5 26c0-4.6 3.8-7.5 8.5-7.5s8.5 2.9 8.5 7.5" />
-              <path d="M21 7.5a4.5 4.5 0 0 1 0 9M23 19.5c3.3 1 5.5 3.4 5.5 6.5" />
-            </svg>
+            <Users aria-hidden="true" />
             <span>{{ t('dye.secPeople') }}</span>
           </header>
           <div class="dye-grid">

@@ -2075,9 +2075,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--muted);
 }
+/* Lucide icons (ShotDyePage.vue). Lucide sets its own stroke attributes on
+   the <svg>, which CSS overrides — so the colour follows the theme here, and
+   the width stays Lucide's own 2, the weight its 24px grid is drawn for. */
 .dye-head svg {
   flex: none; width: 26px; height: 26px;
-  stroke: var(--faint); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+  stroke: var(--faint); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }
 /* Tiles, as many per row as fit: each field is a label and a short value, so a
    full-width row spent most of itself on nothing. */
