@@ -80,7 +80,10 @@ app.use(router).use(i18n).mount('#app');
 // display-override helpers all read the cached answer synchronously.
 loadDisplaySupport();
 
-bootCore().then(() => {
+// Skin settings as soon as the store is read, not after the whole boot — see
+// bootCore's own note. The call below, once everything has loaded, stays: it
+// re-applies the same values, and is what the start-tab re-route waits for.
+bootCore({ onStoreLoaded: loadSkinSettings }).then(() => {
   // Two devices on the same gateway otherwise never notice each other's
   // writes short of a full reload — see useRevalidate.js.
   wireRevalidateTriggers();

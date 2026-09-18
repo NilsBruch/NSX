@@ -355,8 +355,18 @@ NSXCore.on('liveShot', (snap) => {
   liveShot.steamTemperature = snap?.steamTemperature ?? 0;
 });
 
-/** Startup sequence, in the order the core README prescribes. */
-export async function bootCore() {
+/**
+ * Startup sequence, in the order the core README prescribes.
+ *
+ * `onStoreLoaded` runs the moment the settings store has been read, before
+ * the slow part (profiles, beans, grinders, recipes, 200 shots). The skin's
+ * own settings live in that store, and applying them only after the whole
+ * boot left every one at its default for the first seconds of a reload — the
+ * lock screen came up as a slider for someone set to tap-to-wake, then
+ * switched. A callback rather than an import of useSettings.js here, which
+ * would close an import cycle through useScreensaver.js.
+ */
+export async function bootCore({ onStoreLoaded } = {}) {
   try {
     // An NSX user's first Nova start: bring their recipes and presets across
     // (NSX's own data stays untouched) and start in the settings closest to
@@ -376,6 +386,7 @@ export async function bootCore() {
     });
     await NSXCore.migrateLegacyStore();
     await NSXCore.loadStore();
+    onStoreLoaded?.();
 
     NSXCore.hydrateSteam();
     NSXCore.hydrateHotwater();
