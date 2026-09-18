@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { phase, savingShot, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, liveFrame } from '../composables/useLiveShot.js';
 import { recipe } from '../composables/useRecipe.js';
 import { skinSettings } from '../composables/useSettings.js';
-import { machine, currentWorkflow } from '../composables/useCore.js';
+import { machine, currentWorkflow, formatMediumDate } from '../composables/useCore.js';
 import { openNumberPad, openConfirm } from '../composables/useModals.js';
 import { showToast } from '../composables/useToast.js';
 import ShotDyePage from './ShotDyePage.vue';
@@ -96,13 +96,10 @@ const shotTags = computed(() => {
   return Array.isArray(tags) ? tags : [];
 });
 
-const dateLabel = computed(() => {
-  const shot = currentShot.value;
-  if (!shot?.timestamp) return '—';
-  const d = new Date(shot.timestamp);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`;
-});
+// "05. Sep 2026" rather than "05/09/26": which number was the month, and of
+// which century, was a puzzle — the same reason the bag list writes its dates
+// out (formatLongDate). Abbreviated here to fit between the ‹ › arrows.
+const dateLabel = computed(() => formatMediumDate(currentShot.value?.timestamp));
 const timeLabel = computed(() => {
   const shot = currentShot.value;
   return shot?.timestamp ? formatClock(new Date(shot.timestamp)) : '—';

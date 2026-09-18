@@ -234,6 +234,20 @@ export function formatLongDate(iso) {
 }
 
 /**
+ * formatLongDate's order with the month abbreviated — "05. Sep 2026" — for a
+ * place that is tight but must still say which month and year: the history
+ * view's date between its ‹ › arrows. The abbreviation is the locale's own.
+ */
+export function formatMediumDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const locale = window.NSXI18n?.getLocale?.() ?? 'en-US';
+  const month = new Intl.DateTimeFormat(locale, { month: 'short' }).format(d);
+  return `${String(d.getDate()).padStart(2, '0')}. ${month} ${d.getFullYear()}`;
+}
+
+/**
  * The same instant split for a date RAIL — { day: '3', month: 'Sep', time:
  * '07:04' } — where formatShortDate returns one glued string. A list of shots
  * is mostly same-month, so a rail can shout the day and whisper the rest,
