@@ -312,9 +312,11 @@ async function editGrindSetting() {
              the live view exactly (see the request that spawned this). Holding a
              finger on the graph fills each label with that point's value. -->
         <div v-if="!expertGraph" class="glabel glabel-inset">
-          <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
-          <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
-          <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
+          <!-- Value in place of the label while scrubbing, as on the coffee
+               page (RecipeBrowser) — the swatch identifies the series. -->
+          <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span><b v-if="scrub">{{ fmt(scrub.pressure) }}<small>bar</small></b><template v-else>{{ t('liveShot.mPressure') }}</template></i>
+          <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span><b v-if="scrub">{{ fmt(scrub.flow) }}<small>ml/s</small></b><template v-else>{{ t('liveShot.mFlow') }}</template></i>
+          <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span><b v-if="scrub">{{ fmt(scrub.weightFlow) }}<small>g/s</small></b><template v-else>{{ t('liveShot.mWflow') }}</template></i>
         </div>
       </div>
       <!-- Read-only: these are what the recipe carried when the shot was

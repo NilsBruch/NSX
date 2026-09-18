@@ -583,8 +583,13 @@ onBeforeUnmount(() => cancelAnimationFrame(raf));
         :aria-pressed="shown[s.key]"
         @click="shown[s.key] = !shown[s.key]"
       >
-        <span class="sw" :style="{ background: s.color }"></span>{{ t(s.label) }}
+        <!-- While scrubbing, the value takes the label's place rather than
+             joining it: label and number together made every chip twice as
+             wide and the row overflowed. The swatch stays, and it is what says
+             which series a number belongs to. -->
+        <span class="sw" :style="{ background: s.color }"></span>
         <b v-if="scrubbed && shown[s.key]">{{ s.key === 'temperature' ? fmtLegend(dispTemp(scrubbed[s.key]), 0) : fmtLegend(scrubbed[s.key], 1) }}<small>{{ s.key === 'temperature' ? tempUnitLabel : s.unit }}</small></b>
+        <template v-else>{{ t(s.label) }}</template>
       </button>
       <button class="sl-chip sl-goals" :class="{ off: !shown.goals }" :aria-pressed="shown.goals" @click="shown.goals = !shown.goals">
         {{ t('liveShot.goals') }}

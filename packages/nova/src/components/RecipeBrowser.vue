@@ -337,11 +337,13 @@ const stepperDetail = computed(() => {
              value — same interaction as LiveShotOverlay's own history screen.
              Temperature isn't part of the chart itself (see scrubTemp's own
              note), but reads from the same scrubbed instant. -->
+        <!-- The value REPLACES the label while scrubbing (the swatch says
+             which series it is) — label plus number made the row too long. -->
         <div v-if="!expertGraph" class="glabel glabel-inset">
-          <i><span class="sw" style="background:#5fb8a5"></span>{{ t('liveShot.mPressure') }}<b v-if="scrub"> {{ fmt(scrub.pressure) }}<small>bar</small></b></i>
-          <i><span class="sw" style="background:#7fa8c9"></span>{{ t('liveShot.mFlow') }}<b v-if="scrub"> {{ fmt(scrub.flow) }}<small>ml/s</small></b></i>
-          <i><span class="sw" style="background:#ad7648"></span>{{ t('liveShot.mWflow') }}<b v-if="scrub"> {{ fmt(scrub.weightFlow) }}<small>g/s</small></b></i>
-          <i><span class="sw" style="background:#e8846f"></span>{{ t('liveShot.mTemp') }}<b v-if="scrub"> {{ dispTemp(scrubTemp) }}<small>{{ tempUnitLabel }}</small></b></i>
+          <i><span class="sw" style="background:#5fb8a5"></span><b v-if="scrub">{{ fmt(scrub.pressure) }}<small>bar</small></b><template v-else>{{ t('liveShot.mPressure') }}</template></i>
+          <i><span class="sw" style="background:#7fa8c9"></span><b v-if="scrub">{{ fmt(scrub.flow) }}<small>ml/s</small></b><template v-else>{{ t('liveShot.mFlow') }}</template></i>
+          <i><span class="sw" style="background:#ad7648"></span><b v-if="scrub">{{ fmt(scrub.weightFlow) }}<small>g/s</small></b><template v-else>{{ t('liveShot.mWflow') }}</template></i>
+          <i><span class="sw" style="background:#e8846f"></span><b v-if="scrub">{{ dispTemp(scrubTemp) }}<small>{{ tempUnitLabel }}</small></b><template v-else>{{ t('liveShot.mTemp') }}</template></i>
         </div>
         <div v-if="!graphShots.length" class="browse-graph-empty">{{ t('liveShot.noShotsYet') }}</div>
       </div>
