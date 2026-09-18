@@ -301,21 +301,27 @@ async function onRecipeCreated() {
       <div v-if="!profileGroupsInBean.length" class="phone-empty">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</div>
     </div>
 
-    <RecipePicker
-      v-if="showRecipeCreator"
-      :preset-bean="diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
-      :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
-      @back="closeRecipeCreator"
-      @created="onRecipeCreated"
-    />
-    <BeanEditor
-      v-if="showBeanEditor"
-      :bean="editingBean"
-      :preset-roaster="diaryState.level === 1 ? diaryState.roasterName : ''"
-      @close="closeBeanEditor"
-      @saved="closeBeanEditor"
-      @deleted="closeBeanEditor"
-    />
-    <BagsPanel v-if="showBags" :bean="bagsBean" @close="closeBags" />
+    <PageTransition>
+      <RecipePicker
+        v-if="showRecipeCreator"
+        :preset-bean="diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
+        :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
+        @back="closeRecipeCreator"
+        @created="onRecipeCreated"
+      />
+    </PageTransition>
+    <PageTransition>
+      <BeanEditor
+        v-if="showBeanEditor"
+        :bean="editingBean"
+        :preset-roaster="diaryState.level === 1 ? diaryState.roasterName : ''"
+        @close="closeBeanEditor"
+        @saved="closeBeanEditor"
+        @deleted="closeBeanEditor"
+      />
+    </PageTransition>
+    <PageTransition>
+      <BagsPanel v-if="showBags" :bean="bagsBean" @close="closeBags" />
+    </PageTransition>
   </section>
 </template>

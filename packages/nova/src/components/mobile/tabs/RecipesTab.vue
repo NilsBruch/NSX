@@ -146,7 +146,11 @@ const press = useLongPress({ tap: loadRow, hold: openRowMenu });
       <div v-if="!recipeRows.length" class="phone-empty">{{ t('diary.noRecipesYet') }}</div>
     </div>
 
-    <RecipeDetail v-if="detailEntry" :entry="detailEntry" @close="detailEntry = null" />
-    <RecipePicker v-if="showRecipeCreator" @back="showRecipeCreator = false" @created="showRecipeCreator = false" />
+    <PageTransition>
+      <RecipeDetail v-if="detailEntry" :entry="detailEntry" @close="detailEntry = null" />
+    </PageTransition>
+    <PageTransition>
+      <RecipePicker v-if="showRecipeCreator" @back="showRecipeCreator = false" @created="showRecipeCreator = false" />
+    </PageTransition>
   </section>
 </template>

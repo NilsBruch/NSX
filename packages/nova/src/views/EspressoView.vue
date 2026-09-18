@@ -190,31 +190,41 @@ async function onBatchPicked(batch) {
       @pick-grinder="pickGrinder"
       @pick-profile="showProfilePicker = true"
     />
-    <RecipePicker
-      v-if="showRecipeCreator"
+    <PageTransition>
+      <RecipePicker
+        v-if="showRecipeCreator"
 
-      @back="showRecipeCreator = false"
-      @created="showRecipeCreator = false"
-    />
-    <BeanChooser v-if="showBeanChooser" @pick="onBeanPicked" @back="showBeanChooser = false" />
-    <ProfilePicker
-      v-if="showProfilePicker"
-      mode="pick"
-      :current-title="recipe.profileTitle"
-      @select="onProfileSelected"
-      @back="showProfilePicker = false"
-    />
-    <BatchPicker
-      v-if="showBatchPicker && recipeBean"
-      :bean="recipeBean"
-      @pick="onBatchPicked"
-      @back="showBatchPicker = false"
-    />
-    <ProfileEditor
-      v-if="showProfileEditor"
-      :record="editingProfileRecord"
-      @close="showProfileEditor = false"
-      @saved="onProfileEditorSaved"
-    />
+        @back="showRecipeCreator = false"
+        @created="showRecipeCreator = false"
+      />
+    </PageTransition>
+    <PageTransition>
+      <BeanChooser v-if="showBeanChooser" @pick="onBeanPicked" @back="showBeanChooser = false" />
+    </PageTransition>
+    <PageTransition>
+      <ProfilePicker
+        v-if="showProfilePicker"
+        mode="pick"
+        :current-title="recipe.profileTitle"
+        @select="onProfileSelected"
+        @back="showProfilePicker = false"
+      />
+    </PageTransition>
+    <PageTransition>
+      <BatchPicker
+        v-if="showBatchPicker && recipeBean"
+        :bean="recipeBean"
+        @pick="onBatchPicked"
+        @back="showBatchPicker = false"
+      />
+    </PageTransition>
+    <PageTransition>
+      <ProfileEditor
+        v-if="showProfileEditor"
+        :record="editingProfileRecord"
+        @close="showProfileEditor = false"
+        @saved="onProfileEditorSaved"
+      />
+    </PageTransition>
   </section>
 </template>

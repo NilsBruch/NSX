@@ -154,6 +154,8 @@ const assistantMode = ref(null); // null | 'forwardFlush' | 'backflush' | 'desca
       </button>
     </div>
 
-    <CleaningAssistant v-if="assistantMode" :mode="assistantMode" @close="assistantMode = null" />
+    <PageTransition>
+      <CleaningAssistant v-if="assistantMode" :mode="assistantMode" @close="assistantMode = null" />
+    </PageTransition>
   </section>
 </template>

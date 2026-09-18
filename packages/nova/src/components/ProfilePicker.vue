@@ -502,11 +502,13 @@ async function onEditorSaved({ profile: built, originalProfile }) {
       </div>
     </div>
 
-    <ProfileEditor
-      v-if="showEditor"
-      :record="editingRecord"
-      @close="showEditor = false; editingRecord = null"
-      @saved="onEditorSaved"
-    />
+    <PageTransition>
+      <ProfileEditor
+        v-if="showEditor"
+        :record="editingRecord"
+        @close="showEditor = false; editingRecord = null"
+        @saved="onEditorSaved"
+      />
+    </PageTransition>
   </div>
 </template>

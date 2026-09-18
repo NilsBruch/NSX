@@ -180,6 +180,8 @@ async function openSearch() {
       </button>
     </div>
 
-    <BeanEditor v-if="showEditor" :bean="null" @close="showEditor = false" @saved="onBeanSaved" />
+    <PageTransition>
+      <BeanEditor v-if="showEditor" :bean="null" @close="showEditor = false" @saved="onBeanSaved" />
+    </PageTransition>
   </div>
 </template>

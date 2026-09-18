@@ -481,13 +481,15 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
       </button>
     </div>
 
-    <!-- The recipe wizard's own two screens. Teleported to <body>: this page
-         sits inside the history view's slider, whose transform would otherwise
-         become the frame these fixed, full-screen overlays position against —
-         they would open inside the slide instead of over the screen. -->
-    <Teleport to="body">
+    <!-- The recipe wizard's own two screens. PageTransition renders them into
+         <body>, out of the history view's slider — whose transform would
+         otherwise be the frame these fixed overlays position against, opening
+         them inside the slide instead of over the screen. -->
+    <PageTransition>
       <BeanChooser v-if="picking === 'bean'" @pick="onBeanPicked" @back="picking = null" />
+    </PageTransition>
+    <PageTransition>
       <BatchPicker v-if="picking === 'bag' && pickedBean" :bean="pickedBean" @pick="onBagPicked" @back="onBagBack" />
-    </Teleport>
+    </PageTransition>
   </div>
 </template>

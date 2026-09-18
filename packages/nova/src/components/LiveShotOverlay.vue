@@ -220,142 +220,151 @@ async function editGrindSetting() {
 </script>
 
 <template>
-  <div v-if="phase === 'live'" class="overlay-full">
-    <div class="live-top">
-      <span class="live-title">{{ t('liveShot.title') }}</span>
-      <PhaseTicker :names="phaseNames" :index="phaseIndex" />
-      <!-- Third cell balances the title so the ticker's centre cell is the
-           centre of the SCREEN — empty most of the time, but this is also
-           where the saving spinner lives once the shot ends (see savingShot
-           in useLiveShot.js): a small corner indicator instead of a full-
-           screen takeover, so the just-finished graph/metrics stay visible
-           while the shot is confirmed saved.
-           No top-right timer here: the elapsed time already runs in the
-           metrics row below (liveShot.mTime), so a second one would be
-           redundant. -->
-      <span class="live-top-end">
-        <svg v-if="savingShot" viewBox="0 0 24 24" class="saving-spin" role="status" :aria-label="t('liveShot.saving')"><path d="M12 3a9 9 0 1 0 9 9" /></svg>
-      </span>
-    </div>
-    <div class="shot-graph">
-      <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" :temp-anchor="liveTempAnchor" :stopped="savingShot" />
-      <!-- Inside the plot, top right, rather than on a row of its own below it:
-           a legend is a caption for the graph, and it was costing a full row of
-           the column for three short words.
-           No temperature entry: the strip chart doesn't plot temp (the metric
-           tile below carries it) — a legend swatch for an absent line lies. -->
-      <div v-if="!expertGraph" class="glabel glabel-inset">
-        <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}</i>
-        <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}</i>
-        <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}</i>
-      </div>
-    </div>
-    <div class="live-metrics">
-      <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.temp }">{{ t('liveShot.mTemp') }}</div><div class="mv">{{ dispTemp(last(series.temperature, 0)) }}<small>{{ tempUnitLabel }}</small></div></div>
-      <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.pressure }">{{ t('liveShot.mPressure') }}</div><div class="mv">{{ last(series.pressure) }}<small>bar</small></div></div>
-      <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.flow }">{{ t('liveShot.mFlow') }}</div><div class="mv">{{ last(series.flow) }}<small>ml/s</small></div></div>
-      <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.wflow }">{{ t('liveShot.mWflow') }}</div><div class="mv">{{ last(series.weightFlow) }}<small>g/s</small></div></div>
-      <div class="metric"><div class="ml">{{ t('liveShot.mTime') }}</div><div class="mv">{{ liveElapsedLabel }}</div></div>
-    </div>
-    <div class="live-bottom">
-      <div class="live-actions">
-        <!-- Skip step only: it advances the profile to its next frame. On the
-             tablet, stopping is deliberately NOT offered here — that's what
-             the machine's own stop is for, same as starting a shot. This
-             button used to be labelled "Skip" but actually stopped the shot.
-             Disabled while savingShot: the shot has already ended by then,
-             so skipping/stopping no longer means anything. -->
-        <button class="skip-btn" :disabled="savingShot" @click="onSkipStep">{{ t('liveShot.skipStep') }}</button>
-        <!-- Phone only — see onStop's own comment for why this is the one
-             place the tablet's "the machine is right there" reasoning
-             doesn't hold. -->
-        <button v-if="isPhone" class="stop-btn" :disabled="savingShot" @click="onStop">{{ t('common.stop') }}</button>
-      </div>
-      <div class="wbar">
-        <span class="wbar-label"><b>{{ shownWeight.toFixed(0) }}</b> / {{ recipe.targetYield.toFixed(0) }} g<small v-if="virtualScaleActive" style="color: var(--muted)"> *</small></span>
-        <div class="wbar-track">
-          <div class="wbar-fill" :style="{ width: `${weightPct}%` }"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Two pages stacked vertically, the graph on top and DYE underneath: the
-       DYE button slides the pair up rather than swapping screens, so the graph
-       is still where it was when you come back. -->
-  <div v-else-if="phase === 'history'" class="overlay-full dye-host">
-   <div class="dye-viewport">
-    <div class="dye-slider" :class="{ 'is-dye': dyeOpen }">
-    <div class="dye-slide">
-    <div class="ov-top">
-      <button class="ov-back" @click="closeHistory">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('liveShot.back') }}
-      </button>
-      <span class="ov-title">{{ t('liveShot.historyTitle') }}</span>
-      <div class="date-nav">
-        <button :disabled="historyIndex >= historyShots.length - 1" @click="olderShot">‹</button>
-        <span class="date">
-          {{ dateLabel }}
-          <small class="date-time">{{ timeLabel }}</small>
+  <!-- One steady outer element, for the same reason as RecipePicker's: App
+       mounts this with the page transition when it opens as history, and
+       Vue hands that transition to the ROOT — with live and history as the
+       root, a shot ending (live -> history) would have run it on both, the
+       live view sliding out while its review slid in across it. Inside this,
+       that switch is an instant swap. .page-host: fixed and full-screen, the
+       frame these fixed overlays position against while it moves. -->
+  <div class="page-host">
+    <div v-if="phase === 'live'" class="overlay-full">
+      <div class="live-top">
+        <span class="live-title">{{ t('liveShot.title') }}</span>
+        <PhaseTicker :names="phaseNames" :index="phaseIndex" />
+        <!-- Third cell balances the title so the ticker's centre cell is the
+             centre of the SCREEN — empty most of the time, but this is also
+             where the saving spinner lives once the shot ends (see savingShot
+             in useLiveShot.js): a small corner indicator instead of a full-
+             screen takeover, so the just-finished graph/metrics stay visible
+             while the shot is confirmed saved.
+             No top-right timer here: the elapsed time already runs in the
+             metrics row below (liveShot.mTime), so a second one would be
+             redundant. -->
+        <span class="live-top-end">
+          <svg v-if="savingShot" viewBox="0 0 24 24" class="saving-spin" role="status" :aria-label="t('liveShot.saving')"><path d="M12 3a9 9 0 1 0 9 9" /></svg>
         </span>
-        <button :disabled="historyIndex <= 0" @click="newerShot">›</button>
+      </div>
+      <div class="shot-graph">
+        <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" :temp-anchor="liveTempAnchor" :stopped="savingShot" />
+        <!-- Inside the plot, top right, rather than on a row of its own below it:
+             a legend is a caption for the graph, and it was costing a full row of
+             the column for three short words.
+             No temperature entry: the strip chart doesn't plot temp (the metric
+             tile below carries it) — a legend swatch for an absent line lies. -->
+        <div v-if="!expertGraph" class="glabel glabel-inset">
+          <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span>{{ t('liveShot.mPressure') }}</i>
+          <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span>{{ t('liveShot.mFlow') }}</i>
+          <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span>{{ t('liveShot.mWflow') }}</i>
+        </div>
+      </div>
+      <div class="live-metrics">
+        <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.temp }">{{ t('liveShot.mTemp') }}</div><div class="mv">{{ dispTemp(last(series.temperature, 0)) }}<small>{{ tempUnitLabel }}</small></div></div>
+        <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.pressure }">{{ t('liveShot.mPressure') }}</div><div class="mv">{{ last(series.pressure) }}<small>bar</small></div></div>
+        <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.flow }">{{ t('liveShot.mFlow') }}</div><div class="mv">{{ last(series.flow) }}<small>ml/s</small></div></div>
+        <div class="metric"><div class="ml" :style="{ color: LIVE_COLORS.wflow }">{{ t('liveShot.mWflow') }}</div><div class="mv">{{ last(series.weightFlow) }}<small>g/s</small></div></div>
+        <div class="metric"><div class="ml">{{ t('liveShot.mTime') }}</div><div class="mv">{{ liveElapsedLabel }}</div></div>
+      </div>
+      <div class="live-bottom">
+        <div class="live-actions">
+          <!-- Skip step only: it advances the profile to its next frame. On the
+               tablet, stopping is deliberately NOT offered here — that's what
+               the machine's own stop is for, same as starting a shot. This
+               button used to be labelled "Skip" but actually stopped the shot.
+               Disabled while savingShot: the shot has already ended by then,
+               so skipping/stopping no longer means anything. -->
+          <button class="skip-btn" :disabled="savingShot" @click="onSkipStep">{{ t('liveShot.skipStep') }}</button>
+          <!-- Phone only — see onStop's own comment for why this is the one
+               place the tablet's "the machine is right there" reasoning
+               doesn't hold. -->
+          <button v-if="isPhone" class="stop-btn" :disabled="savingShot" @click="onStop">{{ t('common.stop') }}</button>
+        </div>
+        <div class="wbar">
+          <span class="wbar-label"><b>{{ shownWeight.toFixed(0) }}</b> / {{ recipe.targetYield.toFixed(0) }} g<small v-if="virtualScaleActive" style="color: var(--muted)"> *</small></span>
+          <div class="wbar-track">
+            <div class="wbar-fill" :style="{ width: `${weightPct}%` }"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <template v-if="currentShot">
-      <div class="shot-graph">
-        <ShotStripChart :series="historyStripSeries" mode="static" :show-targets="skinSettings.showTargets" :expert="expertGraph" @scrub="scrub = $event" />
-        <!-- No temperature swatch: the strip chart doesn't plot temp, matching
-             the live view exactly (see the request that spawned this). Holding a
-             finger on the graph fills each label with that point's value. -->
-        <div v-if="!expertGraph" class="glabel glabel-inset">
-          <!-- Value in place of the label while scrubbing, as on the coffee
-               page (RecipeBrowser) — the swatch identifies the series. -->
-          <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span><b v-if="scrub">{{ fmt(scrub.pressure) }}<small>bar</small></b><template v-else>{{ t('liveShot.mPressure') }}</template></i>
-          <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span><b v-if="scrub">{{ fmt(scrub.flow) }}<small>ml/s</small></b><template v-else>{{ t('liveShot.mFlow') }}</template></i>
-          <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span><b v-if="scrub">{{ fmt(scrub.weightFlow) }}<small>g/s</small></b><template v-else>{{ t('liveShot.mWflow') }}</template></i>
+    <!-- Two pages stacked vertically, the graph on top and DYE underneath: the
+         DYE button slides the pair up rather than swapping screens, so the graph
+         is still where it was when you come back. -->
+    <div v-else-if="phase === 'history'" class="overlay-full dye-host">
+     <div class="dye-viewport">
+      <div class="dye-slider" :class="{ 'is-dye': dyeOpen }">
+      <div class="dye-slide">
+      <div class="ov-top">
+        <button class="ov-back" @click="closeHistory">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('liveShot.back') }}
+        </button>
+        <span class="ov-title">{{ t('liveShot.historyTitle') }}</span>
+        <div class="date-nav">
+          <button :disabled="historyIndex >= historyShots.length - 1" @click="olderShot">‹</button>
+          <span class="date">
+            {{ dateLabel }}
+            <small class="date-time">{{ timeLabel }}</small>
+          </span>
+          <button :disabled="historyIndex <= 0" @click="newerShot">›</button>
         </div>
       </div>
-      <!-- Read-only: these are what the recipe carried when the shot was
-           pulled. Editing tags is a recipe action (the card hold menu). -->
-      <div v-if="skinSettings.showTags && shotTags.length" class="shot-tags">
-        <span class="st-label">{{ t('liveShot.shotTags') }}</span>
-        <span v-for="tag in shotTags" :key="tag" class="st-tag">{{ tag }}</span>
-      </div>
-      <div class="shot-metrics">
-        <button class="metric as-btn" @click="editGrindSetting">
-          <div class="ml">{{ t('liveShot.mGrind') }}</div><div class="mv">{{ grindSetting ?? '—' }}</div>
-        </button>
-        <button class="metric as-btn" @click="editActualDose">
-          <div class="ml">{{ t('liveShot.mIn') }}</div><div class="mv">{{ fmtWeight(actualDose) }}<small>g</small></div>
-        </button>
-        <button class="metric as-btn" @click="editActualYield">
-          <div class="ml">{{ t('liveShot.mOut') }}</div><div class="mv">{{ fmtWeight(actualYield.value) }}<small>{{ actualYield.unit }}{{ actualYield.estimated ? '*' : '' }}</small></div>
-        </button>
-        <div class="metric"><div class="ml">{{ t('liveShot.mRatio') }}</div><div class="mv">{{ ratioLabel }}</div></div>
-        <div class="metric"><div class="ml">{{ t('liveShot.mTime') }}</div><div class="mv">{{ durationLabel }}<small>s</small></div></div>
-      </div>
-      <div class="shot-done">
-        <!-- Bottom left, opposite Delete: the way DOWN into the rest of this
-             shot's record. Everything the graph page has no room for lives
-             there (ShotDyePage.vue). -->
-        <button v-if="skinSettings.dyeButton" class="shot-dye" @click="dyeOpen = true">
-          {{ t('dye.open') }}
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" /></svg>
-        </button>
-        <div class="rate-stars">
-          <button v-for="n in 5" :key="n" class="star" :class="{ on: n <= rating }" @click="setRating(n)">{{ n <= rating ? '★' : '☆' }}</button>
+
+      <template v-if="currentShot">
+        <div class="shot-graph">
+          <ShotStripChart :series="historyStripSeries" mode="static" :show-targets="skinSettings.showTargets" :expert="expertGraph" @scrub="scrub = $event" />
+          <!-- No temperature swatch: the strip chart doesn't plot temp, matching
+               the live view exactly (see the request that spawned this). Holding a
+               finger on the graph fills each label with that point's value. -->
+          <div v-if="!expertGraph" class="glabel glabel-inset">
+            <!-- Value in place of the label while scrubbing, as on the coffee
+                 page (RecipeBrowser) — the swatch identifies the series. -->
+            <i><span class="sw" :style="{ background: LIVE_COLORS.pressure }"></span><b v-if="scrub">{{ fmt(scrub.pressure) }}<small>bar</small></b><template v-else>{{ t('liveShot.mPressure') }}</template></i>
+            <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span><b v-if="scrub">{{ fmt(scrub.flow) }}<small>ml/s</small></b><template v-else>{{ t('liveShot.mFlow') }}</template></i>
+            <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span><b v-if="scrub">{{ fmt(scrub.weightFlow) }}<small>g/s</small></b><template v-else>{{ t('liveShot.mWflow') }}</template></i>
+          </div>
         </div>
-        <button class="shot-delete" :aria-label="t('common.delete')" @click="confirmDeleteShot">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13" /></svg>
-          {{ t('common.delete') }}
-        </button>
+        <!-- Read-only: these are what the recipe carried when the shot was
+             pulled. Editing tags is a recipe action (the card hold menu). -->
+        <div v-if="skinSettings.showTags && shotTags.length" class="shot-tags">
+          <span class="st-label">{{ t('liveShot.shotTags') }}</span>
+          <span v-for="tag in shotTags" :key="tag" class="st-tag">{{ tag }}</span>
+        </div>
+        <div class="shot-metrics">
+          <button class="metric as-btn" @click="editGrindSetting">
+            <div class="ml">{{ t('liveShot.mGrind') }}</div><div class="mv">{{ grindSetting ?? '—' }}</div>
+          </button>
+          <button class="metric as-btn" @click="editActualDose">
+            <div class="ml">{{ t('liveShot.mIn') }}</div><div class="mv">{{ fmtWeight(actualDose) }}<small>g</small></div>
+          </button>
+          <button class="metric as-btn" @click="editActualYield">
+            <div class="ml">{{ t('liveShot.mOut') }}</div><div class="mv">{{ fmtWeight(actualYield.value) }}<small>{{ actualYield.unit }}{{ actualYield.estimated ? '*' : '' }}</small></div>
+          </button>
+          <div class="metric"><div class="ml">{{ t('liveShot.mRatio') }}</div><div class="mv">{{ ratioLabel }}</div></div>
+          <div class="metric"><div class="ml">{{ t('liveShot.mTime') }}</div><div class="mv">{{ durationLabel }}<small>s</small></div></div>
+        </div>
+        <div class="shot-done">
+          <!-- Bottom left, opposite Delete: the way DOWN into the rest of this
+               shot's record. Everything the graph page has no room for lives
+               there (ShotDyePage.vue). -->
+          <button v-if="skinSettings.dyeButton" class="shot-dye" @click="dyeOpen = true">
+            {{ t('dye.open') }}
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" /></svg>
+          </button>
+          <div class="rate-stars">
+            <button v-for="n in 5" :key="n" class="star" :class="{ on: n <= rating }" @click="setRating(n)">{{ n <= rating ? '★' : '☆' }}</button>
+          </div>
+          <button class="shot-delete" :aria-label="t('common.delete')" @click="confirmDeleteShot">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13" /></svg>
+            {{ t('common.delete') }}
+          </button>
+        </div>
+      </template>
+      <div v-else class="list"><div class="list-row"><span class="rsub">{{ t('liveShot.noShotsYet') }}</span></div></div>
       </div>
-    </template>
-    <div v-else class="list"><div class="list-row"><span class="rsub">{{ t('liveShot.noShotsYet') }}</span></div></div>
+      <ShotDyePage class="dye-slide" @close="dyeOpen = false" />
+      </div>
+     </div>
     </div>
-    <ShotDyePage class="dye-slide" @close="dyeOpen = false" />
-    </div>
-   </div>
   </div>
 </template>

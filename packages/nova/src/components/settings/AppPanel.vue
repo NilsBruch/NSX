@@ -265,6 +265,8 @@ const pluginCount = computed(() => plugins.value.length);
       </button>
     </div>
 
-    <PluginsPanel v-if="showPlugins" @close="showPlugins = false" />
+    <PageTransition>
+      <PluginsPanel v-if="showPlugins" @close="showPlugins = false" />
+    </PageTransition>
   </div>
 </template>

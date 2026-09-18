@@ -64,10 +64,20 @@ const active = ref(null);
       </div>
     </div>
 
-    <ProfilePicker v-if="active === 'profiles'" mode="manage" @back="active = null" />
-    <GrinderPanel v-if="active === 'grinders'" @close="active = null" />
-    <MachinePanel v-if="active === 'machine'" @close="active = null" />
-    <SkinPanel v-if="active === 'skin'" @close="active = null" />
-    <AppPanel v-if="active === 'app'" @close="active = null" />
+    <PageTransition>
+      <ProfilePicker v-if="active === 'profiles'" mode="manage" @back="active = null" />
+    </PageTransition>
+    <PageTransition>
+      <GrinderPanel v-if="active === 'grinders'" @close="active = null" />
+    </PageTransition>
+    <PageTransition>
+      <MachinePanel v-if="active === 'machine'" @close="active = null" />
+    </PageTransition>
+    <PageTransition>
+      <SkinPanel v-if="active === 'skin'" @close="active = null" />
+    </PageTransition>
+    <PageTransition>
+      <AppPanel v-if="active === 'app'" @close="active = null" />
+    </PageTransition>
   </section>
 </template>

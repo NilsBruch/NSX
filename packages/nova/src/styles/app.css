@@ -2790,6 +2790,39 @@ a.sw-update { text-decoration: none; }
   .drill-back-enter-from, .drill-back-leave-to { transform: none; }
 }
 
+/* ===== Sub-pages: every full-screen page with a Back button =====
+   A push, like a phone's own navigation: the page slides in from the right
+   while the screen it covers slides out to the left, side by side, and Back
+   runs it in reverse. <PageTransition> where each page is opened moves the
+   page (the `page` transition); usePageStack.js moves the layer beneath it
+   (.page-pushed — the app itself, or the page a page was opened from).
+   One duration and one curve for all of it, both directions: two surfaces
+   meant to read as a single strip only stay edge to edge if they move
+   identically. Decelerating, so the move settles rather than stops. */
+:root { --page-slide: 0.3s cubic-bezier(0.22, 0.8, 0.22, 1); }
+.page-enter-active, .page-leave-active { transition: transform var(--page-slide); }
+.page-enter-from, .page-leave-to { transform: translateX(100%); }
+/* The layers a page can push. The transition lives on them permanently (it
+   only animates when .page-pushed comes or goes); the class moves the layer
+   one screen to the left while a page is open over it. */
+.stage, .phone-shell, .overlay-full, .page-host { transition: transform var(--page-slide); }
+.page-pushed { transform: translateX(-100%); }
+/* The steady outer element for a page that switches between several
+   full-screen views while open (the recipe wizard's steps, the shot overlay's
+   live/history). The transition runs on this, not on the views, so switching
+   inside is instant. Fixed and full-screen because the views are fixed
+   overlays: while this moves it is what they position against, so it must
+   BE the screen — a plain in-flow wrapper would squash them to its own box
+   for the length of the slide. No background of its own. */
+.page-host { position: fixed; inset: 0; z-index: 20; }
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active, .page-leave-active { transition: opacity 0.12s ease; }
+  .page-enter-from, .page-leave-to { transform: none; opacity: 0; }
+  /* No push without motion: the layer beneath simply stays, covered. */
+  .stage, .phone-shell, .overlay-full, .page-host { transition: none; }
+  .page-pushed { transform: none; }
+}
+
 /* The scroller keeps the padding, the mask and a fixed box; .lc-inner carries
    the stacking of cards and is the element the rubber band translates (see
    useScrollEdges.js). */

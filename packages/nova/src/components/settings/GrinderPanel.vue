@@ -66,6 +66,8 @@ function closeEditor() { showEditor.value = false; }
       <button class="act-btn accent grow" @click="openNew">{{ t('grinderEditor.newTitle') }}</button>
     </div>
 
-    <GrinderEditor v-if="showEditor" :grinder="editing" @close="closeEditor" @saved="closeEditor" @deleted="closeEditor" />
+    <PageTransition>
+      <GrinderEditor v-if="showEditor" :grinder="editing" @close="closeEditor" @saved="closeEditor" @deleted="closeEditor" />
+    </PageTransition>
   </div>
 </template>

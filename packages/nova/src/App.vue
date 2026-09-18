@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAccent } from './composables/useAccent.js';
 import { locked } from './composables/useScreensaver.js';
@@ -23,6 +23,22 @@ import FlushCountdown from './components/FlushCountdown.vue';
 import MobileShell from './components/mobile/MobileShell.vue';
 
 const route = useRoute();
+
+/**
+ * Which transition the shot overlay mounts and unmounts with: `page` while it
+ * is the shot HISTORY, none for the live shot. Remembered from the last
+ * VISIBLE phase, because closing history sets the phase to 'hidden' first —
+ * reading the phase then would find nothing to animate out. Synchronous, so
+ * the name is right before the render that mounts the overlay reads it.
+ *
+ * A live shot turning into its history keeps the overlay mounted, so that
+ * switch is not a transition at all: the review replaces the live view where
+ * it stands.
+ */
+const overlayTransition = ref('');
+watch(liveShotPhase, (p) => {
+  if (p !== 'hidden') overlayTransition.value = p === 'history' ? 'page' : 'none';
+}, { flush: 'sync', immediate: true });
 
 // A phone tab has no router entry of its own (usePhoneNav.js), so it maps
 // onto whichever tablet tab shares its concern purely to borrow that tab's
@@ -61,7 +77,11 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
          Tablet-only kiosk chrome, along with RegisterRail/StatusIsland/
          PowerButton above: meaningless on a phone, which has no lock screen
          of its own to show. -->
-    <Screensaver v-if="locked" />
+    <!-- Teleported out of .stage: opening a page pushes .stage off to the left
+         (PageTransition), and a lock screen inside it would go with it. -->
+    <Teleport to="body">
+      <Screensaver v-if="locked" />
+    </Teleport>
   </div>
 
   <!-- Global, BOTH layouts: a hardware-triggered shot/steam/hot-water/flush
@@ -75,7 +95,12 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
        FlushCountdown each write exactly one thing, setMachineState('idle').
        None of the three can START a dispense — the one component that can
        (CleaningAssistant.vue) is simply never mounted on the phone. -->
-  <LiveShotOverlay v-if="liveShotPhase !== 'hidden'" />
+  <!-- Shot history slides in and out like every other page with a Back
+       button (PageTransition, pushing the app aside); the live shot does not — it has to be
+       there the instant the machine starts pouring. See overlayTransition. -->
+  <PageTransition :name="overlayTransition">
+    <LiveShotOverlay v-if="liveShotPhase !== 'hidden'" />
+  </PageTransition>
   <SimpleLiveOverlay />
   <!-- A flush is housekeeping, not a beverage — a centred countdown rather
        than one of the two full-screen live overlays above. -->

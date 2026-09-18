@@ -248,19 +248,25 @@ async function removeThis() {
       <button class="btn danger" @click="removeThis">{{ t('common.delete') }}</button>
     </div>
 
-    <BatchPicker
-      v-if="showBatchPicker && recipeBean"
-      :bean="recipeBean"
-      @pick="onBatchPicked"
-      @back="showBatchPicker = false"
-    />
-    <BeanChooser v-if="showBeanChooser" @pick="onBeanPicked" @back="showBeanChooser = false" />
-    <ProfilePicker
-      v-if="showProfilePicker"
-      mode="pick"
-      :current-title="source.profileTitle"
-      @select="onProfileSelected"
-      @back="showProfilePicker = false"
-    />
+    <PageTransition>
+      <BatchPicker
+        v-if="showBatchPicker && recipeBean"
+        :bean="recipeBean"
+        @pick="onBatchPicked"
+        @back="showBatchPicker = false"
+      />
+    </PageTransition>
+    <PageTransition>
+      <BeanChooser v-if="showBeanChooser" @pick="onBeanPicked" @back="showBeanChooser = false" />
+    </PageTransition>
+    <PageTransition>
+      <ProfilePicker
+        v-if="showProfilePicker"
+        mode="pick"
+        :current-title="source.profileTitle"
+        @select="onProfileSelected"
+        @back="showProfilePicker = false"
+      />
+    </PageTransition>
   </div>
 </template>

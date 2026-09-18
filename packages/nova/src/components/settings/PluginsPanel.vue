@@ -174,6 +174,8 @@ async function toggleEnabled(plugin) {
       </template>
     </div>
 
-    <VisualizerPanel v-if="showVisualizer" @close="showVisualizer = false" />
+    <PageTransition>
+      <VisualizerPanel v-if="showVisualizer" @close="showVisualizer = false" />
+    </PageTransition>
   </div>
 </template>

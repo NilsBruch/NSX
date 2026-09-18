@@ -505,25 +505,31 @@ watch(
       </button>
     </div>
 
-    <BeanEditor
-      v-if="showEditor"
-      :bean="editingBean"
-      :preset-roaster="diaryState.level === 1 ? diaryState.roasterName : ''"
-      @close="closeEditor"
-      @saved="closeEditor"
-      @deleted="closeEditor"
-    />
-    <BagsPanel v-if="showBags" :bean="bagsBean" @close="closeBags" />
+    <PageTransition>
+      <BeanEditor
+        v-if="showEditor"
+        :bean="editingBean"
+        :preset-roaster="diaryState.level === 1 ? diaryState.roasterName : ''"
+        @close="closeEditor"
+        @saved="closeEditor"
+        @deleted="closeEditor"
+      />
+    </PageTransition>
+    <PageTransition>
+      <BagsPanel v-if="showBags" :bean="bagsBean" @close="closeBags" />
+    </PageTransition>
 
     <!-- Seeded from the current browse position: inside a roaster it opens
          there, and on a bean's own page the bean step is already answered. -->
-    <RecipePicker
-      v-if="showRecipeCreator"
-      :preset-bean="diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
-      :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
+    <PageTransition>
+      <RecipePicker
+        v-if="showRecipeCreator"
+        :preset-bean="diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
+        :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
 
-      @back="closeRecipeCreator"
-      @created="onRecipeCreated"
-    />
+        @back="closeRecipeCreator"
+        @created="onRecipeCreated"
+      />
+    </PageTransition>
   </section>
 </template>

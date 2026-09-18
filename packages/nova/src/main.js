@@ -55,6 +55,7 @@ import './styles/app.css';
 import './styles/phone.css';
 
 import App from './App.vue';
+import PageTransition from './components/PageTransition.vue';
 import router from './router';
 import i18n from './i18n';
 import { bootCore } from './composables/useCore.js';
@@ -64,6 +65,9 @@ import { wireRevalidateTriggers } from './composables/useRevalidate.js';
 import { installErrorReporting } from './composables/useErrorReporting.js';
 
 const app = createApp(App);
+// Registered globally: it wraps every full-screen page wherever one is opened
+// (some 35 places across views, panels and the phone tabs).
+app.component('PageTransition', PageTransition);
 installErrorReporting(app);
 app.use(router).use(i18n).mount('#app');
 

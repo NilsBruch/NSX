@@ -83,33 +83,43 @@ function finish() {
 </script>
 
 <template>
-  <BeanChooser v-if="step === 'bean'" :preset-roaster="presetRoaster" @pick="onBeanPicked" @back="emit('back')">
-    <template #crumbs>
-      <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
-    </template>
-  </BeanChooser>
-  <BatchPicker
-    v-else-if="step === 'batch'"
-    :bean="chosenBean"
-    @pick="onBatchPicked"
-    @back="step = 'bean'"
-  >
-    <template #crumbs>
-      <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
-    </template>
-  </BatchPicker>
-  <ProfilePicker
-    v-else
-    mode="pick"
-    :current-title="recipe.profileTitle"
-    :confirm-label="t('recipePicker.createRecipe')"
-    @select="onProfilePicked"
-    @back="step = 'batch'"
-  >
-    <!-- The picker hands over whatever is highlighted, so the last bubble
-         fills while browsing rather than at the moment of no return. -->
-    <template #crumbs="{ selected }">
-      <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" :profile="selected" />
-    </template>
-  </ProfilePicker>
+  <!-- One steady outer element for the whole wizard. Where it is opened, the
+       wizard slides in and out as a page (<PageTransition>), and Vue
+       hands that transition to the component's ROOT; with the three steps
+       themselves as the root, every step change would have run it too — the
+       step being left sliding off to the right while the next slid in over
+       it. Inside this, stepping is an instant swap. Fixed and full-screen
+       (.page-host) because the steps are fixed overlays: while the host
+       moves, they are positioned against it, so it has to be the screen. -->
+  <div class="page-host">
+    <BeanChooser v-if="step === 'bean'" :preset-roaster="presetRoaster" @pick="onBeanPicked" @back="emit('back')">
+      <template #crumbs>
+        <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
+      </template>
+    </BeanChooser>
+    <BatchPicker
+      v-else-if="step === 'batch'"
+      :bean="chosenBean"
+      @pick="onBatchPicked"
+      @back="step = 'bean'"
+    >
+      <template #crumbs>
+        <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
+      </template>
+    </BatchPicker>
+    <ProfilePicker
+      v-else
+      mode="pick"
+      :current-title="recipe.profileTitle"
+      :confirm-label="t('recipePicker.createRecipe')"
+      @select="onProfilePicked"
+      @back="step = 'batch'"
+    >
+      <!-- The picker hands over whatever is highlighted, so the last bubble
+           fills while browsing rather than at the moment of no return. -->
+      <template #crumbs="{ selected }">
+        <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" :profile="selected" />
+      </template>
+    </ProfilePicker>
+  </div>
 </template>
