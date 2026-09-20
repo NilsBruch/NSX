@@ -237,17 +237,34 @@ function pickSuggestion(s) {
         @pointerleave="releaseKey"
       >
         <div v-for="(row, i) in (numeric ? SYMBOLS : LETTERS)" :key="i" class="kb-row">
+          <!-- Shift and backspace are DRAWN, not typed: as the characters ⇧
+               and ⌫ they depended on the kiosk browser's font having them, and
+               a key that renders as a blank box is a key nobody presses — a
+               user reported the keyboard had "no way to make capitals" with
+               the shift key right there in front of them. Every other icon in
+               the skin is an inline stroked svg for the same reason. -->
           <button
             v-if="i === 2"
             class="kb-key kb-wide"
             :class="{ on: shift }"
             :disabled="numeric"
+            aria-label="Shift"
             @pointerdown.prevent="shift = !shift"
-          >⇧</button>
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4l7 7h-3.6v5.5H8.6V11H5l7-7z" />
+              <path d="M8.6 19.5h6.8" />
+            </svg>
+          </button>
           <button v-for="k in row" :key="k" class="kb-key" @pointerdown.prevent="type(k)">
             {{ !numeric && shift ? k.toUpperCase() : k }}
           </button>
-          <button v-if="i === 2" class="kb-key kb-wide" @pointerdown.prevent="backspace">⌫</button>
+          <button v-if="i === 2" class="kb-key kb-wide" aria-label="Backspace" @pointerdown.prevent="backspace">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 5h10.5v14H9L3 12 9 5z" />
+              <path d="M12.5 9.5l5 5M17.5 9.5l-5 5" />
+            </svg>
+          </button>
         </div>
         <div class="kb-row">
           <button class="kb-key kb-wide" @pointerdown.prevent="numeric = !numeric">{{ numeric ? 'ABC' : '123' }}</button>

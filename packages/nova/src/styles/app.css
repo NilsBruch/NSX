@@ -1016,6 +1016,11 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   touch-action: manipulation;
 }
 .kb-key:disabled { opacity: 0.35; }
+/* The drawn keys (shift, backspace) — same 1.8 stroke as every other icon. */
+.kb-key svg {
+  width: 26px; height: 26px; stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
 .kb-key.on { background: var(--accent); color: var(--on-accent); }
 .kb-key.accent { background: var(--accent); color: var(--on-accent); }
 .kb-key.kb-wide { flex: 1.5 1 0; font-size: var(--fs-base); }
