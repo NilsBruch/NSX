@@ -10,6 +10,8 @@ import { openNumberPad, openChooser } from '../../composables/useModals.js';
 import { machine } from '../../composables/useCore.js';
 import { steam } from '../../composables/useMachineFunctions.js';
 import SettingSlider from './SettingSlider.vue';
+import { formatWaterLevel } from '../../utils/water.js';
+import { showToast } from '../../composables/useToast.js';
 import { dispTemp, toCelsius, tempRange, tempUnitLabel } from '../../composables/useUnits.js';
 import {
   appSettings, loadAppSettings, saveAppSetting,
@@ -43,9 +45,37 @@ onMounted(() => {
   loadMachineInfo();
 });
 
+/**
+ * The refill threshold is a tank DEPTH in millimetres — that is what the DE1
+ * takes and what /machine/waterLevels reports — but the row labelled it "ml",
+ * so 5 read as an absurd 5 millilitres. It says mm now, with the volume that
+ * depth is worth in brackets (utils/water.js's conversion, the same one the
+ * status island uses), since ml is what anyone actually thinks in when filling
+ * a tank. Passed as SettingSlider's `format`, not `textValue`, so the brackets
+ * stay put while the slider is being dragged — as textValue they vanished
+ * under the finger and the row jumped on every drag.
+ */
+const refillLevelText = (mm) => `${Math.round(mm)} mm (${formatWaterLevel(mm, 'ml')})`;
+
+/**
+ * The slider shows machine.water.refillLevel, which is the gateway's own
+ * waterLevels stream — so a POST the machine refuses silently snaps the row
+ * back to whatever the machine still holds. That used to be invisible: the
+ * @change handler was the bare push, and a rejected request became an
+ * unhandled promise nobody sees. Saying so in a toast is the difference
+ * between "the slider is broken" and "the machine said no, and why".
+ */
+async function setRefillLevel(mm) {
+  try {
+    await pushRefillLevel(mm);
+  } catch (err) {
+    showToast(`${t('machineSettings.refillAlert')}: ${err.message}`);
+  }
+}
+
 async function editRefillLevel() {
-  const v = await openNumberPad({ title: t('machineSettings.refillAlert'), unit: 'ml', value: machine.water.refillLevel ?? '' });
-  if (v != null) pushRefillLevel(Number(v));
+  const v = await openNumberPad({ title: t('machineSettings.refillAlert'), unit: 'mm', value: machine.water.refillLevel ?? '' });
+  if (v != null) setRefillLevel(Number(v));
 }
 
 // Flow multipliers are real app-level settings (POST /settings), not
@@ -142,8 +172,8 @@ const refillKitLabel = () => refillKitOpts.find(([value]) => value === (advanced
         <SettingSlider
           :label="t('machineSettings.refillAlert')"
           :model-value="machine.water.refillLevel ?? null"
-          :min="5" :max="43" :step="1" unit=" ml"
-          @change="pushRefillLevel" @edit="editRefillLevel"
+          :min="5" :max="43" :step="1" unit=" mm" :format="refillLevelText"
+          @change="setRefillLevel" @edit="editRefillLevel"
         />
         <button class="setting-row as-btn" @click="pickWaterUnit">
           <span class="sr-name">{{ t('machineSettings.waterUnit') }}</span>

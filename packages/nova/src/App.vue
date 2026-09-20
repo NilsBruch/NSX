@@ -8,6 +8,7 @@ import { isPhone } from './composables/useLayout.js';
 import { phoneTab } from './composables/usePhoneNav.js';
 import RegisterRail from './components/RegisterRail.vue';
 import StatusIsland from './components/StatusIsland.vue';
+import MachinePowerButton from './components/MachinePowerButton.vue';
 import PowerButton from './components/PowerButton.vue';
 import Screensaver from './components/Screensaver.vue';
 import WheelPicker from './components/WheelPicker.vue';
@@ -66,6 +67,9 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
   <div v-else class="stage">
     <RegisterRail side="left" />
     <StatusIsland />
+    <!-- The two corners of the chrome are two different devices: the machine
+         on the left, the display (lock screen) on the right. -->
+    <MachinePowerButton />
     <PowerButton />
     <main class="pages">
       <RouterView />
@@ -75,7 +79,8 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
     <!-- Locked is NOT the same as "machine asleep" — see useScreensaver.js. Sleep
          always locks, but unlocking doesn't always wake the machine back up.
          Tablet-only kiosk chrome, along with RegisterRail/StatusIsland/
-         PowerButton above: meaningless on a phone, which has no lock screen
+         MachinePowerButton/PowerButton above: meaningless on a phone, which has
+         no lock screen
          of its own to show. -->
     <!-- Teleported out of .stage: opening a page pushes .stage off to the left
          (PageTransition), and a lock screen inside it would go with it. -->

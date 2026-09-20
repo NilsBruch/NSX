@@ -26,6 +26,12 @@ const props = defineProps({
   // instead of its raw index) while the drag/track math still runs on
   // modelValue as usual — only the displayed string changes.
   textValue: { type: String, default: null },
+  // Formats the numeric readout itself, LIVE — unlike textValue, which is the
+  // parent's last committed value and so steps aside while a drag is in
+  // flight. For a readout that must keep its shape under the finger: the
+  // refill row's "12 mm (330 ml)" shrank to "12 mm" mid-drag with textValue,
+  // and the row jumped every time it did.
+  format: { type: Function, default: null },
   // Opt-in for the 0-means-off sliders (a step's volume/weight cap, the
   // profile's stop-at targets): what to show INSTEAD of "0" at the floor, so
   // an inactive limit reads as off rather than as a real cap of zero. Left
@@ -77,7 +83,11 @@ const pct = computed(() => {
 // While dragging, show the live numeric value (immediate feedback on the
 // index/position being dragged to) — textValue only takes over once settled,
 // since it reflects the parent's last COMMITTED value, not the live drag.
-const numericDisplay = computed(() => (hasValue.value ? shown.value.toFixed(props.decimals) + props.unit : '—'));
+const numericDisplay = computed(() => {
+  if (!hasValue.value) return '—';
+  if (props.format) return props.format(shown.value);
+  return shown.value.toFixed(props.decimals) + props.unit;
+});
 const display = computed(() => {
   // "Off" wins over everything, including mid-drag: dragging to the floor
   // should say so immediately, not read as a 0 g cap.

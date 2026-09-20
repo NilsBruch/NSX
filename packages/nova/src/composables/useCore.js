@@ -335,7 +335,11 @@ NSXCore.on('scaleWeight', ({ weight, weightFlow }) => {
 
 NSXCore.on('waterLevel', ({ currentLevel, refillLevel }) => {
   machine.water.currentLevel = currentLevel;
-  machine.water.refillLevel = refillLevel;
+  // Only when the message actually carries one: the stream ticks every few
+  // seconds and not every build puts refillLevel in every frame, so assigning
+  // it unconditionally wiped the known threshold back to nothing (and the
+  // settings slider with it) on the first frame that left it out.
+  if (Number.isFinite(Number(refillLevel))) machine.water.refillLevel = Number(refillLevel);
 });
 
 NSXCore.on('timeToReady', ({ remainingMs }) => { machine.timeToReadyMs = remainingMs ?? null; });

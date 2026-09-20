@@ -4,10 +4,10 @@
  * SettingsView.vue (which are already `position:fixed inset:0` full-screen
  * overlays, see app.css), just triggered from a single-column tile list
  * instead of the tablet's two columns of widget cards. The widgets above the
- * tile list are SettingsView's own left column, in the same order, minus
- * MachineWidget — its whole content (state word + sleep switch) is already
- * the first thing MachineTab.vue shows, and a second copy of the same
- * switch here would just be the same control twice.
+ * tile list are SettingsView's own left column, in the same order. The
+ * machine's own on/off switch is not among them on either layout: the tablet
+ * has it in the chrome (MachinePowerButton) and the phone, which has no
+ * chrome, shows it as the first thing in MachineTab.vue.
  * All four widgets are already `.swidget`-shaped, the same card EnergyWidget
  * below has always used on this page — no phone-specific width fix was
  * needed for any of them (unlike the settings PANELS, which do carry a few

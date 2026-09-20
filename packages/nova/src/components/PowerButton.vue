@@ -21,12 +21,13 @@ async function sleep() {
 
 <template>
   <button class="power-btn" aria-label="Sleep" @click="sleep">
-    <!-- A crescent, not a power symbol: this button does not cut the power, it
-         puts the machine to sleep and locks the screen. One closed path, drawn
-         as the arc of the disc minus the arc that bites it — a stroked shape,
-         so it inherits the same 1.8 stroke every other icon in the skin uses. -->
+    <!-- A padlock, not a power symbol: the power symbol now belongs to
+         MachinePowerButton in the opposite corner, and what this button leaves
+         behind is the locked screen. Body and shackle as two stroked paths, so
+         it inherits the same 1.8 stroke every other icon in the skin uses. -->
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M20.5 14.2A8.5 8.5 0 1 1 9.8 3.5a6.6 6.6 0 0 0 10.7 10.7z" />
+      <path d="M5.5 10.5h13v10h-13z" />
+      <path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" />
     </svg>
   </button>
 </template>

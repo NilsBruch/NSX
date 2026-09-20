@@ -90,13 +90,19 @@ const READY_MARGIN_C = 10;
 const DEFAULT_TARGET_C = 90;
 const targetTemp = computed(() => Number(recipe.groupTemp) > 0 ? Number(recipe.groupTemp) : DEFAULT_TARGET_C);
 
-// Heating = connected, an explicit warmup state OR simply not yet within the
-// ready margin of target. Temperature is the single source of truth now.
+// Heating = the machine says so, or it is IDLE and still short of target. The
+// temperature test only ever refines 'idle' — "on, but not there yet" is the
+// one thing the machine's own state word cannot tell apart, and every other
+// state already names itself. It used to run on temperature alone, which made
+// a sleeping machine read as "Heating" as soon as the group cooled below
+// target-10 (i.e. a few minutes after being put to sleep, and on every cold
+// boot) — the machine was doing nothing at all.
 const heatingActive = computed(() => {
   if (!machine.connected) return false;
+  if (HEATING_STATES.has(machine.state)) return true;
+  if (machine.state !== 'idle') return false;
   const temp = Number(liveShot.groupTemperature);
-  if (!Number.isFinite(temp) || temp <= 0) return HEATING_STATES.has(machine.state);
-  return HEATING_STATES.has(machine.state) || temp < targetTemp.value - READY_MARGIN_C;
+  return Number.isFinite(temp) && temp > 0 && temp < targetTemp.value - READY_MARGIN_C;
 });
 
 const statusClass = computed(() => {

@@ -18,7 +18,6 @@ import MachinePanel from '../components/settings/MachinePanel.vue';
 import SkinPanel from '../components/settings/SkinPanel.vue';
 import AppPanel from '../components/settings/AppPanel.vue';
 import TileCard from '../components/settings/TileCard.vue';
-import MachineWidget from '../components/settings/MachineWidget.vue';
 import EnergyWidget from '../components/settings/EnergyWidget.vue';
 import DisplayWidget from '../components/settings/DisplayWidget.vue';
 import ConnectionWidget from '../components/settings/ConnectionWidget.vue';
@@ -51,7 +50,6 @@ const active = ref(null);
     <div class="settings-body">
       <div class="sw-col">
         <UpdateWidget />
-        <MachineWidget />
         <!-- Nothing to drive where the host has no backlight control (core's
              display domain, from GET /api/v1/display's platformSupported). -->
         <DisplayWidget v-if="displaySupport.brightness" />
