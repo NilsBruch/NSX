@@ -205,6 +205,14 @@ watch(
 function startLive() {
   phase.value = 'live';
   shotStartMs.value = Date.now();
+  // Both of these are LAST SHOT's leftovers, and the snapshot stream keeps
+  // reporting the frame the previous shot ended on for as long as the machine
+  // sits idle. Carried into a new shot, the phase ticker opened on the LAST
+  // phase and stayed there until the machine's first frame report landed, and
+  // skipStep's repeat guard silently swallowed the first skip if it happened
+  // to be on the same frame number as the last one it sent.
+  liveFrame.value = null;
+  _skipGuardFrame = null;
   series.elapsed = [];
   series.pressure = [];
   series.targetPressure = [];
@@ -442,6 +450,8 @@ export function openHistoryAt(shotList, shot) {
  */
 const SKIP_STEP_MIN_INTERVAL_MS = 800;
 let _skipInFlight = false;
+// Reset by startLive() too — see there for why a guard that outlives its shot
+// eats the next one's first skip.
 let _skipGuardFrame = null;
 let _skipLastSentAt = 0;
 

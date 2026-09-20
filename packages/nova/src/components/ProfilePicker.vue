@@ -50,10 +50,16 @@ const myProfiles = computed(() => sourceList.value.filter(isUserOwned));
 const decentProfiles = computed(() => sourceList.value.filter((p) => !isUserOwned(p)));
 
 /**
- * The three profiles most recently brewed with, above the library — the same
- * shortcut the bean step has (BeanChooser.vue), and for the same reason: a new
- * recipe is usually a variation on what you have been pulling, which otherwise
- * means finding it again among tabs, type filters and every Decent default.
+ * The ten profiles most recently brewed with — the same shortcut the bean step
+ * has (BeanChooser.vue), and for the same reason: a new recipe is usually a
+ * variation on what you have been pulling, which otherwise means finding it
+ * again among tabs, type filters and every Decent default.
+ *
+ * A THIRD TAB beside Decent and Custom, not a block above them as it first
+ * was: sitting above the library it pushed the list down and made the library
+ * itself harder to work through, which is the opposite of the help it was
+ * meant to be. As a tab it costs the library nothing and holds ten instead of
+ * three.
  *
  * Matched by TITLE, which is what a shot records; a profile since edited into
  * a new record still resolves, and one deleted from the library drops out.
@@ -64,7 +70,7 @@ const recentProfiles = computed(() => {
   return NSXCore.recentFromShots(shots.value, (shot) => {
     const title = shot?.workflow?.profile?.title || shot?.workflow?.context?.profileTitle;
     return title ? sourceList.value.find((p) => (p.profile?.title || '') === title) ?? null : null;
-  });
+  }, { limit: 10 });
 });
 
 const selectedId = ref(
@@ -94,9 +100,24 @@ function onBackTap() {
 }
 
 // Which group is on screen — always opens on Decent's factory profiles,
-// regardless of which group the current profile lives in.
+// regardless of which group the current profile lives in. 'recent' is the
+// third tab (pick mode only, and only once something has been brewed).
 const activeGroup = ref('decent');
+const showRecentTab = computed(() => recentProfiles.value.length > 0);
+const isRecent = computed(() => activeGroup.value === 'recent');
 const groupProfiles = computed(() => (activeGroup.value === 'user' ? myProfiles.value : decentProfiles.value));
+// The tab can vanish under the user — the recent list is derived from shots,
+// and hiding or deleting the last-brewed profile can empty it. Fall back to
+// where the picker opens rather than leaving a tab selected that isn't there.
+watch(showRecentTab, (has) => { if (!has && isRecent.value) activeGroup.value = 'decent'; });
+// Which slot the thumb sits in. Recent leads the row — it is the shortcut, so
+// it reads before the two halves of the library it shortcuts past — which
+// pushes the other two along by one whenever it is there at all.
+const segPos = computed(() => {
+  if (isRecent.value) return 0;
+  const offset = showRecentTab.value ? 1 : 0;
+  return (activeGroup.value === 'user' ? 1 : 0) + offset;
+});
 
 // Second-level filter, below the Decent/Custom toggle: Profile.beverage_type
 // (see ProfileEditor's Info tab, which is where this gets set/edited).
@@ -126,6 +147,14 @@ function groupOf(title) {
   return { group: null, name: String(title || '') };
 }
 const entries = computed(() => {
+  // Recent is ordered by WHEN, so it skips the grouping and the alphabetical
+  // sort below entirely — a "most recent first" list that then sorts itself by
+  // name is just the library again.
+  if (isRecent.value) {
+    return recentProfiles.value.map((p) => ({
+      kind: 'item', id: p.id, profile: p, name: p.profile?.title || '—', grouped: false,
+    }));
+  }
   const groups = new Map();
   const sortable = [];
   for (const p of visibleProfiles.value) {
@@ -380,37 +409,30 @@ async function onEditorSaved({ profile: built, originalProfile }) {
           <span>{{ t('profilePicker.pickingSourceHint') }}</span>
           <button class="btn" @click="pickingSource = false">{{ t('common.cancel') }}</button>
         </div>
-        <!-- Above the tabs, because it belongs to neither of them: these are
-             the profiles you have actually been brewing, wherever they live.
-             A hairline under them, then the library as it was. -->
-        <div v-if="recentProfiles.length" class="pick-recent">
-          <span class="pick-group-label">{{ t('common.recent') }}</span>
-          <button
-            v-for="p in recentProfiles"
-            :key="`recent-${p.id}`"
-            class="pick-item"
-            :class="{ sel: p.id === selectedId }"
-            @click="selectedId = p.id"
-          >
-            <span class="pname">{{ p.profile?.title || '—' }}</span>
-            <span v-if="p.profile?.title === currentTitle" class="cur">{{ t('common.current') }}</span>
-          </button>
-        </div>
-        <span v-if="recentProfiles.length" class="pick-group-label">{{ t('common.library') }}</span>
-        <div class="seg seg-tall" :data-pos="activeGroup === 'user' ? 1 : 0">
+        <!-- Recent is a TAB of the library, not a block above it: these are
+             the profiles you have actually been brewing, wherever they live,
+             and as a tab they stay one tap away without shortening the list
+             underneath them. -->
+        <div class="seg seg-tall" :class="{ 'seg-three': showRecentTab }" :data-pos="segPos">
           <span class="seg-thumb"></span>
+          <button v-if="showRecentTab" :class="{ on: isRecent }" @click="activeGroup = 'recent'">{{ t('common.recent') }}</button>
           <button :class="{ on: activeGroup === 'decent' }" @click="activeGroup = 'decent'">{{ t('profilePicker.decentProfiles') }}</button>
           <button :class="{ on: activeGroup === 'user' }" @click="activeGroup = 'user'">{{ t('profilePicker.myProfiles') }}</button>
         </div>
 
-        <div class="pick-type-filter">
+        <!-- Greyed out and inert on the Recent tab: a beverage type filters a
+             LIBRARY, and ten shots' worth of profiles is a history instead.
+             The selection itself is left alone, so switching back to Decent or
+             Custom lands on the same filter as before. -->
+        <div class="pick-type-filter" :class="{ 'is-off': isRecent }">
           <div class="pe-type-grid pick-type-row">
-            <button class="type-small" :class="{ on: activeType === 'all' }" @click="activeType = 'all'">{{ t('profilePicker.allTypes') }}</button>
+            <button class="type-small" :class="{ on: activeType === 'all' }" :disabled="isRecent" @click="activeType = 'all'">{{ t('profilePicker.allTypes') }}</button>
             <button
               v-for="ty in SMALL_TYPES"
               :key="ty"
               class="type-small"
               :class="{ on: activeType === ty }"
+              :disabled="isRecent"
               @click="activeType = ty"
             >{{ t(`profileEditor.beverageTypes.${ty}`) }}</button>
           </div>
@@ -420,6 +442,7 @@ async function onEditorSaved({ profile: built, originalProfile }) {
               :key="ty"
               class="type-big"
               :class="{ on: activeType === ty }"
+              :disabled="isRecent"
               @click="activeType = ty"
             >{{ t(`profileEditor.beverageTypes.${ty}`) }}</button>
           </div>
