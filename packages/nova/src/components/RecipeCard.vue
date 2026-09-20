@@ -34,30 +34,28 @@ const tags = computed(() => (Array.isArray(props.entry.tags) ? props.entry.tags 
 <template>
   <div class="rp-card" :class="{ current }">
     <div class="rp-head">
-      <!-- On the roaster's line and pushed to the card's right edge, where
-           the "Current" badge used to sit and nothing else does. Inside
-           the line rather than above it because .rp-head is a COLUMN: a
-           sibling svg would take a row of its own and make a pinned card
-           taller than its neighbours. Last in the row, so its presence
-           cannot shift the roaster name — no reserved space needed. -->
+      <!-- The roaster's line carries the card's markers at its right edge:
+           the pin, then the rating as one star plus the number ("4.5"). Both
+           live INSIDE the line rather than above it because .rp-head is a
+           COLUMN — a sibling would take a row of its own and make a marked
+           card taller than its neighbours. Putting the rating here instead of
+           beside the coffee name gives the name the whole width back; five
+           stars beside it cropped every name to a few letters. -->
       <span class="rp-roaster">
         <span class="rp-roaster-text">{{ entry.coffeeRoaster }}</span>
         <svg v-if="entry.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
         </svg>
+        <StarRating
+          v-if="Number(entry.rating) > 0"
+          class="rp-rating"
+          :model-value="Number(entry.rating)"
+          readonly
+          compact
+          :size="15"
+        />
       </span>
-      <!-- Name and rating share one row, the stars flush right: the rating is
-           about the coffee named beside it, and giving it a row of its own cost
-           a card-height line that was empty on every unrated recipe. The name
-           yields first when the two don't fit (min-width:0 + its own ellipsis),
-           since a cropped name still identifies the coffee while half a star
-           rating says nothing. -->
-      <div class="rp-name-row">
-        <span class="rp-name">{{ entry.coffeeName }}</span>
-        <div class="rp-rating">
-          <StarRating v-if="Number(entry.rating) > 0" :model-value="Number(entry.rating)" readonly :size="16" />
-        </div>
-      </div>
+      <span class="rp-name">{{ entry.coffeeName }}</span>
     </div>
     <div class="rp-rows">
       <div v-if="!singleGrinder" class="rp-row-duo">

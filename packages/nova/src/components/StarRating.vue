@@ -10,6 +10,9 @@ const props = defineProps({
   modelValue: { type: Number, default: 0 },
   readonly: { type: Boolean, default: false },
   size: { type: Number, default: 26 },
+  // One star plus the number ("4.5") instead of five stars — for tight rows
+  // where five stars would crowd out the text beside them.
+  compact: { type: Boolean, default: false },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -25,10 +28,19 @@ const fillPct = (n) => {
 function set(v) { if (!props.readonly) emit('update:modelValue', v); }
 
 const pxSize = computed(() => `${props.size}px`);
+// 4 -> "4", 4.5 -> "4.5": the trailing .0 is noise at this size.
+const compactText = computed(() => {
+  const v = Math.round((Number(props.modelValue) || 0) * 2) / 2;
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+});
 </script>
 
 <template>
-  <div class="star-rating" :class="{ interactive: !readonly }" :style="{ '--star-size': pxSize }">
+  <div v-if="compact" class="star-rating compact" :style="{ '--star-size': pxSize }">
+    <svg class="star-solid" viewBox="0 0 24 24" aria-hidden="true"><path :d="STAR" /></svg>
+    <span class="star-num">{{ compactText }}</span>
+  </div>
+  <div v-else class="star-rating" :class="{ interactive: !readonly }" :style="{ '--star-size': pxSize }">
     <span v-for="n in 5" :key="n" class="star-cell">
       <svg class="star-bg" viewBox="0 0 24 24" aria-hidden="true"><path :d="STAR" /></svg>
       <span class="star-fill" :style="{ width: fillPct(n) + '%' }">
@@ -44,6 +56,15 @@ const pxSize = computed(() => `${props.size}px`);
 
 <style scoped>
 .star-rating { display: inline-flex; gap: 4px; }
+.star-rating.compact { align-items: center; gap: 3px; }
+.star-solid {
+  width: var(--star-size); height: var(--star-size); display: block;
+  fill: var(--accent); stroke: var(--accent); stroke-width: 1.4;
+}
+.star-num {
+  font-size: calc(var(--star-size) * 0.82); font-weight: 600;
+  color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums;
+}
 .star-cell { position: relative; width: var(--star-size); height: var(--star-size); display: inline-block; }
 .star-bg, .star-fill svg {
   width: var(--star-size); height: var(--star-size); display: block;
