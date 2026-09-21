@@ -266,6 +266,10 @@ export default {
     forwardFlushBusy: 'Machine busy — try again once it is idle',
     forwardFlushPrep: 'Insert the portafilter with the blind basket and add cleaning detergent, then press Start.',
     forwardFlushArmed: 'Press the espresso button on the machine to start the cleaning cycle.',
+    // Second pass: the same cycle again, this time to wash the detergent out.
+    forwardFlushRinse: 'Rinse the blind basket and reinsert it without cleaning detergent, then press Start for the second cycle.',
+    // Closing instruction — the group flush is on the machine, not here.
+    forwardFlushFinal: 'Remove the portafilter and flush the group as often as it takes until the water runs clear.',
     backflush: 'Backflush',
     descale: 'Descale',
     transport: 'Transport',
@@ -274,9 +278,13 @@ export default {
     transportPrep: 'Purges the remaining water from inside the machine. Run before packing it to prevent leaks during transport. Place a container under the group, then press Start.',
     step1: 'Step 1 of 2',
     step2: 'Step 2 of 2',
-    forwardFlushStep1: 'Step 1 of 3',
-    forwardFlushStep2: 'Step 2 of 3',
-    forwardFlushStep3: 'Step 3 of 3',
+    // Five steps, because the forward flush runs twice — with detergent, then
+    // without — and ends on a hand flush. {pass} is 1 or 2.
+    forwardFlushStep1: 'Step 1 of 5',
+    forwardFlushStep2: 'Step 2 of 5',
+    forwardFlushStep3: 'Cycle {pass} of 2',
+    forwardFlushStep4: 'Step 4 of 5',
+    forwardFlushStep5: 'Step 5 of 5',
     stepProgress: 'Step {x} of {y}',
     running: 'Cleaning in progress…',
     doNotRemovePortafilter: 'Do not remove the portafilter during the cleaning cycle.',

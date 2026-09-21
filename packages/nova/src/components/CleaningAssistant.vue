@@ -5,14 +5,29 @@
  * -- this is supervised maintenance, not a drink) -> watches the real machine
  * state for the maintenance state, then auto-closes once it returns to idle.
  *
- * Forward flush is a fourth, three-step mode: it runs as a real espresso
- * profile (state `espresso`), so starting it is hardware-only like any other
- * shot -- Start here only LOADS the profile (loadForwardFlush), landing on an
- * "armed" step that tells the user to press the machine's espresso button.
- * Once the machine actually enters `espresso`, this shows a cleaning-specific
- * run screen (frame/step/timer/pressure/flow + Skip step/Stop) instead of the
- * normal LiveShotOverlay graph -- useLiveShot.js suppresses that overlay for
- * the whole session via flushSession.active (useCleaningSession.js).
+ * Forward flush is a fourth mode with its own multi-step flow: it runs as a
+ * real espresso profile (state `espresso`), so starting it is hardware-only
+ * like any other shot -- Start here only LOADS the profile
+ * (loadForwardFlush), landing on an "armed" step that tells the user to press
+ * the machine's espresso button. Once the machine actually enters `espresso`,
+ * this shows a cleaning-specific run screen (frame/step/timer/pressure/flow +
+ * Skip step/Stop) instead of the normal LiveShotOverlay graph --
+ * useLiveShot.js suppresses that overlay for the whole session via
+ * flushSession.active (useCleaningSession.js).
+ *
+ * ── Two passes, like NSX ────────────────────────────────────────────────────
+ * The forward-flush profile is a backflush: it is run TWICE, first with
+ * detergent in the blind basket and then, after rinsing the basket, without --
+ * and it ends on an instruction to flush the group by hand, which the skin
+ * cannot drive (the flush button is on the machine). NSX's cleaning wizard
+ * does exactly this (app.js's _cleaningMultiPass / _cleaningFinishPass), and
+ * running the cycle only once left detergent in the machine, so Nova now
+ * follows the same flow rather than closing after the first pass.
+ *
+ * Pass 2 re-pushes the profile through loadForwardFlush() rather than assuming
+ * it is still on the machine: the previous recipe is auto-restored the moment
+ * the machine goes idle after a pass (useMachineFunctions.js), so by the time
+ * the user is ready for the second run the flush profile is gone.
  *
  * There is no real progress feed for backflush/descale/transport (unlike
  * heating's time-to-ready) -- that bar is honestly indeterminate, not a
@@ -39,9 +54,21 @@ const STATE_FOR_MODE = { forwardFlush: 'espresso', backflush: 'cleaning', descal
 const targetState = computed(() => STATE_FOR_MODE[props.mode]);
 const running = computed(() => machine.state === targetState.value);
 
-// Forward flush's middle step: the profile has been pushed, waiting for the
-// machine's hardware espresso button. Irrelevant for the other three modes.
-const armed = ref(false);
+/**
+ * Where the forward-flush flow stands (ignored by the other three modes):
+ *   'prep'  — instructions for this pass, Start loads the profile
+ *   'armed' — profile pushed, waiting for the machine's espresso button
+ *   'rinse' — pass 1 is done: rinse the basket, reinsert it without detergent
+ *   'done'  — both passes are done: flush the group by hand, then Done
+ * The RUN screen isn't a step here — it is driven by the machine's own state
+ * (`running`), so it can't disagree with what the machine is doing.
+ */
+const step = ref('prep');
+const pass = ref(1);
+// Kept as its own name because the template and cancel() both read it, and
+// "is a loaded-but-unrun profile sitting on the machine" is the question they
+// are actually asking.
+const armed = computed(() => step.value === 'armed');
 
 const ICONS = {
   forwardFlush: '<path d="M4 12a8 8 0 0 1 14-5m2-3v5h-5"/><path d="M20 12a8 8 0 0 1-14 5m-2 3v-5h5"/>',
@@ -64,6 +91,12 @@ const stepLabel = computed(() =>
     ? t('cleaning.stepProgress', { x: Math.min(frameIdx.value + 1, totalFrames.value), y: totalFrames.value })
     : ''
 );
+// "Step n of 5" for forward flush (prep, run, rinse, run, hand flush) so the
+// two passes read as one procedure rather than two identical cycles; the
+// other modes keep their own 1-of-2 labels.
+const FLUSH_STEP_LABEL = { prep: 'cleaning.forwardFlushStep1', armed: 'cleaning.forwardFlushStep2', rinse: 'cleaning.forwardFlushStep4', done: 'cleaning.forwardFlushStep5' };
+const flushStepLabel = computed(() => t(FLUSH_STEP_LABEL[step.value] ?? FLUSH_STEP_LABEL.prep));
+
 const stepPct = computed(() => (totalFrames.value ? Math.min(100, ((frameIdx.value + 1) / totalFrames.value) * 100) : 0));
 
 // Gauges scaled to a DE1's practical range -- purely visual movement, not a
@@ -94,7 +127,18 @@ watch(
   (isRunning) => {
     if (props.mode === 'forwardFlush') {
       if (isRunning && !wasRunning) startTimer();
-      if (!isRunning && wasRunning) stopTimer();
+      if (!isRunning && wasRunning) {
+        stopTimer();
+        // A finished pass hands over to the next instruction instead of
+        // closing: pass 1 to the basket rinse, pass 2 to the hand-flush note.
+        // Nothing auto-closes here — both are things the user has to DO, and
+        // a screen that vanishes on its own is exactly how the detergent
+        // stage got skipped.
+        if (pass.value === 1) { pass.value = 2; step.value = 'rinse'; }
+        else step.value = 'done';
+      }
+      wasRunning = isRunning;
+      return;
     }
     if (wasRunning && !isRunning) setTimeout(() => emit('close'), 900);
     wasRunning = isRunning;
@@ -105,7 +149,7 @@ onUnmounted(() => { stopTimer(); });
 async function start() {
   if (props.mode === 'forwardFlush') {
     const ok = await loadForwardFlush();
-    if (ok) armed.value = true;
+    if (ok) step.value = 'armed';
     return;
   }
   // setState is disallowed only while an espresso shot is hardware-running
@@ -125,6 +169,10 @@ async function cancel() {
   if (props.mode === 'forwardFlush' && armed.value) await cancelForwardFlush();
   emit('close');
 }
+
+// The last step's Done: the recipe was already restored when the machine went
+// idle after the pass, so there is nothing to undo here — just leave.
+function finish() { emit('close'); }
 
 // ── Forward-flush run controls ────────────────────────────────────────────
 let skipInFlight = false;
@@ -162,7 +210,7 @@ async function stop() {
     <!-- Forward flush: dedicated run screen while the machine is actually brewing. -->
     <template v-if="mode === 'forwardFlush' && running">
       <div class="assist-body flush-run">
-        <div class="assist-step">{{ t('cleaning.forwardFlushStep3') }}</div>
+        <div class="assist-step">{{ t('cleaning.forwardFlushStep3', { pass }) }}</div>
         <div class="assist-step">{{ frameTitle }}</div>
         <div class="assist-step">{{ stepLabel }}</div>
         <div class="progress"><div class="bar" :style="{ width: `${stepPct}%` }"></div></div>
@@ -192,12 +240,14 @@ async function stop() {
     <template v-else>
       <div class="assist-body">
         <span class="bigicon"><svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS[mode]"></svg></span>
-        <div v-if="mode === 'forwardFlush' && armed && !running">
-          <div class="assist-step">{{ t('cleaning.forwardFlushStep2') }}</div>
-          <p class="assist-text">{{ t('cleaning.forwardFlushArmed') }}</p>
+        <div v-if="mode === 'forwardFlush' && !running">
+          <div class="assist-step">{{ flushStepLabel }}</div>
+          <!-- One paragraph per step of the flow: detergent in, press the
+               button, rinse the basket for the second pass, flush by hand. -->
+          <p class="assist-text">{{ t(`cleaning.forwardFlush${step === 'prep' ? 'Prep' : step === 'armed' ? 'Armed' : step === 'rinse' ? 'Rinse' : 'Final'}`) }}</p>
         </div>
         <div v-else-if="!running">
-          <div class="assist-step">{{ t(mode === 'forwardFlush' ? 'cleaning.forwardFlushStep1' : 'cleaning.step1') }}</div>
+          <div class="assist-step">{{ t('cleaning.step1') }}</div>
           <p class="assist-text">{{ t(`cleaning.${mode}Prep`) }}</p>
         </div>
         <div v-else>
@@ -207,7 +257,12 @@ async function stop() {
         </div>
       </div>
 
-      <div v-if="!running && !(mode === 'forwardFlush' && armed)" class="ov-bottom">
+      <!-- Armed has no button of its own (the machine's espresso button is the
+           control); the last step closes instead of starting anything. -->
+      <div v-if="!running && mode === 'forwardFlush' && step === 'done'" class="ov-bottom">
+        <button class="rate-btn" @click="finish">{{ t('common.done') }}</button>
+      </div>
+      <div v-else-if="!running && !armed" class="ov-bottom">
         <button class="rate-btn" :disabled="machine.state === 'espresso'" @click="start">{{ t('common.start') }}</button>
       </div>
     </template>
