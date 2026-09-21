@@ -32,7 +32,7 @@
  * on that bag reports. The bean itself is managed in the Diary.
  */
 import { reactive, computed, ref, watch } from 'vue';
-import { currentWorkflow, machine, grinders, beans } from './useCore.js';
+import { currentWorkflow, machine, grinders, beans, shots } from './useCore.js';
 import { reportSilentFailure } from './useErrorReporting.js';
 
 const { NSXCore, NSXApi } = window;
@@ -97,6 +97,77 @@ export async function refreshRecipes(force = false) {
   recipes.value = await NSXCore.loadRecipes(force);
   return recipes.value;
 }
+
+/**
+ * THE LOADED RECIPE'S OWN SHOT HISTORY — queried per recipe, not sliced out of
+ * useCore's recent-shots reference list.
+ *
+ * That reference list is the newest ~200 shots overall, which is plenty for
+ * "what was brewed lately" but not for "every shot of THIS recipe": a recipe
+ * left alone for a few weeks falls out of the window entirely, and the coffee
+ * page's graph then reported no shots for a recipe with years of history.
+ * NSXCore.fetchShotsForWorkflow asks the gateway for this bean + grinder +
+ * profile directly, so age stops mattering.
+ *
+ * `recipeShotsKey` records WHICH recipe the list belongs to, so a stale list
+ * is never shown against a recipe that was switched in the meantime (the
+ * fetch is async; the user can tap on).
+ */
+export const recipeShots = ref([]);
+export const recipeShotsKey = ref(null);
+let recipeShotsToken = 0;
+
+/** Fetch (or refetch) the loaded recipe's shots. Safe to call repeatedly —
+ *  only the newest call's result is kept. Failures leave the previous list in
+ *  place; currentRecipeShots still falls back to the reference list. */
+export async function loadRecipeShots() {
+  const key = NSXCore.getWorkflowKey(recipe);
+  const my = ++recipeShotsToken;
+  try {
+    const list = await NSXCore.fetchShotsForWorkflow(recipe);
+    if (my !== recipeShotsToken) return recipeShots.value; // a newer selection won
+    recipeShots.value = list;
+    recipeShotsKey.value = key;
+  } catch (err) {
+    console.warn('[Nova] loading recipe shots failed', err?.message || err);
+  }
+  return recipeShots.value;
+}
+
+/**
+ * What every "this recipe's shots" view reads: the fetched history, merged
+ * with whatever the shared reference list already matches.
+ *
+ * The merge is what keeps a just-finished shot on screen immediately — it
+ * lands in the reference list first (loadShots runs in the post-shot path)
+ * and the recipe query may still be in flight — and it makes the whole thing
+ * degrade to the old behavior if the fetch failed or hasn't run yet.
+ */
+export const currentRecipeShots = computed(() => {
+  const local = NSXCore.findShotsForWorkflow(recipe, shots.value);
+  if (recipeShotsKey.value !== NSXCore.getWorkflowKey(recipe)) return local;
+  const byId = new Map();
+  for (const shot of [...local, ...recipeShots.value]) {
+    if (shot?.id && !byId.has(shot.id)) byId.set(shot.id, shot);
+  }
+  return [...byId.values()].sort(
+    (a, b) => (Date.parse(b?.timestamp || 0) || 0) - (Date.parse(a?.timestamp || 0) || 0));
+});
+
+/**
+ * Any change of recipe IDENTITY (roaster / bean / grinder / profile — the four
+ * parts of the workflow key) refetches. A watcher rather than a call inside
+ * selectRecipe() because the loaded recipe also changes without going through
+ * the picker: refreshFromWorkflow() at boot and on a gateway push from another
+ * device, and setRecipeBean/setRecipeGrinder/profile swaps in place. Dial
+ * edits (dose, yield, temp) leave the key alone and cost nothing.
+ *
+ * Not `immediate`: at module load `recipe` is still the empty placeholder, and
+ * querying shots for "—" would be a wasted round-trip before boot fills it in.
+ */
+watch(() => NSXCore.getWorkflowKey(recipe), (key) => {
+  if (key !== recipeShotsKey.value) loadRecipeShots();
+});
 
 function hasFrames(p) {
   const frames = p?.steps ?? p?.frames;

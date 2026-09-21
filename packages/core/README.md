@@ -133,7 +133,12 @@ global (keeps core app-state-free).
   recipe-as-brewed (grind setting, roaster/bean, targets) by MERGING onto the
   full record, since the gateway's PUT replaces `workflow` wholesale and a
   context-only patch would drop the embedded profile. CRUD wrappers invalidate
-  the cache entry on success.
+  the cache entry on success. `fetchShotsForWorkflow(workflow, {limit})` asks
+  the GATEWAY for one recipe's whole history (server-side filters on roaster /
+  bean / grinder model / profile title, then narrowed through
+  `findShotsForWorkflow`) — use it instead of filtering a skin's recent-shots
+  window, which silently reports "no shots" for a recipe last brewed beyond
+  that window.
 - **`profile.js`** — three independent caches (visible / visible+hidden /
   deleted), each `null` until loaded, never cached empty (gateway can transiently
   return none right after wake): `getProfiles`, `getProfilesAll`,

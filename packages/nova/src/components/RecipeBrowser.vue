@@ -19,7 +19,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
+import { recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { shots, loadShots, formatDateParts } from '../composables/useCore.js';
@@ -49,6 +49,10 @@ const { rateRecipe } = useRecipeDials();
 onMounted(() => {
   refreshRecipes();
   if (!shots.value.length) loadShots(200).catch(() => { /* unsorted list is still usable */ });
+  // The loaded recipe's own history may never have been fetched — the
+  // identity watcher in useRecipe.js only fires on a CHANGE, and arriving on
+  // this page with the boot-time recipe still loaded isn't one.
+  if (recipeShotsKey.value !== NSXCore.getWorkflowKey(recipe)) loadRecipeShots();
 });
 
 // No sort/search UI on this screen — always sorted by use (useRecipeList's
@@ -136,7 +140,10 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
 // .glabel below is hidden when it's on — same rule as LiveShotOverlay's.
 const expertGraph = computed(() => skinSettings.graphMode === 'expert');
 
-const graphShots = computed(() => NSXCore.findShotsForWorkflow(recipe, shots.value));
+// The recipe's FULL history (gateway-queried, see useRecipe.js's
+// currentRecipeShots) — not the newest-200 reference list, which made a
+// recipe that hadn't been brewed in a while look like it never had been.
+const graphShots = currentRecipeShots;
 const graphIndex = ref(0); // 0 = newest
 const graphShot = ref(null); // full detail (incl. measurements), fetched below
 let reqId = 0; // guards against a slower, older fetch landing after a newer one

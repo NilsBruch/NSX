@@ -9,7 +9,7 @@
  */
 import { computed, reactive, ref, watch } from 'vue';
 import { machine, shots, loadShots, currentWorkflow } from './useCore.js';
-import { recipe, bumpRecipeLastUsed, saveVolumeCalibration } from './useRecipe.js';
+import { recipe, bumpRecipeLastUsed, saveVolumeCalibration, currentRecipeShots, loadRecipeShots } from './useRecipe.js';
 import { skinSettings } from './useSettings.js';
 import { flushSession } from './useCleaningSession.js';
 import { refreshHistoryIfActive } from './useDiary.js';
@@ -125,7 +125,7 @@ export async function setShotContext(patch) {
   // The history list open right now (historyShots) is deliberately left
   // alone: re-deriving it would pull the shot being edited out from under the
   // user the moment it stopped matching this recipe.
-  await Promise.allSettled([loadShots(200), refreshHistoryIfActive()]);
+  await Promise.allSettled([loadShots(200), loadRecipeShots(), refreshHistoryIfActive()]);
 }
 
 /** Records a corrected dose-in for the shot currently in review — the DE1
@@ -415,7 +415,9 @@ async function applyPostShotVirtualScale(newShot, prefetchedFull = null) {
 /** Opens the history screen for the current recipe directly (the Espresso
  *  screen's History button) — same screen a live shot lands in afterward. */
 export function loadHistoryForCurrentRecipe() {
-  historyShots.value = NSXCore.findShotsForWorkflow(recipe, shots.value);
+  // currentRecipeShots, not the newest-200 reference list: this recipe's
+  // whole history, however long ago it was last brewed (see useRecipe.js).
+  historyShots.value = currentRecipeShots.value;
   historyIndex.value = 0;
   phase.value = 'history';
 }
@@ -494,7 +496,7 @@ export async function deleteCurrentShot() {
   historyShots.value = historyShots.value.filter((s) => s.id !== shot.id);
   // The reference list and, if it is the list on screen, the Diary's own
   // full-history page — two refs since the split, one call each.
-  await Promise.allSettled([loadShots(200), refreshHistoryIfActive()]);
+  await Promise.allSettled([loadShots(200), loadRecipeShots(), refreshHistoryIfActive()]);
   if (!historyShots.value.length) { closeHistory(); return; }
   if (historyIndex.value >= historyShots.value.length) historyIndex.value = historyShots.value.length - 1;
   // The [historyIndex, historyShots] watcher refetches currentFullShot.

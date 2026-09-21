@@ -25,7 +25,7 @@
  * more careful pass — see the plan.
  */
 import { boot, refreshProfiles, loadShots } from './useCore.js';
-import { refreshRecipes } from './useRecipe.js';
+import { refreshRecipes, loadRecipeShots } from './useRecipe.js';
 
 const { NSXCore } = window;
 
@@ -55,6 +55,9 @@ export async function revalidateSharedData() {
     NSXCore.loadBeans(),
     NSXCore.loadGrinders(),
     loadShots(200),
+    // The loaded recipe's own (gateway-queried) history — a shot pulled on
+    // another device belongs in it just as much as in the reference list.
+    loadRecipeShots(),
   ]);
 }
 
