@@ -57,7 +57,11 @@ function press(key) {
   } else if (key === 'back') {
     v = v.slice(0, -1);
   } else if (key === '.') {
-    if (v.includes('.')) { setActiveDraft(v); return; } // no-op, already has a decimal point
+    // A multiPoint field (a dotted grind setting like "1.2.4") takes as many
+    // points as the grinder's scale has parts; every other field takes one.
+    // Two in a ROW is refused either way — "1..2" is nobody's value.
+    const allowed = numberPadState.multiPoint ? !v.endsWith('.') : !v.includes('.');
+    if (!allowed) { setActiveDraft(v); return; }
     if (v === '') v = '0.';
     else v += '.';
   } else {
@@ -82,6 +86,8 @@ function confirm() {
   // Clamp only on confirm, and only when the caller asked for it — see
   // openNumberPad's min/max note. A half-typed value ("1" on its way to "100")
   // must not be clamped mid-entry.
+  // A dotted value isn't a number to clamp — see openNumberPad's multiPoint.
+  if (numberPadState.multiPoint) { resolveNumberPad(raw); return; }
   const { min, max } = numberPadState;
   const n = parseFloat(raw);
   if (Number.isFinite(n)) {

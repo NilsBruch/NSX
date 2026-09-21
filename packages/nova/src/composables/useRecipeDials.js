@@ -29,7 +29,12 @@ export function useRecipeDials() {
     await pushRecipe();
   }
   async function editGrind() {
-    const v = await openNumberPad({ title: t('espresso.grindSize'), value: recipe.grinderSetting });
+    // multiPoint: a grind setting is a LABEL on the grinder's scale, not a
+    // measurement — some read "1.2.4" (ring.number.click), which the one-point
+    // pad could not type at all. The gateway stores the field as a string all
+    // the way through (core's mapping/workflow domains never parse it), so
+    // whatever the scale says can be recorded as it reads.
+    const v = await openNumberPad({ title: t('espresso.grindSize'), value: recipe.grinderSetting, multiPoint: true });
     if (v == null) return;
     recipe.grinderSetting = v;
     await pushRecipe();
@@ -91,9 +96,23 @@ export function useRecipeDials() {
     const s = Number(g?.settingSmallStep);
     return Number.isFinite(s) && s > 0 ? s : 1;
   });
+  /**
+   * A setting the dial CAN'T move: a dotted scale like "1.2.4", or anything
+   * else that isn't one plain number (including the "—" of a recipe with no
+   * grind recorded yet).
+   *
+   * Dragging one of those would be destructive, not just useless —
+   * parseFloat("1.2.4") is 1.2, so a single accidental pull would silently
+   * rewrite the setting to a DIFFERENT, valid-looking one. There is no honest
+   * step to apply either: only the grinder itself knows how many clicks its
+   * last part has before it carries. Tapping still opens the pad, which is
+   * where such a value gets typed.
+   */
+  const grindIsDialable = computed(() => Number.isFinite(Number(String(recipe.grinderSetting ?? '').trim())));
+
   // Grind: same feel, but the step is the grinder's own small step (a 0.1-step
   // Niche needs the same finger travel per click as a 1-step grinder).
-  const grindDrag = useDragDial({
+  const rawGrindDrag = useDragDial({
     get: () => parseFloat(recipe.grinderSetting) || 0,
     set: (v) => { recipe.grinderSetting = String(Math.round(v * 100) / 100); },
     onCommit: () => pushRecipe(),
@@ -101,6 +120,13 @@ export function useRecipeDials() {
     step: () => grindStep.value,
     pxPerUnit: () => DIAL_PX_PER_STEP / grindStep.value,
   });
+  // Swallowing pointerdown is what disables the drag: with no drag started,
+  // the move/up handlers do nothing and `moved` stays false, so guardClick
+  // still lets the tap through to the number pad.
+  const grindDrag = {
+    ...rawGrindDrag,
+    onPointerDown: (evt) => { if (grindIsDialable.value) rawGrindDrag.onPointerDown(evt); },
+  };
   const onGrindClick = grindDrag.guardClick(editGrind);
 
   const yieldDrag = useDragDial({

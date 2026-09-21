@@ -212,7 +212,7 @@ async function editActualYield() {
 }
 
 async function editGrindSetting() {
-  const v = await openNumberPad({ title: t('liveShot.mGrind'), value: grindSetting.value ?? '' });
+  const v = await openNumberPad({ title: t('liveShot.mGrind'), value: grindSetting.value ?? '', multiPoint: true });
   // Stored as a string, like the recipe's own grinderSetting — a grinder's
   // scale isn't necessarily numeric-with-one-decimal.
   if (v != null) setGrindSetting(String(v));

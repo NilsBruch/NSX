@@ -115,7 +115,8 @@ export function resolveChooser(value) {
  * fields this replaces).
  */
 export const numberPadState = reactive({
-  open: false, title: '', unit: '', value: '', min: null, max: null, linked: null, _resolve: null,
+  open: false, title: '', unit: '', value: '', min: null, max: null, linked: null,
+  multiPoint: false, _resolve: null,
 });
 
 /**
@@ -138,12 +139,17 @@ export const numberPadState = reactive({
  *   grams + brew ratio) — tapping either makes it the one digits go into, and
  *   every keystroke recomputes the OTHER field via toLinked/toPrimary, so
  *   editing either keeps both in sync (see EspressoView.vue's editYield).
+ *   `multiPoint` allows MORE THAN ONE decimal point, for a field whose value
+ *   is a dotted label rather than a number — a grind setting like "1.2.4" on a
+ *   grinder whose scale is ring.number.click. It also skips the min/max clamp,
+ *   since parseFloat("1.2.4") is 1.2 and clamping against that would rewrite a
+ *   value it never actually read.
  *   The resolved value is always the PRIMARY field — toLinked/toPrimary keep
  *   it current regardless of which field was actually typed into, so a caller
  *   with no `linked` need not change anything.
  * @returns {Promise<string|null>} the entered digits (primary field), or null if cancelled
  */
-export function openNumberPad({ title, unit = '', value = '', min = null, max = null, linked = null }) {
+export function openNumberPad({ title, unit = '', value = '', min = null, max = null, linked = null, multiPoint = false }) {
   return new Promise((resolve) => {
     numberPadState.title = title;
     numberPadState.unit = unit;
@@ -151,6 +157,7 @@ export function openNumberPad({ title, unit = '', value = '', min = null, max = 
     numberPadState.min = min;
     numberPadState.max = max;
     numberPadState.linked = linked;
+    numberPadState.multiPoint = multiPoint;
     numberPadState._resolve = resolve;
     numberPadState.open = true;
   });

@@ -235,7 +235,7 @@ async function editGrinder() {
 }
 
 async function editGrind() {
-  const v = await openNumberPad({ title: t('dye.grind'), value: grindSetting.value ?? '' });
+  const v = await openNumberPad({ title: t('dye.grind'), value: grindSetting.value ?? '', multiPoint: true });
   // A string, like the recipe's own grinderSetting: not every grinder's scale
   // is a number with one decimal.
   if (v != null) await setGrindSetting(String(v));

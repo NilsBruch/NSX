@@ -65,7 +65,7 @@ async function editDose() {
   else await patchRecipeEntry(props.entry.id, { targetDoseWeight: value });
 }
 async function editGrind() {
-  const v = await openNumberPad({ title: t('espresso.grindSize'), value: source.value.grinderSetting });
+  const v = await openNumberPad({ title: t('espresso.grindSize'), value: source.value.grinderSetting, multiPoint: true });
   if (v == null) return;
   if (isLoaded.value) { recipe.grinderSetting = v; await pushRecipe(); }
   else await patchRecipeEntry(props.entry.id, { grinderSetting: v });
