@@ -180,6 +180,14 @@ function snapshot() {
     targetFlow: flowing ? 2 : 0,
     groupTemperature: 92 + Math.sin(Date.now() / 4000),
     targetGroupTemperature: 93,
+    // The steam BOILER, in plain °C — the field NSX's steam orb and Nova's
+    // steam readout/graph read. The mock carried none at all, so a steam
+    // session here showed a dash where a machine shows a temperature. Sits at
+    // its standby temperature and dips while steaming, the way a boiler under
+    // draw does; the shape is approximate, its presence and units are not.
+    steamTemperature: state.machine.state === "steam"
+      ? Math.max(128, 152 - elapsed * 1.4)
+      : 150 + Math.sin(Date.now() / 6000),
   };
 }
 

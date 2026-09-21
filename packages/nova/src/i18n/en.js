@@ -240,6 +240,9 @@ export default {
   },
   steam: {
     intensity: 'Intensity',
+    // The live steam overlay's temperature/flow/pressure plot.
+    showGraph: 'Show graph',
+    hideGraph: 'Hide graph',
     presets: 'Presets',
     holdToSave: 'Hold to save',
     timer: 'Timer',

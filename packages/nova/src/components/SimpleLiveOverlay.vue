@@ -17,6 +17,12 @@
  *    'steam' state also covers wand heat-up, so the anchor is the first pour,
  *    not the state transition — mirrors NSX's steamSession). Direction follows
  *    the auto-stop toggle: on counts DOWN from the dialed duration, off up.
+ *    Flanking the timer are the two live readings that actually move while
+ *    steaming — boiler temperature and flow — and a Show-graph toggle opens
+ *    the temperature / flow / pressure plot underneath for anyone who wants to
+ *    watch the steam curve rather than just the clock. The ring alone said
+ *    nothing about how the machine was doing, which is what made the steam
+ *    screen feel empty.
  *  - HOT WATER: dispensed millilitres against the target volume. With a scale
  *    it's the weight delta since start (grams ≈ ml water — how NSX shows it);
  *    without a scale we integrate the live flow (ml/s) ourselves, since the
@@ -24,11 +30,13 @@
  *    persisted ShotSnapshot, which the gateway never streams live). Either way
  *    the readout works scale-free instead of falling back to a bare timer.
  */
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { computed, onUnmounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { machine, liveShot } from '../composables/useCore.js';
 import { steam, hotwater } from '../composables/useMachineFunctions.js';
+import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import LiveRing from './LiveRing.vue';
+import ShotStripChart from './ShotStripChart.vue';
 
 const { t } = useI18n();
 const { NSXCore, NSXApi } = window;
@@ -56,6 +64,43 @@ const hwProgress = computed(() =>
   hwTarget.value > 0 ? Math.min(1, hwDispensed.value / hwTarget.value) : null
 );
 const hwSub = computed(() => (hwTarget.value > 0 ? `/ ${hwTarget.value} ml` : 'ml'));
+
+// ── Steam readouts: the two numbers that move while steaming ────────────────
+// steamTemperature is the machine's own boiler reading (0/absent when it
+// isn't reporting one — shown as a dash rather than a confident 0°C).
+const steamTemp = computed(() => (liveShot.steamTemperature > 0 ? liveShot.steamTemperature : null));
+const steamTempLabel = computed(() => (steamTemp.value == null ? '—' : String(dispTemp(steamTemp.value))));
+const steamFlowLabel = computed(() => (liveShot.flow || 0).toFixed(1));
+
+// ── The steam curve ─────────────────────────────────────────────────────────
+// Sampled by the tick below for as long as the machine is steaming, whether or
+// not the graph is open — opening it mid-steam should show what has happened
+// so far, not start from the moment of the tap.
+//
+// The same parallel-array shape ShotStripChart takes from the live shot. The
+// target series stay empty because steam runs no profile to have targets from,
+// and weightFlow stays empty because there is no scale under a steam jug —
+// both are `omit`ted from the chart's legend rather than drawn flat at zero.
+// SAMPLE_CAP bounds a wand left open: 250ms samples, so ~10 minutes.
+const SAMPLE_CAP = 2400;
+const steamSeries = reactive({
+  elapsed: [], pressure: [], targetPressure: [], flow: [], targetFlow: [],
+  weightFlow: [], temperature: [],
+});
+const showGraph = ref(false);
+const graphOriginMs = ref(0);
+
+function resetSteamSeries() {
+  for (const key of Object.keys(steamSeries)) steamSeries[key].length = 0;
+}
+
+function sampleSteam(now) {
+  if (steamSeries.elapsed.length >= SAMPLE_CAP) return;
+  steamSeries.elapsed.push((now - graphOriginMs.value) / 1000);
+  steamSeries.pressure.push(liveShot.pressure || 0);
+  steamSeries.flow.push(liveShot.flow || 0);
+  steamSeries.temperature.push(steamTemp.value ?? 0);
+}
 
 // ── Timer (steam only; hot water shows ml, not a timer) ──────────────────────
 // Steam advances only while actively pouring; hot water isn't timed.
@@ -91,6 +136,9 @@ function tick() {
     flowVolume.value += (liveShot.flow || 0) * (now - lastTickMs) / 1000;
   }
   lastTickMs = now;
+  // Before the advancing guard: the wand heating up (substate != 'pouring')
+  // is part of the curve even though the TIMER deliberately doesn't run then.
+  if (isSteam.value) sampleSteam(now);
   if (!advancing.value) return;               // steam: freeze between/after pours
   if (startMs === 0) startMs = now;
   elapsedSec.value = (now - startMs) / 1000;
@@ -107,6 +155,11 @@ watch(
       elapsedSec.value = 0;
       flowVolume.value = 0;
       startWeight = machine.weight ?? 0;       // tare-relative dispense baseline
+      graphOriginMs.value = Date.now();
+      resetSteamSeries();
+      // The graph closes with the session rather than staying open for the
+      // next one: whether you want to watch the curve is a per-steam decision.
+      showGraph.value = false;
       tick();
       timer = setInterval(tick, 250);
     } else if (leaving && timer) {
@@ -124,15 +177,85 @@ async function stop() {
 </script>
 
 <template>
-  <LiveRing v-if="isSteam" :value="timeLabel" :progress="steamProgress">
+  <LiveRing v-if="isSteam" :value="timeLabel" :progress="steamProgress" :raised="showGraph">
+    <!-- Temperature left, flow right — the two readings the machine is
+         actually working on while the timer counts. -->
+    <template #left>
+      <div class="sl-stat">
+        <div class="sl-sv">{{ steamTempLabel }}<small>{{ tempUnitLabel }}</small></div>
+        <div class="sl-sl">{{ t('hotwater.temperature') }}</div>
+      </div>
+    </template>
+    <template #right>
+      <div class="sl-stat">
+        <div class="sl-sv">{{ steamFlowLabel }}<small>ml/s</small></div>
+        <div class="sl-sl">{{ t('cleaning.flow') }}</div>
+      </div>
+    </template>
     <button class="rate-btn" @click="stop">{{ t('common.stop') }}</button>
+    <button class="rate-btn sl-ghost" @click="showGraph = !showGraph">
+      {{ showGraph ? t('steam.hideGraph') : t('steam.showGraph') }}
+    </button>
   </LiveRing>
+
+  <!-- Expert mode regardless of the skin's graph setting: temperature is the
+       series this graph is FOR, and the normal strip chart deliberately
+       doesn't plot it (it's an extraction-dynamics view). Scroll mode, like
+       the live shot — a steam is watched as it happens. -->
+  <div v-if="isSteam && showGraph" class="sl-graph">
+    <ShotStripChart
+      :series="steamSeries" mode="scroll" :origin-ms="graphOriginMs" :window-s="35"
+      expert :omit="['weight', 'goals']"
+    />
+  </div>
 
   <!-- Millilitres, from the scale when there is one (a real measurement of what
        landed in the cup) and from the machine's integrated flow when there
        isn't — see the header. Same number either way, so the readout doesn't
        change shape when a scale connects mid-dispense. -->
-  <LiveRing v-else-if="isHotWater" :value="String(hwDispensed)" :sub="hwSub" :progress="hwProgress">
+  <LiveRing v-if="isHotWater" :value="String(hwDispensed)" :sub="hwSub" :progress="hwProgress">
     <button class="rate-btn" @click="stop">{{ t('common.stop') }}</button>
   </LiveRing>
 </template>
+
+<style scoped>
+/* The flanking readouts. Same tile shape as the live shot's metrics (label
+   under value, unit as a small suffix), scaled down — the ring's own number is
+   the headline and these two must stay secondary to it. */
+.sl-stat { pointer-events: none; }
+.sl-sv {
+  font-size: var(--fs-lg); font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.sl-sv small { font-size: var(--fs-xs); font-weight: 600; margin-left: 2px; color: var(--muted); }
+.sl-sl {
+  margin-top: 4px; font-size: var(--fs-xs); font-weight: 600;
+  color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase;
+}
+
+/* Secondary next to Stop: stopping the steam is the action this screen is
+   for, and a second filled accent button would compete with it. */
+.sl-ghost {
+  background: var(--card-bg); color: var(--text);
+  min-width: 200px; box-shadow: var(--elev-1);
+}
+
+/* The lower half of the screen, under the raised ring. Above the scrim (which
+   sits at z-index 13, the ring at 14) and interactive, since the expert plot's
+   legend toggles series. */
+.sl-graph {
+  position: fixed; z-index: 14;
+  left: 50%; transform: translateX(-50%);
+  top: 54%; width: min(760px, 92vw); height: 230px;
+  padding: 12px 14px;
+  border-radius: var(--r-lg); background: var(--card-bg); box-shadow: var(--elev-2);
+  pointer-events: auto;
+  animation: sl-graph-in 0.22s ease-out;
+}
+@keyframes sl-graph-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-graph { animation: none; }
+}
+</style>

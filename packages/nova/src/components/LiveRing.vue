@@ -18,6 +18,16 @@
  *
  * `sub` is an optional smaller line under the number, for the readouts whose
  * value only means something against a target ("120" over "/ 200 ml").
+ *
+ * The optional `left` / `right` slots flank the ring with a second and third
+ * reading (steam uses them for boiler temperature and flow). They sit OUTSIDE
+ * the circle rather than inside it: the number in the middle is the one the
+ * ring is about, and crowding two more into it would cost exactly the
+ * glanceability the ring exists for.
+ *
+ * `raised` lifts the whole thing out of the vertical centre, for when the
+ * caller puts something else (the steam graph) in the lower half of the
+ * screen.
  */
 import { computed, useSlots } from 'vue';
 
@@ -25,6 +35,7 @@ const props = defineProps({
   value: { type: String, required: true },
   progress: { type: Number, default: null },
   sub: { type: String, default: '' },
+  raised: { type: Boolean, default: false },
 });
 
 const slots = useSlots();
@@ -46,7 +57,7 @@ const dashOffset = computed(() => {
        blur its own child too (backdrop-filter applies to everything painted
        behind the element, and the ring is painted inside it). -->
   <div class="lring-scrim"></div>
-  <div class="lring">
+  <div class="lring" :class="{ 'lring-raised': raised }">
     <svg class="lring-svg" viewBox="0 0 120 120" aria-hidden="true">
       <circle class="lring-track" cx="60" cy="60" :r="R" />
       <!-- Rotated so the arc starts at 12 o'clock rather than 3. -->
@@ -56,10 +67,12 @@ const dashOffset = computed(() => {
         transform="rotate(-90 60 60)"
       />
     </svg>
+    <div v-if="$slots.left" class="lring-side lring-left"><slot name="left" /></div>
     <div class="lring-val">
       <div class="lring-num">{{ value }}</div>
       <div v-if="sub" class="lring-sub">{{ sub }}</div>
     </div>
+    <div v-if="$slots.right" class="lring-side lring-right"><slot name="right" /></div>
   </div>
   <!-- Bottom of the SCREEN, not of the ring: that's where the stop control
        lives in the full-screen live overlays, and a running machine is exactly
@@ -96,6 +109,21 @@ const dashOffset = computed(() => {
   pointer-events: none; /* purely a readout — never swallows a tap */
   animation: lring-pop 0.22s ease-out;
 }
+/* Out of the centre when the caller needs the lower half of the screen. A
+   transform rather than a different `top`, so the centring maths above stays
+   in one place. */
+.lring-raised { transform: translate(-50%, -50%) translateY(-90px); }
+
+/* Flanking readouts: outside the circle, vertically on its centre line, and
+   wide enough that a two-digit and a three-digit value don't shift the ring's
+   apparent centre. Pointer-events stay off with the rest of the ring. */
+.lring-side {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 104px; text-align: center;
+}
+.lring-left { right: calc(100% + 10px); }
+.lring-right { left: calc(100% + 10px); }
+
 .lring-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .lring-track, .lring-arc { fill: none; stroke-width: 6; stroke-linecap: round; }
 .lring-track { stroke: var(--ring-track); }
@@ -115,7 +143,7 @@ const dashOffset = computed(() => {
 .lring-action {
   position: fixed; z-index: 14;
   left: 0; right: 0; bottom: 34px;
-  display: flex; justify-content: center;
+  display: flex; justify-content: center; gap: 14px;
   pointer-events: auto;
   animation: lring-fade 0.22s ease-out;
 }
@@ -129,6 +157,12 @@ const dashOffset = computed(() => {
 @keyframes lring-pop {
   from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
 }
+/* The raised ring animates from its own resting place — sharing the keyframe
+   above would make it slide down into the centre on entry. */
+@keyframes lring-pop-raised {
+  from { opacity: 0; transform: translate(-50%, -50%) translateY(-90px) scale(0.92); }
+}
+.lring-raised { animation-name: lring-pop-raised; }
 @media (prefers-reduced-motion: reduce) {
   .lring-scrim, .lring, .lring-action { animation: none; }
 }

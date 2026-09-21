@@ -70,6 +70,12 @@ const props = defineProps({
   // first sample. Fixes the right-hand scale for the whole shot — see
   // tempRange(). Without it a live chart falls back to fitting the data.
   tempAnchor: { type: Number, default: null },
+  // Legend keys this caller has no data for, so they are neither drawn nor
+  // offered as a toggle: 'pressure' | 'flow' | 'weight' | 'temperature' |
+  // 'goals'. The steam graph omits weight (no scale in a steam jug) and goals
+  // (steam runs no profile, so there are no target curves) — a chip for a
+  // series that can only ever be flat at zero is a dead control.
+  omit: { type: Array, default: () => [] },
   // Scroll mode: the shot is over. The viewport stops where it was instead of
   // scrolling on into time where nothing more will arrive.
   stopped: { type: Boolean, default: false },
@@ -126,11 +132,14 @@ const X_COLORS = {
 const shown = reactive({
   pressure: true, flow: true, weight: true, temperature: true, goals: props.showTargets,
 });
+// Omitted series stay off for good: every draw path is already gated on
+// `shown`, so this is all it takes to keep them out of the plot.
+for (const key of props.omit) shown[key] = false;
 // The skin setting seeds Goals; flipping it in settings re-seeds it here rather
 // than fighting whatever the legend was last left on.
 watch(() => props.showTargets, (v) => { shown.goals = v; });
 
-const LEGEND = [
+const ALL_LEGEND = [
   { key: 'pressure', color: X_COLORS.pressure, label: 'liveShot.mPressure', unit: 'bar' },
   { key: 'flow', color: X_COLORS.flow, label: 'liveShot.mFlow', unit: 'ml/s' },
   { key: 'weight', color: X_COLORS.weight, label: 'liveShot.mWflow', unit: 'g/s' },
@@ -139,6 +148,7 @@ const LEGEND = [
   // would not unwrap in the template anyway.
   { key: 'temperature', color: X_COLORS.temperature, label: 'liveShot.mTemp', unit: '' },
 ];
+const LEGEND = computed(() => ALL_LEGEND.filter((s) => !props.omit.includes(s.key)));
 
 /** The scrubbed sample's value per legend entry, so the expert legend doubles
  *  as the readout the caller's own caption gives in normal mode. */
@@ -591,7 +601,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf));
         <b v-if="scrubbed && shown[s.key]">{{ s.key === 'temperature' ? fmtLegend(dispTemp(scrubbed[s.key]), 0) : fmtLegend(scrubbed[s.key], 1) }}<small>{{ s.key === 'temperature' ? tempUnitLabel : s.unit }}</small></b>
         <template v-else>{{ t(s.label) }}</template>
       </button>
-      <button class="sl-chip sl-goals" :class="{ off: !shown.goals }" :aria-pressed="shown.goals" @click="shown.goals = !shown.goals">
+      <button v-if="!omit.includes('goals')" class="sl-chip sl-goals" :class="{ off: !shown.goals }" :aria-pressed="shown.goals" @click="shown.goals = !shown.goals">
         {{ t('liveShot.goals') }}
       </button>
     </div>
