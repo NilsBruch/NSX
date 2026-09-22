@@ -213,17 +213,29 @@ export function resolveConfirm(value) {
   confirmState._resolve = null;
 }
 
-/** A 0–5 star rating picker (half steps) — see RatingModal.vue / StarRating.vue. */
-export const ratingState = reactive({ open: false, title: '', value: 0, _resolve: null });
+/** A 0–5 star rating picker (half steps) — see RatingModal.vue / StarRating.vue.
+ *  `withFavorite` adds the optional heart the shot DYE page asks for. */
+export const ratingState = reactive({
+  open: false, title: '', value: 0, favorite: false, withFavorite: false, _resolve: null,
+});
 
 /**
- * @param {{ title: string, value?: number }} opts
- * @returns {Promise<number|null>} the chosen rating, or null if cancelled
+ * Pass `favorite` (a boolean) to also offer the heart; leave it out and the
+ * picker behaves exactly as it always has. The two shapes are deliberate: a
+ * recipe has a rating and nothing else, while a shot can be both rated and
+ * marked a favourite, and those are one decision made in one sitting rather
+ * than two trips through the same modal.
+ *
+ * @param {{ title: string, value?: number, favorite?: boolean|null }} opts
+ * @returns {Promise<number|{rating: number, favorite: boolean}|null>}
+ *   the chosen rating (an object when `favorite` was passed), or null if cancelled
  */
-export function openRating({ title, value = 0 }) {
+export function openRating({ title, value = 0, favorite = null }) {
   return new Promise((resolve) => {
     ratingState.title = title;
     ratingState.value = Number(value) || 0;
+    ratingState.withFavorite = favorite !== null;
+    ratingState.favorite = favorite === true;
     ratingState._resolve = resolve;
     ratingState.open = true;
   });

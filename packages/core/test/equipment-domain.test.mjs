@@ -176,6 +176,7 @@ test("dyeFieldsFromContext reads both halves of a recorded context", () => {
     {
       baristaName: "Nils", drinkerName: null, finalBeverageType: "espresso",
       basketId: "bskt-1", basketName: "VST 18g", equipmentId: null, equipmentName: null,
+      rpm: null,
     },
   );
 });
@@ -183,10 +184,47 @@ test("dyeFieldsFromContext reads both halves of a recorded context", () => {
 test("a shot pulled before any of this, or with no context at all, reads as empty", () => {
   const empty = {
     baristaName: null, drinkerName: null, finalBeverageType: null,
-    basketId: null, basketName: null, equipmentId: null, equipmentName: null,
+    basketId: null, basketName: null, equipmentId: null, equipmentName: null, rpm: null,
   };
   assert.deepEqual(NSXCore.dyeFieldsFromContext({}), empty);
   assert.deepEqual(NSXCore.dyeFieldsFromContext(null), empty);
   assert.equal(NSXCore.isDyeEmpty(NSXCore.dyeFieldsFromContext(null)), true);
   assert.equal(NSXCore.isDyeEmpty({ basketName: "VST 18g" }), false);
+});
+
+/* ── Where a SAVED shot keeps basket / equipment / RPM ───────────────────── */
+
+test("dyeShotExtras reads annotations.extras — the object DYE2 actually reads", () => {
+  // The bug this guards: the same keys in workflow.context.extras are what a
+  // recipe PUSHES, but DYE2's edit-shot page reads a saved shot's copy out of
+  // annotations.extras. Writing only the workflow context is invisible to it.
+  const shot = {
+    annotations: { extras: { basketId: 'bskt-1', basketName: 'VST 18g', rpm: 900 } },
+    workflow: { context: { extras: { basketId: 'bskt-WRONG', basketName: 'Not this one' } } },
+  };
+
+  assert.deepEqual(NSXCore.dyeShotExtras(shot), {
+    basketId: 'bskt-1', basketName: 'VST 18g',
+    equipmentId: null, equipmentName: null, rpm: 900,
+  });
+});
+
+test("RPM falls back to the legacy workflow.grinderData.rpm DYE2 still reads", () => {
+  const shot = { annotations: {}, workflow: { grinderData: { rpm: 750 } } };
+  assert.equal(NSXCore.dyeShotExtras(shot).rpm, 750);
+
+  // An annotation always wins over the legacy field.
+  const edited = { annotations: { extras: { rpm: 800 } }, workflow: { grinderData: { rpm: 750 } } };
+  assert.equal(NSXCore.dyeShotExtras(edited).rpm, 800);
+});
+
+test("a shot with no extras at all reads as empty, not as a crash", () => {
+  const empty = { basketId: null, basketName: null, equipmentId: null, equipmentName: null, rpm: null };
+  assert.deepEqual(NSXCore.dyeShotExtras({}), empty);
+  assert.deepEqual(NSXCore.dyeShotExtras(null), empty);
+});
+
+test("a recipe's RPM pushes in context.extras, beside basket and equipment", () => {
+  assert.deepEqual(NSXCore.dyeExtras({ rpm: 900, basketId: 'bskt-1' }), { rpm: 900, basketId: 'bskt-1' });
+  assert.equal('rpm' in NSXCore.normalizeDye(null), true);
 });

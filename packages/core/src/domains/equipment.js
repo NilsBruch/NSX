@@ -177,13 +177,18 @@
    * They land in two different places, because that's where the readers look:
    *  - barista / drinker / beverage are native gateway context fields (the
    *    shot DYE page already edits them there).
-   *  - basket and equipment have no native home, so they go in
-   *    `context.extras` under the names DYE2 denormalises onto a shot —
-   *    basketId/basketName, equipmentId/equipmentName. A shot pulled in Nova
-   *    is then readable by DYE2, and vice versa.
+   *  - basket, equipment and grinder RPM have no native home. On the LIVE
+   *    workflow they go in `context.extras` (what DYE2's workflowDialing
+   *    reads); on a SAVED shot they live in `annotations.extras` (what its
+   *    shotDialing reads — see dyeShotExtras below). Those are two different
+   *    objects on a shot record, and writing the wrong one is invisible to
+   *    DYE2, so the two directions have separate helpers here.
+   *
+   * RPM has no schema field anywhere: `GrinderRequest` carries only
+   * rpmSmallStep/rpmBigStep (how far one press moves it), never a value.
    */
   const DYE_CONTEXT_KEYS = ["baristaName", "drinkerName", "finalBeverageType"];
-  const DYE_EXTRAS_KEYS = ["basketId", "basketName", "equipmentId", "equipmentName"];
+  const DYE_EXTRAS_KEYS = ["basketId", "basketName", "equipmentId", "equipmentName", "rpm"];
 
   const blank = (v) => v == null || v === "";
 
@@ -223,6 +228,26 @@
   }
 
   /**
+   * The basket / equipment / RPM recorded on a SAVED shot.
+   *
+   * These live in `annotations.extras`, NOT in the shot's workflow context —
+   * DYE2's edit-shot page reads and writes them there, and a value put in the
+   * workflow context instead is simply not seen by it. `rpm` additionally
+   * falls back to `workflow.grinderData.rpm`, a legacy shape DYE2 still reads
+   * and which appears in no REST schema.
+   */
+  function dyeShotExtras(shot) {
+    const extras = shot?.annotations?.extras || {};
+    const out = {};
+    for (const k of DYE_EXTRAS_KEYS) out[k] = blank(extras[k]) ? null : extras[k];
+    if (out.rpm == null) {
+      const legacy = shot?.workflow?.grinderData?.rpm;
+      if (!blank(legacy)) out.rpm = legacy;
+    }
+    return out;
+  }
+
+  /**
    * A flat DYE object with every key present, missing ones as null — for a
    * recipe loaded from storage that predates the field, or a brand new one.
    */
@@ -256,6 +281,7 @@
   NSXCore.register({
     dyeBeverageOptions,
     dyeFieldsFromContext,
+    dyeShotExtras,
     normalizeDye,
     dyeContextFields,
     dyeExtras,

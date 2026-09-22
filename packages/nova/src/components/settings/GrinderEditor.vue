@@ -28,7 +28,19 @@ const draft = reactive({
   settingSmallStep: props.grinder?.settingSmallStep ?? '',
   settingBigStep: props.grinder?.settingBigStep ?? '',
   settingValues: Array.isArray(props.grinder?.settingValues) ? props.grinder.settingValues.join(', ') : '',
+  // Only a few grinders have a variable speed, so the two RPM steps stay
+  // hidden behind a toggle. There is no flag for it in the gateway schema —
+  // having a step IS the flag (core's grinderHasVariableRpm), so switching
+  // this off clears both rather than storing a "no" of its own.
+  variableRpm: NSXCore.grinderHasVariableRpm(props.grinder),
+  rpmSmallStep: props.grinder?.rpmSmallStep ?? '',
+  rpmBigStep: props.grinder?.rpmBigStep ?? '',
 });
+
+function toggleVariableRpm() {
+  draft.variableRpm = !draft.variableRpm;
+  if (!draft.variableRpm) { draft.rpmSmallStep = ''; draft.rpmBigStep = ''; }
+}
 
 const burrTypeOpts = [['conical', t('grinderEditor.conical')], ['flat', t('grinderEditor.flat')]];
 const settingTypeOpts = [['numeric', t('grinderEditor.stepless')], ['preset', t('grinderEditor.positions')]];
@@ -61,6 +73,10 @@ function toPayload() {
     settingValues: draft.settingValues
       ? draft.settingValues.split(',').map((v) => Number(v.trim())).filter((v) => Number.isFinite(v))
       : [],
+    // Always sent, null included: an explicit null is what turns a grinder's
+    // variable speed back OFF, since the steps are themselves the flag.
+    rpmSmallStep: draft.variableRpm && draft.rpmSmallStep !== '' ? Number(draft.rpmSmallStep) : null,
+    rpmBigStep: draft.variableRpm && draft.rpmBigStep !== '' ? Number(draft.rpmBigStep) : null,
   };
 }
 
@@ -164,6 +180,27 @@ async function del() {
         <button class="setting-row as-btn" @click="editNumber('settingBigStep', t('grinderEditor.bigStep'))">
           <span class="sr-name">{{ t('grinderEditor.bigStep') }}</span>
           <span class="sr-value" :class="{ muted: draft.settingBigStep === '' }">{{ draft.settingBigStep !== '' ? draft.settingBigStep : t('common.notSet') }}<span class="sr-chev">›</span></span>
+        </button>
+      </template>
+      <span class="setting-group-label">{{ t('grinderEditor.speed') }}</span>
+      <div class="setting-row">
+        <span class="sr-main">
+          <span class="sr-name">{{ t('grinderEditor.variableRpm') }}</span>
+          <span class="sr-sub">{{ t('grinderEditor.variableRpmSub') }}</span>
+        </span>
+        <button
+          class="switch" :class="{ on: draft.variableRpm }" role="switch"
+          :aria-checked="draft.variableRpm" @click="toggleVariableRpm"
+        ></button>
+      </div>
+      <template v-if="draft.variableRpm">
+        <button class="setting-row as-btn" @click="editNumber('rpmSmallStep', t('grinderEditor.rpmSmallStep'))">
+          <span class="sr-name">{{ t('grinderEditor.rpmSmallStep') }}</span>
+          <span class="sr-value" :class="{ muted: draft.rpmSmallStep === '' }">{{ draft.rpmSmallStep !== '' ? draft.rpmSmallStep : t('common.notSet') }}<span class="sr-chev">›</span></span>
+        </button>
+        <button class="setting-row as-btn" @click="editNumber('rpmBigStep', t('grinderEditor.rpmBigStep'))">
+          <span class="sr-name">{{ t('grinderEditor.rpmBigStep') }}</span>
+          <span class="sr-value" :class="{ muted: draft.rpmBigStep === '' }">{{ draft.rpmBigStep !== '' ? draft.rpmBigStep : t('common.notSet') }}<span class="sr-chev">›</span></span>
         </button>
       </template>
     </div>

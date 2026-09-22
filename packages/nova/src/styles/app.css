@@ -2160,13 +2160,33 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .dye-tile .dv {
   font-size: var(--fs-sm); font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Exactly one line, whatever the value is made of. Pinned rather than left
+     to the font's default so a value that ISN'T text measures the same as one
+     that is — the rating's stars are a 15px SVG, and on its own that left the
+     tile a different height from every tile whose value is a word. */
+  line-height: 1.3; min-height: 1.3em;
 }
 .dye-tile .dv.muted { color: var(--muted); font-weight: 500; }
-/* The note sits under both columns and wraps, being the one field that runs on. */
-.dye-note { margin-top: 10px; }
+/* The shot's note is an ordinary tile in the People grid now. It used to sit
+   under both columns with a top margin and a two-line value; inside a grid
+   cell the margin came off its own height and the reserved second line made
+   its whole row taller than the rest, so both are gone and it matches. */
 /* A tile that takes its grid's full width — the bean's tasting notes, which
    can run long and wrap (.dv.fit) instead of being cut. */
 .dye-span { grid-column: 1 / -1; }
+/* Two columns rather than all of them — for a tile that shares its row with
+   one other (the shot's note, beside the rating). Falls back to the full
+   width on a grid only two columns wide, which is what `span` already does. */
+.dye-span2 { grid-column: span 2; }
+/* The stars sit on the value line like any other value; the heart is pinned
+   to the tile's top-right corner, level with the label. Absolute, so it costs
+   the row no height — the grid's tiles all measure the same (see .dv above). */
+.dye-tile .dv.dye-enjoy { display: inline-flex; align-items: center; }
+.dye-enjoy-tile { position: relative; }
+.dye-fav-corner {
+  position: absolute; top: 8px; right: 12px;
+  color: var(--accent); font-size: var(--fs-sm); line-height: 1;
+}
 /* Profile and temperature on one row of their own, whatever the grid's column
    count: the row spans the grid, the temperature takes the width its value
    needs, and the profile takes the rest. Spanning two grid tiles instead put
@@ -2186,7 +2206,6 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 /* A value that wraps when it must but, unlike .wrap, reserves no second line —
    for a name that usually fits and only sometimes doesn't. */
 .dye-tile .dv.fit { white-space: normal; line-height: 1.3; }
-.dye-tile .dv.wrap { white-space: normal; line-height: 1.35; min-height: 2.7em; }
 
 /* A fixed 68px — the height of the action buttons elsewhere (.prep-bottom's
    "create recipe") — and the two corner buttons fill it top to bottom. It
@@ -2489,14 +2508,19 @@ a.sw-update { text-decoration: none; }
 .eq-hint { font-size: var(--fs-xs); color: var(--muted); line-height: 1.4; margin: 8px 2px 0; }
 /* A picker with an empty library behind it: 0.35 is the opacity every other
    disabled control in this skin uses. */
-.setting-row.as-btn:disabled, .dye-tile:disabled { opacity: 0.35; }
-/* The read-only blocks and tiles of the recipe DYE page (RecipeDyeModal.vue):
-   the bean, the extraction and analysis a shot has yet to fill in, and the
-   grinder/grind/profile the coffee page owns. They keep their place in the
-   mirrored layout, so this reads as not-yours-to-set-here rather than broken —
-   a lighter hand than :disabled's 0.35, since many of these tiles DO carry a
-   real value and must stay readable. */
-.dye-off { opacity: 0.55; pointer-events: none; }
+.setting-row.as-btn:disabled { opacity: 0.35; }
+/* The DYE pages have exactly ONE grey, and it means "you can't act on this
+   tile here" — nothing finer. Whether the value is set elsewhere (the bean,
+   the dials, the profile), waiting on a shot that hasn't happened (yield,
+   TDS, the analysis strip), or not applicable at all (RPM on a fixed-speed
+   grinder), the tile keeps its place in the layout and reads the same way. An
+   earlier version split these across two opacities; the distinction was not
+   one anybody could read off the screen, and it did not survive contact with
+   the page (almost everything greyed there IS "set elsewhere").
+   Lighter than the 0.35 above because these tiles mostly DO carry a real
+   value, and it has to stay readable. */
+.dye-off, .dye-tile:disabled { opacity: 0.55; }
+.dye-off { pointer-events: none; }
 .setting-row.as-btn { border: none; cursor: pointer; font-family: inherit; color: var(--text); text-align: left; width: 100%; }
 .setting-row.as-btn.danger .sr-name { color: var(--alert); }
 .setting-row .sr-value { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }

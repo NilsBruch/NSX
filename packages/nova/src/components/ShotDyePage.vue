@@ -11,7 +11,9 @@
  * OUT of it, ending in the note.
  *
  * Where each field lives, because the two halves save differently:
- *  - annotations (setShotAnnotations): dose, yield, TDS, EY, favourite, note.
+ *  - annotations (setShotAnnotations): dose, yield, TDS, EY, favourite, note,
+ *    and — in `extras` — the basket, equipment and grinder RPM that have no
+ *    schema field of their own (the home DYE2 reads them from).
  *    The canonical post-shot data per the REST spec; `extras` merges per field.
  *  - workflow.context (setShotContext): bean, grinder, targets, barista,
  *    drinker, beverage. The recipe AS BREWED. The spec calls the workflow
@@ -32,11 +34,12 @@ import {
 import { beans, grinders, shots, baskets, equipment, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
-import { openTextField, openNumberPad, openChooser } from '../composables/useModals.js';
+import { openTextField, openNumberPad, openChooser, openRating } from '../composables/useModals.js';
 // Section icons from Lucide. Named imports, so only these four end up in the
 // build; the style (colour, size, stroke) comes from .dye-head in app.css.
 import { PaperBag, Coffee, LensConcave, Users } from '@lucide/vue';
 import { shotMatchesBean } from '../composables/useDiary.js';
+import StarRating from './StarRating.vue';
 import BeanChooser from './BeanChooser.vue';
 import BatchPicker from './BatchPicker.vue';
 
@@ -244,24 +247,28 @@ async function editGrind() {
 }
 
 /**
- * The basket and the kit the shot was pulled with. They live in
- * `context.extras`, under the names DYE2 denormalises onto a shot, because
- * the gateway has no native field for either (its typed /equipment resource
- * was proposed and closed — see core's equipment domain).
+ * The basket, the kit and the grinder RPM the shot was pulled with. None has
+ * a native gateway field, so all three live in `annotations.extras` — the
+ * object DYE2's own edit-shot page reads and writes. NOT the workflow
+ * context: a recipe PUSHES these in `context.extras`, but on a saved shot
+ * DYE2 looks only at the annotations, so a value left in the context is
+ * invisible to it.
  *
- * Patched with the existing extras spread back in: core's
- * updateShotWorkflowContext merges at the CONTEXT level only, so handing it a
- * bare `extras` would replace the whole object and take the shot's tags with
- * it.
+ * No need to spread the existing extras back in here: unlike the workflow
+ * context (which core merges only one level deep), `annotations.extras`
+ * merges at FIELD level, so patching one key leaves favourite and tags alone
+ * — the same way editEnjoyment below relies on to write a rating and a heart
+ * without disturbing the rest.
  */
+const shotExtras = computed(() =>
+  NSXCore.dyeShotExtras(currentFullShot.value ?? reviewShot.value));
+
 async function editExtrasRef({ title, rows, idField, nameField }) {
   const options = [['', t('recipeDye.none')], ...rows.map((r) => [r.id, r.name || '—'])];
-  const id = await openChooser({ title, options, current: ctx.value.extras?.[idField] ?? '' });
+  const id = await openChooser({ title, options, current: shotExtras.value[idField] ?? '' });
   if (id == null) return;
   const row = rows.find((r) => r.id === id);
-  await setShotContext({
-    extras: { ...(ctx.value.extras ?? {}), [idField]: row?.id ?? null, [nameField]: row?.name ?? null },
-  });
+  await setShotAnnotations({ extras: { [idField]: row?.id ?? null, [nameField]: row?.name ?? null } });
 }
 const editBasket = () => editExtrasRef({
   title: t('recipeDye.basket'), rows: baskets.value, idField: 'basketId', nameField: 'basketName',
@@ -270,11 +277,24 @@ const editEquipment = () => editExtrasRef({
   title: t('recipeDye.equipment'), rows: equipment.value, idField: 'equipmentId', nameField: 'equipmentName',
 });
 
+async function editRpm() {
+  const v = await openNumberPad({
+    title: t('recipeDye.rpm'), unit: 'rpm', value: shotExtras.value.rpm ?? '',
+  });
+  if (v != null && v !== '') await setShotAnnotations({ extras: { rpm: Number(v) } });
+}
+
 // The name recorded ON THE SHOT is what's displayed — not a lookup of today's
 // library. That's the point of DYE2 denormalising it: a basket deleted since
 // does not blank out the shots pulled with it.
-const basketLabel = computed(() => ctx.value.extras?.basketName || null);
-const equipmentLabel = computed(() => ctx.value.extras?.equipmentName || null);
+const basketLabel = computed(() => shotExtras.value.basketName || null);
+const equipmentLabel = computed(() => shotExtras.value.equipmentName || null);
+// The field is always shown (with the integration on), but only editable on
+// a grinder whose speed adjusts — core's grinderHasVariableRpm. A shot that
+// already recorded an RPM stays editable regardless, so a value the record
+// holds is never stranded behind a disabled control.
+const canEditRpm = computed(() =>
+  NSXCore.grinderIdHasVariableRpm(ctx.value.grinderId) || shotExtras.value.rpm != null);
 
 // Only needed to populate the two pickers; the labels above read off the shot.
 onMounted(async () => {
@@ -333,7 +353,33 @@ async function editNotes() {
   if (v != null) await setShotAnnotations({ espressoNotes: v.trim() === '' ? null : v });
 }
 
-const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.value } });
+/**
+ * How much you enjoyed the shot: 0–5 stars, plus the optional heart that used
+ * to be this slot's whole content.
+ *
+ * They open together because they are one judgement made in one sitting, and
+ * because a bare heart could only ever say "good" — the stars say how good.
+ * The heart stays its own answer rather than a synonym for five stars: it
+ * marks the shot you want to find again.
+ *
+ * Stored as the API really stores them: `annotations.enjoyment` is 0–100, not
+ * 0–5 (core's starsToEnjoyment — writing the raw star count would read as a
+ * ~1% rating in every other skin), and the favourite flag rides in
+ * `annotations.extras`. Both in ONE patch, so a rating and a heart set in the
+ * same visit cost one request rather than two.
+ */
+const stars = computed(() => NSXCore.enjoymentToStars(ann.value.enjoyment));
+
+async function editEnjoyment() {
+  const res = await openRating({
+    title: t('dye.enjoyment'), value: stars.value, favorite: favorite.value,
+  });
+  if (res == null) return;
+  await setShotAnnotations({
+    enjoyment: NSXCore.starsToEnjoyment(res.rating),
+    extras: { favorite: res.favorite },
+  });
+}
 </script>
 
 <template>
@@ -390,9 +436,11 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
               <span class="dl">{{ t('dye.variety') }}</span>
               <span class="dv" :class="{ muted: !shotBean?.variety }">{{ dash(shotBean?.variety) }}</span>
             </div>
-            <!-- Tasting notes can run long, so they take the grid's full width and
-                 wrap when they must — but reserve no second line (.fit), so a
-                 short list sits at the height of the tiles beside it. -->
+            <!-- The roaster's own notes on the bag, not a verdict on this
+                 shot. Tasting notes can run long, so they take the grid's
+                 full width and wrap when they must — but reserve no second
+                 line (.fit), so a short list sits at the height of the tiles
+                 beside it. -->
             <div class="dye-tile static dye-span">
               <span class="dl">{{ t('dye.beanNotes') }}</span>
               <span class="dv fit" :class="{ muted: !shotBean?.notes }">{{ dash(shotBean?.notes) }}</span>
@@ -464,6 +512,13 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
               <span class="dl">{{ t('dye.grinder') }}</span>
               <span class="dv" :class="{ muted: !grinderLabel }">{{ dash(grinderLabel) }}</span>
             </button>
+            <button
+              v-if="skinSettings.dyeButton" class="dye-tile"
+              :disabled="!canEditRpm" @click="editRpm"
+            >
+              <span class="dl">{{ t('recipeDye.rpm') }}</span>
+              <span class="dv" :class="{ muted: shotExtras.rpm == null }">{{ dash(shotExtras.rpm) }}</span>
+            </button>
             <button class="dye-tile" @click="editGrind">
               <span class="dl">{{ t('dye.grind') }}</span>
               <span class="dv" :class="{ muted: grindSetting == null }">{{ dash(grindSetting) }}</span>
@@ -517,21 +572,37 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
                 {{ ctx.finalBeverageType ? t(`dye.beverage_${ctx.finalBeverageType}`, ctx.finalBeverageType) : '—' }}
               </span>
             </button>
-            <button class="dye-tile" @click="toggleFavorite">
-              <span class="dl">{{ t('dye.favorite') }}</span>
-              <span class="dv" :class="{ 'sw-accent': favorite, muted: !favorite }">{{ favorite ? '★' : '☆' }}</span>
+            <button class="dye-tile dye-enjoy-tile" @click="editEnjoyment">
+              <span class="dl">{{ t('dye.enjoyment') }}</span>
+              <!-- Top-right corner rather than in with the stars: the heart is
+                   a separate answer from the score, and sitting beside the
+                   stars it read as part of them (a sixth mark). In the corner
+                   it flags the whole card, which is what it means. -->
+              <span v-if="favorite" class="dye-fav-corner" aria-hidden="true">♥</span>
+              <span class="dv dye-enjoy" :class="{ muted: !stars }">
+                <StarRating v-if="stars" :model-value="stars" readonly :size="15" />
+                <span v-else>—</span>
+              </span>
+            </button>
+            <!-- The verdict on the shot — how it actually tasted, as opposed
+                 to the roaster's notes on the bag up in Beans. It sits BESIDE
+                 the rating rather than under both columns of the page, where
+                 it was stranded from everything else and wasted the space
+                 next to it. Two columns, so it fills the row the rating
+                 starts and still has room to wrap. -->
+            <button class="dye-tile dye-span2" @click="editNotes">
+              <span class="dl">{{ t('dye.notes') }}</span>
+              <!-- One line, cut with an ellipsis, exactly like every other
+                   tile: reserving a second line for it made this whole row
+                   taller than the one above. The width it gets from .dye-span2
+                   is what buys it a useful preview; the full note is there the
+                   moment you tap in. -->
+              <span class="dv" :class="{ muted: !notes }">{{ notes || t('dye.notesEmpty') }}</span>
             </button>
           </div>
         </section>
-      </div>
 
-      <!-- The verdict, under both columns: the one field that belongs to the
-           whole shot rather than to any part of it, and the only one that runs
-           long enough to want the full width. -->
-      <button class="dye-tile dye-note" @click="editNotes">
-        <span class="dl">{{ t('dye.notes') }}</span>
-        <span class="dv wrap" :class="{ muted: !notes }">{{ notes || t('dye.notesEmpty') }}</span>
-      </button>
+      </div>
     </div>
 
     <!-- The recipe wizard's own two screens. PageTransition renders them into

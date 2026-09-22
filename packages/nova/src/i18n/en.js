@@ -30,6 +30,7 @@ export default {
     tagHint: 'Type an entry, then Add — or tap one below',
   },
   rating: {
+    favorite: 'Favourite',
     rate: 'Rate',
     title: 'Rate recipe',
     unrated: 'Not rated',
@@ -319,6 +320,7 @@ export default {
   },
   // The DYE page (ShotDyePage.vue) — the shot's own record, in full.
   dye: {
+    enjoyment: 'Enjoyment',
     title: 'Describe your espresso',
     open: 'DYE',
     backToGraph: 'Graph',
@@ -541,6 +543,9 @@ export default {
     newTitle: 'New grinder', model: 'Model', burrs: 'Burrs', burrSize: 'Burr size',
     type: 'Burr type', conical: 'Conical', flat: 'Flat',
     adjustment: 'Adjustment', setting: 'Setting type', stepless: 'Stepless', positions: 'Positions',
+    speed: 'Speed', variableRpm: 'Variable RPM',
+    variableRpmSub: 'Only a few grinders let you change the motor speed',
+    rpmSmallStep: 'Small RPM step', rpmBigStep: 'Big RPM step',
     smallStep: 'Small step', bigStep: 'Big step', values: 'Preset values', valuesSub: 'Comma-separated',
     backfillTitle: 'Use this grinder in existing recipes?',
     // Plural forms (one | other), selected by the third argument at the call
@@ -554,10 +559,9 @@ export default {
     // The button on the coffee page, left of Rate.
     button: 'DYE settings',
     title: 'DYE settings',
-    basket: 'Basket', equipment: 'Equipment',
+    basket: 'Basket', equipment: 'Equipment', rpm: 'RPM',
     barista: 'Barista', drinker: 'Drinker', beverage: 'Beverage',
     none: '— None —',
-    pinned: 'Pinned',
   },
   basketEditor: {
     newTitle: 'New basket', name: 'Name', size: 'Size', diameter: 'Diameter', notes: 'Notes',

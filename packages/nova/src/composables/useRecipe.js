@@ -87,6 +87,9 @@ export const recipe = reactive({
   dye: {
     basketId: null, basketName: null,
     equipmentId: null, equipmentName: null,
+    // Only for grinders whose speed adjusts at all — see the RPM tile's guard
+    // in RecipeDyeModal (NSXCore.grinderHasVariableRpm).
+    rpm: null,
     baristaName: null, drinkerName: null, finalBeverageType: null,
   },
   roastDate: null,   // ISO date string, or null = "not set". Derived from the batch,

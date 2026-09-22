@@ -9,36 +9,40 @@
  * ask one question at different times — what IS this coffee (here) versus
  * what WAS that shot (there).
  *
- * Most of it is READ-ONLY (.dye-off), for two different reasons:
+ * Most of it is READ-ONLY, and greys uniformly: one treatment meaning "not
+ * yours to act on here", whatever the underlying reason. Those reasons do
+ * differ — the bean, the dials' dose and yield, the grinder, the grind and
+ * the profile are all set elsewhere in the app; yield, time, TDS and the
+ * analysis strip wait on a shot that hasn't happened; RPM doesn't apply to a
+ * fixed-speed grinder — but they are not a distinction anybody can read off
+ * the screen, so the page does not try to draw one. The recipe's own targets
+ * still show through wherever it has them (dose, target yield, their ratio);
+ * only what a shot alone can answer is a dash.
  *
- *  - Extraction and analysis describe a pull that hasn't happened. The
- *    recipe's own targets show through where it has them (dose, target yield,
- *    the ratio between them); everything only a shot can answer is a dash.
- *  - The bean, the grinder, the grind, the profile and its temperature are
- *    all editable elsewhere, and the coffee page's dials and title bar own
- *    them. Showing them here keeps the mirror complete without opening a
- *    second way to change them that would have to be kept in step.
+ * Showing the read-only tiles at all is what keeps the mirror complete,
+ * without opening a second way to change them that would have to be kept in
+ * step with the coffee page.
  *
  * What this page actually edits is the DYE fields proper — basket, equipment,
- * barista, drinker, beverage — plus the pin. Those write to the RECIPE and
- * push, so they take effect on the next shot, and only the next one: a shot
+ * RPM, barista, drinker, beverage. Those write to the RECIPE and push, so
+ * they take effect on the next shot, and only the next one: a shot
  * already pulled keeps what it recorded, and is corrected on the shot's own
  * DYE page. Every setter used here pushes on its own, so there is no save
  * button and no separate persist step.
  *
- * The shot page's full-width note slot has no counterpart here and is left
- * out rather than filled with something else: a recipe has no verdict on
- * itself, and the tasting notes that DO exist belong to the bean (shown in
- * the Beans section, edited in the Diary).
+ * The shot's enjoyment and its note have no counterpart on a recipe — there
+ * is no cup to score and no verdict to write — so both are shown greyed in
+ * the slots the shot page puts them in, rather than dropped or filled with a
+ * substitute. Neither is the bean's tasting notes, which are the roaster's
+ * and live up in the Beans section.
  */
 import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
-  recipe, recipes, roastAge,
-  setRecipeDye, dyeNamesUsed, beanForRecipe, togglePinRecipe,
+  recipe, roastAge, setRecipeDye, dyeNamesUsed, beanForRecipe,
 } from '../composables/useRecipe.js';
 import { baskets, equipment, grinders, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
-import { openTextField, openChooser } from '../composables/useModals.js';
+import { openTextField, openChooser, openNumberPad } from '../composables/useModals.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
 // The same four section icons the shot page uses — the mirror is the point.
@@ -111,6 +115,20 @@ const pickEquipment = () => pickFromLibrary({
   title: t('recipeDye.equipment'), rows: equipment.value, idField: 'equipmentId', nameField: 'equipmentName',
 });
 
+// Most grinders run at one speed. The field is always SHOWN — so the layout
+// doesn't shift as you change grinder, and so it's clear the skin records
+// this at all — but it only takes a value on a grinder whose speed adjusts
+// (core's grinderHasVariableRpm, which reads the rpm steps as the flag).
+// A recipe already carrying an RPM stays editable regardless, rather than
+// stranding a value it holds behind a disabled control.
+const canEditRpm = computed(() =>
+  NSXCore.grinderIdHasVariableRpm(recipe.grinderId) || dye.value.rpm != null);
+
+async function editRpm() {
+  const v = await openNumberPad({ title: t('recipeDye.rpm'), unit: 'rpm', value: dye.value.rpm ?? '' });
+  if (v != null) await setRecipeDye({ rpm: v === '' ? null : Number(v) });
+}
+
 /* ── People ─────────────────────────────────────────────────────────────── */
 
 async function editName(field, label) {
@@ -127,11 +145,6 @@ async function pickBeverage() {
   if (v != null) await setRecipeDye({ finalBeverageType: v });
 }
 
-// The shot page's ★ marks a favourite shot; a recipe's nearest equivalent is
-// the pin that sorts it to the top of the browser, so the slot keeps meaning.
-const entry = computed(() => recipes.value.find((r) => r.id === recipe.id) ?? null);
-const pinned = computed(() => entry.value?.pinned === true);
-const togglePin = () => (entry.value ? togglePinRecipe(entry.value) : null);
 
 </script>
 
@@ -186,6 +199,8 @@ const togglePin = () => (entry.value ? togglePinRecipe(entry.value) : null);
               <span class="dl">{{ t('dye.variety') }}</span>
               <span class="dv" :class="{ muted: !bean?.variety }">{{ dash(bean?.variety) }}</span>
             </div>
+            <!-- The roaster's own notes on the bag, not a verdict on a shot.
+                 Full width of this section: they run long. -->
             <div class="dye-tile static dye-span">
               <span class="dl">{{ t('dye.beanNotes') }}</span>
               <span class="dv fit" :class="{ muted: !bean?.notes }">{{ dash(bean?.notes) }}</span>
@@ -267,6 +282,13 @@ const togglePin = () => (entry.value ? togglePinRecipe(entry.value) : null);
               <span class="dl">{{ t('dye.grinder') }}</span>
               <span class="dv" :class="{ muted: !grinderLabel }">{{ dash(grinderLabel) }}</span>
             </div>
+            <!-- Greys to the same 0.55 as every other tile you can't act on
+                 here (see .dye-off in app.css); :disabled rather than the
+                 class so it also drops out of the focus order. -->
+            <button class="dye-tile" :disabled="!canEditRpm" @click="editRpm">
+              <span class="dl">{{ t('recipeDye.rpm') }}</span>
+              <span class="dv" :class="{ muted: dye.rpm == null }">{{ dash(dye.rpm) }}</span>
+            </button>
             <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.grind') }}</span>
               <span class="dv" :class="{ muted: recipe.grinderSetting === '—' }">{{ dash(recipe.grinderSetting) }}</span>
@@ -312,15 +334,30 @@ const togglePin = () => (entry.value ? togglePinRecipe(entry.value) : null);
                 {{ dye.finalBeverageType ? t(`dye.beverage_${dye.finalBeverageType}`, dye.finalBeverageType) : '—' }}
               </span>
             </button>
-            <!-- The shot page's ★ marks a favourite shot; a recipe's nearest
-                 equivalent is the pin. Needs a saved recipe — a composed but
-                 unsaved one has no library entry to carry the flag. -->
-            <button class="dye-tile" :disabled="!entry" @click="togglePin">
-              <span class="dl">{{ t('recipeDye.pinned') }}</span>
-              <span class="dv" :class="{ 'sw-accent': pinned, muted: !pinned }">{{ pinned ? '★' : '☆' }}</span>
-            </button>
+            <!-- Enjoyment belongs to a SHOT — it scores one pull you drank,
+                 which is not a thing a recipe can be. (A recipe has its own
+                 rating, but that is the Rate button on the coffee page and a
+                 different judgement: how the recipe goes, not how this cup
+                 went.) Shown greyed rather than swapped for either of those:
+                 the mirror only works if the slot holds the field the shot
+                 page holds, and a different control wearing its place would
+                 be read as the same thing. -->
+            <div class="dye-tile static dye-off">
+              <span class="dl">{{ t('dye.enjoyment') }}</span>
+              <span class="dv muted">—</span>
+            </div>
+            <!-- The shot's own note — how that cup tasted. A recipe has no
+                 verdict on itself, so the slot is greyed rather than dropped:
+                 the two pages have to hold the same fields in the same places
+                 for the mirror to be worth anything. Not to be confused with
+                 the bean notes up in Beans, which are the roaster's. -->
+            <div class="dye-tile static dye-span2 dye-off">
+              <span class="dl">{{ t('dye.notes') }}</span>
+              <span class="dv muted">—</span>
+            </div>
           </div>
         </section>
+
       </div>
     </div>
   </div>
