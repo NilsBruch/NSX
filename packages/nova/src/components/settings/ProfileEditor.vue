@@ -13,7 +13,7 @@
  * .normalizeProfileLimits, .buildProfileFromDraft, .makeDefaultFrame) — this
  * file only holds UI state and dispatches to it.
  */
-import { computed, reactive, ref } from 'vue';
+import { computed, provide, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { openTextField, openNumberPad, openConfirm } from '../../composables/useModals.js';
 import { frameName } from '../../composables/useProfileDisplay.js';
@@ -35,6 +35,14 @@ const props = defineProps({
 const isFork = computed(() => props.record?.isDefault === true);
 const emit = defineEmits(['close', 'saved']);
 const { t } = useI18n();
+
+/**
+ * Every SettingSlider under this editor becomes a tap-to-type tile on a
+ * phone — see SettingSlider's own note. Provided once here rather than bound
+ * on each of the dozen call sites below: it is a property of the SCREEN (a
+ * drag track has no resolution at phone width), not of any one field.
+ */
+provide('sliderCard', isPhone);
 const { NSXCore } = window;
 
 const sourceProfile = props.record?.profile ?? null;

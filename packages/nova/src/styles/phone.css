@@ -434,6 +434,38 @@ body[data-phone="true"] .sort-btn.icon-only { width: 44px; height: 44px; }
    top-to-bottom-again (Temperature, Max, Goal, Exit). */
 body[data-phone="true"] .pe-groups { flex-direction: column; }
 
+/* ...and each group becomes a two-up grid of SettingSlider's cards (the
+   editor provides `sliderCard` for phones — see ProfileEditor). A step's
+   numbers are short — a temperature, a time, a cap — so two fit across a
+   phone and a group reads as a block instead of a column you scroll past.
+   Everything that ISN'T a number keeps the full width: the group's label, the
+   pump/sensor/transition switchers, the exit-type buttons. */
+/* No box around a group, the way RecipeDetail's phone layout has none: a
+   header, then the controls under it. Nested cards (tiles inside a tile
+   inside the page) is a tablet's way of dividing a wide pane; down a phone's
+   single column the outer fill only eats the width the tiles need and makes
+   every group look like a thing you could tap. */
+body[data-phone="true"] .pe-group {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-content: start;
+  background: none; padding: 0;
+}
+/* Which puts the group's label on the page rather than inside a card, so it
+   needs the spacing .phone-group-label has (this IS the same idiom). */
+body[data-phone="true"] .pe-group > .pd-panel-label,
+/* The Exit group wraps its label with a switch, so the row is what carries
+   the spacing there. */
+body[data-phone="true"] .pe-group > .pe-group-header { margin: 6px 2px 0; }
+/* ...and the tiles take the fill the group gave up, so they read as the cards
+   on the page that they now are. */
+body[data-phone="true"] .setting-row.slider-card { background: var(--card-bg); }
+body[data-phone="true"] .pe-group > .pd-panel-label,
+body[data-phone="true"] .pe-group > .pe-group-header,
+body[data-phone="true"] .pe-group > .pe-seg-row,
+body[data-phone="true"] .pe-group > .pe-exit-grid { grid-column: 1 / -1; }
+/* The switcher pills sized themselves to a tablet's tile (168px fixed); across
+   a full phone row they should simply share it. */
+body[data-phone="true"] .pe-group .seg.pe-seg-sm { flex: 1; width: auto; }
+
 /* The Limits tab's [name | track | readout] grid assumes a label short enough
    to sit on one line (.pe-limits .slider-row .sr-name forces nowrap, to undo
    .pe-group's 62px WRAPPING column) — "Track volume starting with" at phone

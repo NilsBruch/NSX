@@ -5,8 +5,18 @@
  * per pixel), or tap the value on the right to type an exact figure via the
  * number pad. Same fill-floor trick as VerticalSlider — the lowest selectable
  * value still shows a sliver rather than an empty track.
+ *
+ * CARD MODE drops the track entirely and renders a tile you tap to type: the
+ * label over the value, sized to sit two-up in a grid. A screen turns it on
+ * for all its sliders at once by providing `sliderCard` (ProfileEditor does,
+ * for phones), rather than each call site passing a prop — every one of them
+ * already wires @edit for exactly this, so nothing else has to change.
+ *
+ * It exists because a drag track needs width to have any resolution, and a
+ * phone hasn't got it: at ~150px a 0–30s track moves a second every 5px,
+ * which is not a control, it's a way to lose the value you had.
  */
-import { computed, ref } from 'vue';
+import { computed, inject, ref } from 'vue';
 import { openAlert } from '../../composables/useModals.js';
 
 const props = defineProps({
@@ -50,6 +60,12 @@ const props = defineProps({
 // caller renders the number itself, so without it the readout would sit still
 // while the bar moves under the finger.
 const emit = defineEmits(['change', 'edit', 'preview']);
+
+// Provided per screen (see the note above), never per slider. A `bare` caller
+// has neither label nor value of its own to build a card out of, so it keeps
+// the track whatever the screen asks for.
+const cardMode = inject('sliderCard', null);
+const asCard = computed(() => Boolean(cardMode?.value) && !props.bare);
 
 const track = ref(null);
 const dragValue = ref(null); // non-null only while a drag is in flight
@@ -127,7 +143,18 @@ function showHint() {
 </script>
 
 <template>
-  <div class="setting-row slider-row" :class="{ bare }">
+  <!-- A tile, not a row: the whole thing opens the number pad. The hint stays
+       a button of its own beside it (a <button> cannot nest), the same split
+       every other two-action row in the skin uses. -->
+  <div v-if="asCard" class="setting-row slider-card">
+    <button class="sc-main" @click="emit('edit')">
+      <span class="sc-label">{{ label }}</span>
+      <span class="sc-value">{{ display }}</span>
+    </button>
+    <button v-if="hint" type="button" class="sr-info-btn" :aria-label="`${label} info`" @click="showHint">ⓘ</button>
+  </div>
+
+  <div v-else class="setting-row slider-row" :class="{ bare }">
     <span v-if="!bare" class="sr-name">
       {{ label }}
       <button v-if="hint" type="button" class="sr-info-btn" :aria-label="`${label} info`" @click="showHint">ⓘ</button>

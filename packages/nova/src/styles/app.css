@@ -1692,6 +1692,32 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    (Time, Volume, Goal) still sit on one line. */
 .pe-group .slider-row .sr-name { flex: 0 0 62px; width: 62px; max-width: none; white-space: normal; line-height: 1.2; }
 
+/* SettingSlider's card rendering (see its own note): a tile you tap to type,
+   with no track at all. Lives here rather than in phone.css because it is the
+   component's own second shape — which screen asks for it is phone.css's
+   business. */
+/* .setting-row.slider-card, and declared AFTER `.pe-group .setting-row` above:
+   equal specificity, so source order is what lets the card drop that rule's
+   padding onto its own inner button, where the whole tile becomes tappable. */
+.setting-row.slider-card { align-items: stretch; gap: 6px; padding: 0; background: var(--card-hi); }
+.sc-main {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  background: none; border: none; padding: 10px 12px;
+  font: inherit; color: var(--text); text-align: left;
+}
+.sc-label {
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* One line, cut — "Off" and "92.0 °C" have to measure the same so a row of
+   tiles keeps one height whatever each is set to. */
+.sc-value {
+  font-size: var(--fs-base); font-weight: 700; line-height: 1.3; min-height: 1.3em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.slider-card .sr-info-btn { flex: none; align-self: flex-start; padding: 8px 10px 0 0; }
+
 .pe-exit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .pe-exit-grid button {
   height: 38px; border: none; border-radius: var(--r-sm); background: var(--card-hi); color: var(--muted);
