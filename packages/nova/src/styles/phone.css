@@ -160,40 +160,65 @@ body[data-phone="true"] {
 .phone-load-more { background: var(--card-bg); border: none; border-radius: var(--r-md); padding: 12px; color: var(--accent); font-weight: 600; }
 
 /* ═══ 4. Recipes (+ RecipeDetail) ═══════════════════════════════════════════
-   A row that needs a SEPARATE pencil action (RecipesTab) can't be one plain
-   button — a <button> can't contain a <button> — so .phone-list-row there is
-   the outer container (unchanged, still gets its background/radius/shadow
-   from section 3/9) and splits into .phone-row-main (the press-and-hold
-   target, sized to fill the row) plus .phone-row-edit (the pencil), the same
-   two-button split the tablet's .row-main/.row-edit give a bean/profile row.
-   Rows that only need a single tap (every other .phone-list-row in the app)
-   are untouched — they stay a bare <button class="phone-list-row">. */
-.phone-row-main {
-  flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px;
-  background: none; border: none; color: inherit; font: inherit; text-align: left; padding: 0;
+   RecipesTab's rows are plain .phone-list-row buttons (section 3). They were
+   briefly split into a press-target plus a Load button; loading now happens
+   by opening the recipe, so the row is a single button again and needs
+   nothing of its own here beyond the two rules below. */
+/* The stars sit at the BOTTOM of the row rather than centred against a
+   now-multi-line identity stack: that puts them beside the facts line
+   (dose/grind/temp) they belong with instead of beside the coffee's name.
+   Small on purpose — a glance-only readout in a dense list, not the
+   interactive control it is on RecipeDetail's own rating row. */
+.phone-list-row .star-rating { flex: none; align-self: flex-end; }
+.phone-list-row.current {
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
-/* The star rating sits at the row's top-right rather than centred against the
-   whole (now multi-line) identity block — flex-start above lines both boxes'
-   TOP edges up, so the stars land level with the roaster/bean line instead of
-   floating mid-height next to a stack of four. Small on purpose: this is a
-   glance-only readout in a dense list, not the interactive control it is on
-   RecipeDetail's own rating row. */
-.phone-row-main .star-rating { flex: none; margin-top: 2px; }
-.phone-row-edit {
-  flex: none; display: flex; align-items: center; justify-content: center;
-  /* 44px touch target, same reasoning as .phone-icon-btn above. */
-  width: 44px; height: 44px; border-radius: var(--r-sm);
-  background: none; border: none; color: var(--muted);
+/* RecipeDetail's fields: half-width tiles, two to a row, grouped by the
+   question they answer. A phone column of full-width label-left/value-right
+   rows made you read every label to find one field; at half width two fit
+   side by side and a group reads as one block. The label goes ABOVE the
+   value rather than opposite it — half a phone's width has no room for both
+   on one line, which is the same reason the DYE tiles stack (app.css). */
+.phone-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.phone-group-label {
+  /* block, not inline: these sit in .phone-main's normal block flow now (not
+     as flex items of .overlay-full), and vertical margins on an inline box
+     are ignored. */
+  display: block;
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); margin: 14px 2px 6px;
 }
-/* RecipesTab's rows are the one .phone-list-row that splits into
-   .phone-row-main + .phone-row-edit — and now that the identity stack can
-   run to four lines, .phone-list-row's own align-items: center (the right
-   default for every single-line row elsewhere) left the pencil floating at
-   the middle of a tall card instead of level with the first line, the way
-   the star badge already sits (.phone-row-main itself is flex-start — see
-   above). This mirrors that at the row level. */
-.phone-list-row-split { align-items: flex-start; }
-.phone-row-edit svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.phone-group-label:first-of-type { margin-top: 4px; }
+.phone-tile {
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  background: var(--card-bg); border: none; border-radius: var(--r-md);
+  padding: 12px 14px; text-align: left; color: var(--text); font: inherit;
+}
+.phone-tile .tl {
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+}
+/* One line, cut with an ellipsis — a profile title ("D-Flow / default") is
+   longer than half a phone, and wrapping it would make one tile taller than
+   its neighbour. min-height keeps a tile whose value is a switch or a star
+   row the same height as one whose value is a word. */
+.phone-tile .tv {
+  font-size: var(--fs-sm); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.4; min-height: 1.4em; display: flex; align-items: center;
+}
+.phone-tile-wide { grid-column: 1 / -1; }
+/* The selected profile's curve, above the Brew group. Fixed height so the
+   page doesn't jump as you step between recipes with different profiles; the
+   SVG scales into it (compactMargins makes it fill rather than letterbox). */
+.phone-profile-plot {
+  background: var(--card-bg); border-radius: var(--r-md); overflow: hidden;
+  padding: 6px; margin-bottom: 8px;
+}
+/* The renderer emits width="100%" and a viewBox but no height, so the height
+   has to come from here — and compactMargins sets preserveAspectRatio="none",
+   which means it stretches to whatever it's given rather than letterboxing. */
+.phone-profile-plot svg { display: block; width: 100%; height: 108px; }
 
 /* RecipeDetail's value rows: label left (.rmeta, already flex:1 from section
    3), current value + chevron right — the settings-row idiom (.sr-value/
@@ -212,7 +237,9 @@ body[data-phone="true"] {
 /* Two rows: Load — the page's main action — across the full width, then Pin
    and Delete side by side. Three in one row left each too narrow for its
    label on a phone. */
-.phone-detail-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 4px; }
+/* Scrolls with the recipe rather than pinned to the viewport — the margin is
+   what separates it from the last group of tiles above it. */
+.phone-detail-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 .phone-detail-footer .btn { height: 52px; justify-content: center; white-space: nowrap; }
 .phone-detail-footer .btn.accent { grid-column: 1 / -1; }
 
@@ -274,10 +301,6 @@ body[data-phone="true"] {
 /* ═══ Press feedback (phone) ════════════════════════════════════════════════
    The phone shell has its own control classes, so app.css's press block can't
    reach them — same two groups, same values. */
-/* .phone-row-edit is deliberately NOT here, matching the tablet's own
-   .row-edit (app.css): it sits inside a .phone-list-row that already gets
-   :active feedback below, and adding a second transform on the nested button
-   would compound with the row's own scale instead of reading as one press. */
 .phone-back,
 .phone-icon-btn,
 .phone-filter-chip,

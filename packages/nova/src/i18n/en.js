@@ -57,6 +57,8 @@ export default {
     machine: 'Machine',
     recipeLoaded: '{name} loaded',
     loaded: 'Loaded',
+    grpCoffee: 'Coffee', grpGrind: 'Grind', grpBrew: 'Brew',
+    loaded: 'Loaded',
   },
   status: {
     ready: 'Ready',

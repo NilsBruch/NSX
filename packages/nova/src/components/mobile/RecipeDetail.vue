@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Phone recipe detail/edit — opened by RecipesTab's pencil button for ANY
+ * Phone recipe detail/edit — opened by tapping a row in RecipesTab, for ANY
  * library entry, not just the one loaded on the machine. That is the whole
  * complication this file exists to handle: every value/edit function below
  * has to work whether or not `entry` is the loaded recipe.
@@ -25,13 +25,13 @@
  */
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { grinders, formatGrinderLabel, singleGrinder, recipeIdentityParts, formatShortDate } from '../../composables/useCore.js';
+import { grinders, profiles, formatGrinderLabel, singleGrinder, recipeIdentityParts, formatShortDate } from '../../composables/useCore.js';
 import {
-  recipe, recipes, pushRecipe, selectRecipe, deleteRecipe, togglePinRecipe, patchRecipeEntry,
+  recipe, recipes, pushRecipe, deleteRecipe, togglePinRecipe, patchRecipeEntry,
   setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, roastAge, beanForRecipe,
 } from '../../composables/useRecipe.js';
 import { openNumberPad, openRating, openChooser, openConfirm } from '../../composables/useModals.js';
-import { showToast } from '../../composables/useToast.js';
+import { skinSettings } from '../../composables/useSettings.js';
 import BatchPicker from '../BatchPicker.vue';
 import BeanChooser from '../BeanChooser.vue';
 import ProfilePicker from '../ProfilePicker.vue';
@@ -157,10 +157,35 @@ async function onProfileSelected(profile) {
   showProfilePicker.value = false;
 }
 
-async function loadOntoMachine() {
-  await selectRecipe(libraryEntry.value);
-  showToast(t('phone.recipeLoaded', { name: titleParts.value.join(' • ') }));
-}
+/**
+ * The selected profile's own curve, drawn above the Brew group.
+ *
+ * A recipe stores only a REFERENCE to a library profile (id, falling back to
+ * title — see useRecipe's selectedProfileId note), so resolve it the same way
+ * buildGatewayPayload does before handing it to core's renderer. The renderer
+ * is the one ProfilePicker's detail pane uses, with the same options: no
+ * legend, no ticks, no temperature line, margins collapsed so it fills the
+ * card rather than letterboxing.
+ *
+ * Reading skinSettings.theme here is deliberate — it makes the SVG re-render
+ * when the theme changes, since the renderer paints its own background.
+ */
+const selectedProfile = computed(() => {
+  const id = source.value.selectedProfileId;
+  const title = String(source.value.profileTitle || '').trim();
+  return profiles.value.find((p) => p.id === id)
+    ?? profiles.value.find((p) => String(p.profile?.title || '').trim() === title)
+    ?? null;
+});
+const profileSvg = computed(() => (selectedProfile.value
+  ? window.NSXCore.renderProfileSpark(selectedProfile.value.profile, {
+    theme: skinSettings.theme === 'light' ? 'light' : 'dark',
+    showLegend: false, showXTicks: false, showYTicks: false, showStageLabels: false,
+    showTempLine: false, compactMargins: true, pressureMax: 12,
+    dose: Number(source.value.targetDoseWeight) || 18,
+  })
+  : ''));
+
 async function pin() {
   await togglePinRecipe(libraryEntry.value);
 }
@@ -197,58 +222,103 @@ async function removeThis() {
       <span v-for="(part, i) in titleParts" :key="i" :class="i < 2 ? 'phone-identity-line' : 'rsub'">{{ part }}</span>
     </span>
 
-    <div class="phone-list">
-      <button class="phone-list-row" @click="editDose">
-        <span class="rmeta">{{ t('espresso.dose') }}</span>
-        <span class="phone-row-value">{{ (Number(source.targetDoseWeight) || 0).toFixed(1) }} g<span class="chev">›</span></span>
-      </button>
-      <button class="phone-list-row" @click="editGrind">
-        <span class="rmeta">{{ t('espresso.grindSize') }}</span>
-        <span class="phone-row-value">{{ source.grinderSetting }}<span class="chev">›</span></span>
-      </button>
-      <button class="phone-list-row" @click="editYield">
-        <span class="rmeta">{{ t('espresso.targetYield') }}</span>
-        <span class="phone-row-value">{{ (Number(source.targetYield) || 0).toFixed(1) }} g<span class="chev">›</span></span>
-      </button>
-      <div class="phone-list-row">
-        <span class="rmeta">{{ t('espresso.stopAtWeight') }}</span>
-        <button class="switch" :class="{ on: source.stopAtWeight }" role="switch" :aria-checked="!!source.stopAtWeight" @click="toggleStopAtWeight"></button>
+    <!-- The fields scroll; the back row, the title and the action footer
+         don't. .overlay-full is a COLUMN FLEX container, so without this
+         every child simply shrank to fit once the content outgrew the screen
+         — which is what collapsed the profile plot to nothing rather than
+         pushing anything off the bottom. -->
+    <div class="phone-main">
+      <!-- Half-width tiles in a two-column grid, grouped by the question they
+           answer: which coffee, how it's ground, how it's brewed. One long
+           undifferentiated column of full-width rows made you read every label
+           to find one field; at half width two fit side by side and a group is
+           one glance. Label over value (not label-left/value-right) because a
+           half-width row has no room for both on one line. -->
+      <span class="phone-group-label">{{ t('phone.grpCoffee') }}</span>
+      <div class="phone-grid">
+        <!-- Bean and Batch are loaded-recipe only — see the file header: they
+             resolve a real batch record, and patching them on a library entry
+             would look like it worked and silently revert on next load. -->
+        <button v-if="isLoaded" class="phone-tile" @click="showBeanChooser = true">
+          <span class="tl">{{ t('espresso.bean') }}</span>
+          <span class="tv">{{ source.coffeeName }}</span>
+        </button>
+        <button v-if="isLoaded" class="phone-tile" @click="recipeBean && (showBatchPicker = true)">
+          <span class="tl">{{ t('espresso.roasted') }}</span>
+          <span class="tv">{{ roastLabel }}</span>
+        </button>
+        <button class="phone-tile" @click="editDose">
+          <span class="tl">{{ t('espresso.dose') }}</span>
+          <span class="tv">{{ (Number(source.targetDoseWeight) || 0).toFixed(1) }} g</span>
+        </button>
       </div>
-      <button class="phone-list-row" @click="editTemp">
-        <span class="rmeta">{{ t('espresso.stopAtTemp') }}</span>
-        <span class="phone-row-value">{{ fmtTemp(source.groupTemp) }}<span class="chev">›</span></span>
-      </button>
-      <button v-if="!singleGrinder" class="phone-list-row" @click="pickGrinder">
-        <span class="rmeta">{{ t('espresso.grinder') }}</span>
-        <span class="phone-row-value">{{ source.grinderModel }}<span class="chev">›</span></span>
-      </button>
-      <button class="phone-list-row" @click="showProfilePicker = true">
-        <span class="rmeta">{{ t('espresso.profile') }}</span>
-        <span class="phone-row-value">{{ source.profileTitle }}<span class="chev">›</span></span>
-      </button>
 
-      <!-- Roast date / bean: loaded-recipe only — see the file header. -->
-      <button v-if="isLoaded" class="phone-list-row" @click="recipeBean && (showBatchPicker = true)">
-        <span class="rmeta">{{ t('espresso.roasted') }}</span>
-        <span class="phone-row-value">{{ roastLabel }}<span class="chev">›</span></span>
-      </button>
-      <button v-if="isLoaded" class="phone-list-row" @click="showBeanChooser = true">
-        <span class="rmeta">{{ t('espresso.bean') }}</span>
-        <span class="phone-row-value">{{ source.coffeeName }}<span class="chev">›</span></span>
-      </button>
+      <span class="phone-group-label">{{ t('phone.grpGrind') }}</span>
+      <div class="phone-grid">
+        <button v-if="!singleGrinder" class="phone-tile" @click="pickGrinder">
+          <span class="tl">{{ t('espresso.grinder') }}</span>
+          <span class="tv">{{ source.grinderModel }}</span>
+        </button>
+        <button class="phone-tile" @click="editGrind">
+          <span class="tl">{{ t('espresso.grindSize') }}</span>
+          <span class="tv">{{ source.grinderSetting }}</span>
+        </button>
+      </div>
 
-      <button class="phone-list-row" @click="openRateRow">
-        <span class="rmeta">{{ t('rating.rate') }}</span>
-        <StarRating v-if="Number(source.rating) > 0" :model-value="Number(source.rating)" readonly :size="16" />
-        <span v-else class="phone-row-value">{{ t('rating.unrated') }}<span class="chev">›</span></span>
-      </button>
+      <span class="phone-group-label">{{ t('phone.grpBrew') }}</span>
+      <!-- The profile's own curve, above the group it belongs to: the title
+           alone ("D-Flow / default") says nothing about what the shot will do,
+           and this is the one field here you can't judge from its value. -->
+      <div v-if="profileSvg" class="phone-profile-plot" v-html="profileSvg"></div>
+      <div class="phone-grid">
+        <!-- Two columns: "D-Flow / default" is the longest value on the page
+             and the one that actually tells two recipes for the same bean
+             apart, so a half tile ellipsised away the useful half of it. -->
+        <button class="phone-tile phone-tile-wide" @click="showProfilePicker = true">
+          <span class="tl">{{ t('espresso.profile') }}</span>
+          <span class="tv">{{ source.profileTitle }}</span>
+        </button>
+        <button class="phone-tile" @click="editYield">
+          <span class="tl">{{ t('espresso.targetYield') }}</span>
+          <span class="tv">{{ (Number(source.targetYield) || 0).toFixed(1) }} g</span>
+        </button>
+        <button class="phone-tile" @click="editTemp">
+          <span class="tl">{{ t('espresso.stopAtTemp') }}</span>
+          <span class="tv">{{ fmtTemp(source.groupTemp) }}</span>
+        </button>
+        <!-- A tile like the rest, but its value IS the control. -->
+        <div class="phone-tile">
+          <span class="tl">{{ t('espresso.stopAtWeight') }}</span>
+          <span class="tv">
+            <button
+              class="switch sm" :class="{ on: source.stopAtWeight }" role="switch"
+              :aria-checked="!!source.stopAtWeight" @click="toggleStopAtWeight"
+            ></button>
+          </span>
+        </div>
+        <!-- Rate finishes the row the toggle starts. It was a full-width
+             tile in a grid of its own below, which had no gap above it and so
+             read as if it had come loose from the group. -->
+        <button class="phone-tile" @click="openRateRow">
+          <span class="tl">{{ t('rating.rate') }}</span>
+          <span class="tv">
+            <StarRating v-if="Number(source.rating) > 0" :model-value="Number(source.rating)" readonly :size="16" />
+            <template v-else>{{ t('rating.unrated') }}</template>
+          </span>
+        </button>
+      </div>
+
+      <!-- Inside the scroll, at the very bottom of the recipe: these two act
+           on the recipe as a whole rather than on any field, and a fixed bar
+           kept Delete on screen the entire time you were editing. You reach
+           them by finishing the page, which is the right amount of effort for
+           the only destructive thing here. -->
+      <div class="phone-detail-footer">
+        <button class="btn" @click="pin">{{ libraryEntry.pinned ? t('diary.unpin') : t('diary.pin') }}</button>
+        <button class="btn danger" @click="removeThis">{{ t('common.delete') }}</button>
+      </div>
     </div>
 
-    <div class="phone-detail-footer">
-      <button class="btn accent" @click="loadOntoMachine">{{ t('diary.loadRecipe') }}</button>
-      <button class="btn" @click="pin">{{ libraryEntry.pinned ? t('diary.unpin') : t('diary.pin') }}</button>
-      <button class="btn danger" @click="removeThis">{{ t('common.delete') }}</button>
-    </div>
 
     <PageTransition>
       <BatchPicker

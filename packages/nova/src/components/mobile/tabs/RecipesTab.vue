@@ -6,12 +6,21 @@
  * "load this" far more than it is browsed roaster-by-roaster, so recipes get
  * top billing instead of being a step buried in Diary.
  *
- * Tap loads the recipe onto the machine immediately (selectRecipe) — the
- * phone's decision that a recipe row IS the load action, not a preview of
- * one. Press-and-hold offers Load / Pin / Delete, same as the tablet's
- * openGroupMenu. The pencil button opens RecipeDetail.vue, which can edit
- * dose/grind/yield/temp/grinder/rating (and roast date/bean once this entry
- * IS the loaded one) without loading it first.
+ * Tap loads the recipe AND opens RecipeDetail.vue: entering a recipe is what
+ * chooses it, so there is no separate Load button to press afterwards. That
+ * also settles RecipeDetail's awkward half-state — roast date and bean can
+ * only be edited on the LOADED recipe (see the file header there), so a
+ * detail screen you could open without loading was one where two of its
+ * fields silently went missing.
+ *
+ * `selectRecipe` assigns recipe.id synchronously before it awaits anything,
+ * so the detail below renders already knowing it is the loaded one — no
+ * half-second where those two fields are absent and then pop in.
+ *
+ * The loaded recipe stays marked in the list (.current) after you come back.
+ * Press-and-hold still offers Load / Pin / Delete — Load is the one way to
+ * put a recipe on the machine WITHOUT leaving the list, which is why it's
+ * still there with no button of its own.
  *
  * MobileShell.vue keeps diaryState.view in sync with the active phone tab
  * (this tab wants 'recipes', so recipeRows/cycleSort resolve against the
@@ -23,11 +32,12 @@ import { useI18n } from 'vue-i18n';
 import {
   diaryState, recipeRows, ensureDiaryLoaded, cycleSort,
 } from '../../../composables/useDiary.js';
-import { selectRecipe, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
+import { recipe, selectRecipe, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
 import { recipeIdentityParts } from '../../../composables/useCore.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
 import { showToast } from '../../../composables/useToast.js';
+import { reportRuntimeError } from '../../../composables/useErrorReporting.js';
 import RecipeDetail from '../RecipeDetail.vue';
 import RecipePicker from '../../RecipePicker.vue';
 import StarRating from '../../StarRating.vue';
@@ -41,7 +51,14 @@ const { t } = useI18n();
 onMounted(ensureDiaryLoaded);
 
 const detailEntry = ref(null);
-function openDetail(row) { detailEntry.value = row.recipe; }
+/** Opening a recipe is choosing it — see the file header. */
+function openDetail(row) {
+  detailEntry.value = row.recipe;
+  // Not awaited: the screen should appear on the tap, and recipe.id is set
+  // before selectRecipe's first await, so `isLoaded` is true from the first
+  // render. Only the push to the machine is still in flight.
+  selectRecipe(row.recipe).catch((err) => reportRuntimeError('load recipe', err));
+}
 
 // Same entry point the tablet's Diary "+" opens (RecipePicker) — no preset
 // bean/roaster here, since this tab isn't browsing inside either.
@@ -96,7 +113,14 @@ function recipeFacts(r) {
   ].join(' · ');
 }
 
-const press = useLongPress({ tap: loadRow, hold: openRowMenu });
+// Tap opens, hold offers the menu. Load is a button of its own (below), so
+// it is never something a stray tap can trigger.
+const press = useLongPress({ tap: openDetail, hold: openRowMenu });
+
+// Which row is on the machine right now — the same test useRecipeList makes
+// for the tablet's cards, inlined rather than pulling that whole factory in
+// for one line.
+const isCurrent = (r) => r.id != null && r.id === recipe.id;
 </script>
 
 <template>
@@ -119,30 +143,29 @@ const press = useLongPress({ tap: loadRow, hold: openRowMenu });
     </button>
 
     <div class="phone-list">
-      <div v-for="row in recipeRows" :key="row.recipe.id" class="phone-list-row phone-list-row-split">
-        <button
-          class="phone-row-main"
-          @pointerdown="press.down($event, row)"
-          @pointermove="press.move"
-          @pointerup="press.up(row)"
-          @pointercancel="press.cancel"
-          @pointerleave="press.cancel"
-        >
-          <span class="rmeta">
-            <span class="phone-identity-stack">
-              <!-- Roaster and bean are one identity (the coffee) and share
-                   this line's weight; only grinder/profile beyond them step
-                   down to .rsub. -->
-              <span v-for="(part, i) in recipeIdentityParts(row.recipe)" :key="i" :class="{ rsub: i > 1 }">{{ part }}</span>
-            </span>
-            <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
+      <!-- One button again, like every other .phone-list-row: with the Load
+           button gone there is no second action to split the row for. -->
+      <button
+        v-for="row in recipeRows" :key="row.recipe.id"
+        class="phone-list-row"
+        :class="{ current: isCurrent(row.recipe) }"
+        @pointerdown="press.down($event, row)"
+        @pointermove="press.move"
+        @pointerup="press.up(row)"
+        @pointercancel="press.cancel"
+        @pointerleave="press.cancel"
+      >
+        <span class="rmeta">
+          <span class="phone-identity-stack">
+            <!-- Roaster and bean are one identity (the coffee) and share this
+                 line's weight; only grinder/profile beyond them step down to
+                 .rsub. -->
+            <span v-for="(part, i) in recipeIdentityParts(row.recipe)" :key="i" :class="{ rsub: i > 1 }">{{ part }}</span>
           </span>
-          <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="10" />
-        </button>
-        <button class="phone-row-edit" :aria-label="t('common.edit')" @click="openDetail(row)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
-        </button>
-      </div>
+          <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
+        </span>
+        <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="10" />
+      </button>
       <div v-if="!recipeRows.length" class="phone-empty">{{ t('diary.noRecipesYet') }}</div>
     </div>
 
