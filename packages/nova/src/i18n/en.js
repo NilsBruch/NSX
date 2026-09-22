@@ -420,6 +420,11 @@ export default {
   },
   settingsPage: {
     profiles: 'Profiles', grinders: 'Grinder', machine: 'Machine',
+    equipment: 'Equipment', baskets: 'Baskets', otherEquipment: 'Other equipment',
+    // Says out loud that two of the three sections are shared storage, so a
+    // basket appearing in DYE2 (or one made there appearing here) is expected
+    // rather than surprising.
+    sharedHint: 'Baskets and other equipment are shared with the DYE2 plugin — what you add here shows up there too.',
     skin: 'Skin & Display', schedule: 'Schedule', app: 'App',
     back: 'Settings', connected: 'Connected', disconnected: 'Disconnected',
     energy: 'Energy', display: 'Display brightness',
@@ -522,7 +527,8 @@ export default {
     graphExpert: 'Expert',
     showTags: 'Recipe tags',
     showTagsSub: 'Show tags on recipes and on the shots pulled with them',
-    dyeButton: 'DYE button', dyeButtonSub: 'Reach a shot’s full record — notes, TDS, people — from the history view',
+    dyeButton: 'Enable DYE plugin integration',
+    dyeButtonSub: 'Baskets and equipment shared with the DYE2 plugin, DYE settings on a recipe, and a shot’s full record — notes, TDS, people — from the history view',
     tabColors: 'Colour by tab',
     tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',
@@ -543,6 +549,30 @@ export default {
     // empty branch outright ("Plural must have messages") rather than just
     // yielding an empty string.
     backfillMessage: 'One recipe has no grinder yet. Set it to {grinder}? | {n} recipes have no grinder yet. Set them to {grinder}?',
+  },
+  recipeDye: {
+    // The button on the coffee page, left of Rate.
+    button: 'DYE settings',
+    title: 'DYE settings',
+    basket: 'Basket', equipment: 'Equipment',
+    barista: 'Barista', drinker: 'Drinker', beverage: 'Beverage',
+    none: '— None —',
+    pinned: 'Pinned',
+  },
+  basketEditor: {
+    newTitle: 'New basket', name: 'Name', size: 'Size', diameter: 'Diameter', notes: 'Notes',
+    // DYE2's fixed vocabulary for a basket's size — not free text, so the
+    // value round-trips into its own filters.
+    single: 'Single', double: 'Double', triple: 'Triple', bottomless: 'Bottomless', other: 'Other',
+    deleteConfirm: 'Delete {name}?',
+    deleteHint: 'Shots pulled with it keep the name they recorded.',
+  },
+  equipmentEditor: {
+    newTitle: 'New equipment', name: 'Name',
+    fields: 'Details', addField: 'Add detail', fieldName: 'Detail name',
+    fieldsHint: 'Add anything worth remembering about this piece of kit — you name the fields yourself.',
+    deleteConfirm: 'Delete {name}?',
+    deleteHint: 'Shots recorded with it keep the name they recorded.',
   },
   systemSettings: {
     advanced: 'Advanced', gatewayMode: 'Gateway mode',

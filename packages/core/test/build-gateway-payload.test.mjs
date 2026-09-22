@@ -12,6 +12,8 @@ import { setupWindow, loadCoreFile } from "./harness.mjs";
 setupWindow();
 loadCoreFile("core.js");
 loadCoreFile("domains/workflow.js");
+// The DYE mapping the payload builder defers to lives in the equipment domain.
+loadCoreFile("domains/equipment.js");
 const NSXCore = window.NSXCore;
 
 const VISIBLE = { id: "p-visible", profile: { title: "Visible", steps: [{ temperature: 90 }] } };
@@ -196,4 +198,61 @@ test("reference-only workflow (no embedded profile) still resolves via the libra
   assert.notEqual(payload, null);
   assert.equal(payload.profileId, "p-hidden");
   assert.equal(payload.profile.title, "Hidden One");
+});
+
+
+/* ── The DYE fields a recipe stamps onto its shots ───────────────────────── */
+
+const DYE_WORKFLOW = { selectedProfileId: "p-visible", profileTitle: "Visible", targetYield: 36 };
+
+test("a recipe's DYE fields ride into the context, split by where readers look", async () => {
+  stubCore();
+  const payload = await NSXCore.buildGatewayPayload({
+    ...DYE_WORKFLOW,
+    dye: {
+      baristaName: "Nils", drinkerName: "Ada", finalBeverageType: "espresso",
+      basketId: "bskt-1", basketName: "VST 18g", equipmentId: "eqp-1", equipmentName: "Lunar",
+    },
+  }, {});
+
+  // Native gateway fields stay top-level, where the shot DYE page reads them.
+  assert.equal(payload.context.baristaName, "Nils");
+  assert.equal(payload.context.drinkerName, "Ada");
+  assert.equal(payload.context.finalBeverageType, "espresso");
+  // Basket/equipment have no native home — they go under the names DYE2
+  // denormalises onto a shot, so it can read a shot we pulled.
+  assert.deepEqual(payload.context.extras, {
+    basketId: "bskt-1", basketName: "VST 18g", equipmentId: "eqp-1", equipmentName: "Lunar",
+  });
+});
+
+test("DYE fields and tags share `extras` rather than one replacing the other", async () => {
+  stubCore();
+  const payload = await NSXCore.buildGatewayPayload({
+    ...DYE_WORKFLOW, tags: ["morning"], dye: { basketId: "bskt-1", basketName: "VST 18g" },
+  }, {});
+
+  assert.deepEqual(payload.context.extras, {
+    tags: ["morning"], basketId: "bskt-1", basketName: "VST 18g",
+  });
+});
+
+test("a cleared DYE field is sent as an explicit null, so the gateway drops it", async () => {
+  // Omitting a context field leaves the gateway's PREVIOUS value in place —
+  // the same reason targetWaterVolume is always sent.
+  stubCore();
+  const payload = await NSXCore.buildGatewayPayload({ ...DYE_WORKFLOW, dye: { baristaName: "" } }, {});
+
+  assert.equal(payload.context.baristaName, null);
+  assert.equal("baristaName" in payload.context, true, "present, not omitted");
+  assert.equal(payload.context.extras, null, "nothing in extras, so no empty object");
+});
+
+test("a recipe with no DYE fields at all pushes exactly what it used to", async () => {
+  stubCore();
+  const payload = await NSXCore.buildGatewayPayload({ ...DYE_WORKFLOW, tags: ["morning"] }, {});
+  assert.deepEqual(payload.context.extras, { tags: ["morning"] });
+
+  const bare = await NSXCore.buildGatewayPayload({ ...DYE_WORKFLOW }, {});
+  assert.equal(bare.context.extras, null);
 });

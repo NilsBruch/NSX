@@ -20,6 +20,7 @@ import './core/domains/steam.js';
 import './core/domains/hotwater.js';
 import './core/domains/flush.js';
 import './core/domains/grinder.js';
+import './core/domains/equipment.js';
 import './core/domains/bean.js';
 import './core/domains/shot.js';
 import './core/domains/workflow.js';

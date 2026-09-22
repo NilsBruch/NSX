@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipeIdentityParts, formatShortDate } from '../composables/useCore.js';
 import { recipe, roastAge, hasProfile } from '../composables/useRecipe.js';
@@ -9,6 +9,7 @@ import { skinSettings } from '../composables/useSettings.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import StarRating from './StarRating.vue';
+import RecipeDyeModal from './RecipeDyeModal.vue';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 
 /**
@@ -51,8 +52,12 @@ const ICONS = {
   history: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
   star: '<path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z"/>',
   tag: '<path d="M4 11V5a1 1 0 0 1 1-1h6l8 8-7 7-8-8z"/><circle cx="8" cy="8" r="1.2"/>',
+  // DYE: a card with a line on it — the shot's written-up record.
+  dye: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 10h8M8 14h5"/>',
   drop: '<path d="M12 3.5s5.5 6.3 5.5 10a5.5 5.5 0 0 1-11 0c0-3.7 5.5-10 5.5-10z"/><path d="M9.5 14.5a2.8 2.8 0 0 0 2.3 2.7"/>',
 };
+
+const dyeOpen = ref(false);
 
 // The combined identity title — shared with the Diary's recipe rows so the two
 // render the same recipe identically (see useCore's recipeIdentityParts).
@@ -208,6 +213,13 @@ const roastLabel = computed(() =>
          label — tapping them reopens the same editor, so the rating is both
          the display and the control. StarRating renders no nested <button>
          in readonly mode, so the tap reaches this one. -->
+    <!-- Left of Rate, in History's style: the two buttons flanking it are
+         both about the record a shot leaves, while Rate is the opinion.
+         Follows the DYE integration toggle — with it off the row is the pair
+         it was before. -->
+    <button v-if="skinSettings.dyeButton" class="btn" @click="dyeOpen = true">
+      <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.dye"></svg>{{ t('recipeDye.button') }}
+    </button>
     <button class="rate-recipe-btn" :aria-label="t('rating.rate')" @click="rateRecipe">
       <StarRating v-if="recipe.rating > 0" :model-value="recipe.rating" readonly :size="18" />
       <template v-else>
@@ -218,4 +230,8 @@ const roastLabel = computed(() =>
       <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.history"></svg>{{ t('espresso.history') }}
     </button>
   </div>
+
+  <PageTransition>
+    <RecipeDyeModal v-if="dyeOpen" @close="dyeOpen = false" />
+  </PageTransition>
 </template>

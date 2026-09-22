@@ -86,6 +86,17 @@ NSXCore.on('beansLoaded', ({ beans: list }) => { beans.value = list; });
 NSXCore.on('grindersLoaded', ({ grinders: list }) => { grinders.value = list; });
 
 /**
+ * Baskets and general kit, mirrored the same way — but they come from DYE2's
+ * KV namespace rather than a bridge resource, so nothing revalidates them on
+ * its own. The Equipment panel reloads on open and on visibilitychange; see
+ * core/domains/equipment.js for why polling is the only option.
+ */
+export const baskets = ref([]);
+export const equipment = ref([]);
+NSXCore.on('basketsLoaded', ({ baskets: list }) => { baskets.value = list; });
+NSXCore.on('equipmentLoaded', ({ equipment: list }) => { equipment.value = list; });
+
+/**
  * profile.js (unlike bean.js/grinder.js) emits no *Loaded event — it has three
  * independent caches (visible/all/deleted) with different reload semantics, so
  * there's no one "the list changed" moment to hook. Nova mirrors the visible

@@ -23,13 +23,15 @@
  * Editing a field here changes THIS SHOT only. The recipe it was pulled from
  * keeps its own values (see setShotContext).
  */
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   reviewShot, currentFullShot, grindSetting,
   setShotAnnotations, setShotContext, setActualDose, setActualYield, setGrindSetting,
 } from '../composables/useLiveShot.js';
-import { beans, grinders, shots, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
+import { beans, grinders, shots, baskets, equipment, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
+import { skinSettings } from '../composables/useSettings.js';
+import { reportRuntimeError } from '../composables/useErrorReporting.js';
 import { openTextField, openNumberPad, openChooser } from '../composables/useModals.js';
 // Section icons from Lucide. Named imports, so only these four end up in the
 // build; the style (colour, size, stroke) comes from .dye-head in app.css.
@@ -241,6 +243,49 @@ async function editGrind() {
   if (v != null) await setGrindSetting(String(v));
 }
 
+/**
+ * The basket and the kit the shot was pulled with. They live in
+ * `context.extras`, under the names DYE2 denormalises onto a shot, because
+ * the gateway has no native field for either (its typed /equipment resource
+ * was proposed and closed — see core's equipment domain).
+ *
+ * Patched with the existing extras spread back in: core's
+ * updateShotWorkflowContext merges at the CONTEXT level only, so handing it a
+ * bare `extras` would replace the whole object and take the shot's tags with
+ * it.
+ */
+async function editExtrasRef({ title, rows, idField, nameField }) {
+  const options = [['', t('recipeDye.none')], ...rows.map((r) => [r.id, r.name || '—'])];
+  const id = await openChooser({ title, options, current: ctx.value.extras?.[idField] ?? '' });
+  if (id == null) return;
+  const row = rows.find((r) => r.id === id);
+  await setShotContext({
+    extras: { ...(ctx.value.extras ?? {}), [idField]: row?.id ?? null, [nameField]: row?.name ?? null },
+  });
+}
+const editBasket = () => editExtrasRef({
+  title: t('recipeDye.basket'), rows: baskets.value, idField: 'basketId', nameField: 'basketName',
+});
+const editEquipment = () => editExtrasRef({
+  title: t('recipeDye.equipment'), rows: equipment.value, idField: 'equipmentId', nameField: 'equipmentName',
+});
+
+// The name recorded ON THE SHOT is what's displayed — not a lookup of today's
+// library. That's the point of DYE2 denormalising it: a basket deleted since
+// does not blank out the shots pulled with it.
+const basketLabel = computed(() => ctx.value.extras?.basketName || null);
+const equipmentLabel = computed(() => ctx.value.extras?.equipmentName || null);
+
+// Only needed to populate the two pickers; the labels above read off the shot.
+onMounted(async () => {
+  if (!skinSettings.dyeButton) return;
+  try {
+    await NSXCore.loadEquipmentLibrary();
+  } catch (err) {
+    reportRuntimeError('equipment library', err);
+  }
+});
+
 const editBarista = () => editText(t('dye.barista'), ctx.value.baristaName,
   (v) => setShotContext({ baristaName: v }), namesUsed('baristaName'));
 const editDrinker = () => editText(t('dye.drinker'), ctx.value.drinkerName,
@@ -249,11 +294,9 @@ const editDrinker = () => editText(t('dye.drinker'), ctx.value.drinkerName,
 /** Beverage type is an open set in the API, so the four Decent itself names
  *  are offered and anything already recorded (from another skin or plugin)
  *  joins the list rather than being silently replaced. */
-const BEVERAGES = ['espresso', 'filter', 'lungo', 'americano'];
 async function editBeverage() {
   const current = ctx.value.finalBeverageType ?? null;
-  const known = current && !BEVERAGES.includes(current) ? [current, ...BEVERAGES] : BEVERAGES;
-  const options = known.map((v) => [v, t(`dye.beverage_${v}`, v)]);
+  const options = NSXCore.dyeBeverageOptions(current).map((v) => [v, t(`dye.beverage_${v}`, v)]);
   const v = await openChooser({ title: t('dye.beverage'), options, current });
   if (v != null) await setShotContext({ finalBeverageType: v });
 }
@@ -425,6 +468,16 @@ const toggleFavorite = () => setShotAnnotations({ extras: { favorite: !favorite.
               <span class="dl">{{ t('dye.grind') }}</span>
               <span class="dv" :class="{ muted: grindSetting == null }">{{ dash(grindSetting) }}</span>
             </button>
+            <template v-if="skinSettings.dyeButton">
+              <button class="dye-tile" :disabled="!baskets.length" @click="editBasket">
+                <span class="dl">{{ t('recipeDye.basket') }}</span>
+                <span class="dv" :class="{ muted: !basketLabel }">{{ dash(basketLabel) }}</span>
+              </button>
+              <button class="dye-tile" :disabled="!equipment.length" @click="editEquipment">
+                <span class="dl">{{ t('recipeDye.equipment') }}</span>
+                <span class="dv" :class="{ muted: !equipmentLabel }">{{ dash(equipmentLabel) }}</span>
+              </button>
+            </template>
             <!-- The profile is the one thing a shot cannot be re-described into:
                  the record carries the frames that were actually run.
                  Profile and temperature share a row of their own, whatever

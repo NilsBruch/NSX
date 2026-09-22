@@ -77,6 +77,18 @@ export const recipe = reactive({
   // the whole point of them — a permanent note about the conditions a shot was
   // pulled under, which editing the recipe later cannot rewrite.
   tags: [],
+  // The DYE plugin's fields: who pulled it, who drank it, what it was, and on
+  // what kit. Exactly like `tags` above, they ride into the pushed workflow
+  // context (NSXCore.dyeContextFields / dyeExtras) so every shot pulled on
+  // this recipe RECORDS them, and the shot view reads them back off the shot
+  // rather than off today's recipe. Basket and equipment reference rows in
+  // DYE2's shared store; the name is denormalised next to the id so a shot
+  // still reads correctly after the row behind it is deleted.
+  dye: {
+    basketId: null, basketName: null,
+    equipmentId: null, equipmentName: null,
+    baristaName: null, drinkerName: null, finalBeverageType: null,
+  },
   roastDate: null,   // ISO date string, or null = "not set". Derived from the batch,
                      // which is the source of truth; deliberately NOT persisted on the recipe.
   // ml-per-gram factor this recipe has learned for estimating weight from the
@@ -199,6 +211,7 @@ function snapshotFromCurrentRecipe(existing = {}) {
     beanUnlinked: recipe.beanUnlinked,
     pinned: recipe.pinned,
     tags: Array.isArray(recipe.tags) ? [...recipe.tags] : [],
+    dye: { ...recipe.dye },
     volumeCalibration: recipe.volumeCalibration,
     rating: Number(recipe.rating) || 0,
   };
@@ -238,6 +251,25 @@ export async function setRecipeRating(value) {
 export async function setRecipeTags(tags) {
   recipe.tags = Array.isArray(tags) ? tags.filter(Boolean) : [];
   await pushRecipe();
+}
+
+/** Patches the loaded recipe's DYE fields and pushes, so the machine's
+ *  workflow carries them from the very next shot on. Pushing persists them
+ *  too (pushRecipe -> persistCurrentRecipeEdits), exactly like setRecipeTags. */
+export async function setRecipeDye(patch) {
+  recipe.dye = NSXCore.normalizeDye({ ...recipe.dye, ...(patch || {}) });
+  await pushRecipe();
+}
+
+/** Every barista or drinker name any recipe carries, for the text editors'
+ *  suggestions — same idea as allRecipeTags, so you retype a name once. */
+export function dyeNamesUsed(field) {
+  const seen = new Set();
+  for (const r of recipes.value) {
+    const v = String(r?.dye?.[field] || '').trim();
+    if (v) seen.add(v);
+  }
+  return [...seen];
 }
 
 /** Every tag any recipe in the library carries, for the editor's suggestions —
@@ -424,6 +456,9 @@ async function syncFromWorkflow(wf) {
     // carries whatever that skin set. Boot is the exception (the machine's own
     // workflow may predate them) — see adoptCurrentWorkflowAsRecipe.
     tags: Array.isArray(wf?.context?.extras?.tags) ? [...wf.context.extras.tags] : [],
+    // Same rule as tags: the gateway is the truth. A workflow pushed from
+    // another skin or from DYE2 itself carries whatever IT set.
+    dye: NSXCore.dyeFieldsFromContext(wf?.context),
     grinderId: wf?.context?.grinderId ?? null,
     beanId: null,
     beanBatchId: wf?.context?.beanBatchId ?? null,
@@ -520,6 +555,10 @@ export async function pushRecipe({ silent = false } = {}) {
     // -> context.extras.tags, which is what stamps them onto every shot pulled
     // on this workflow (see the `tags` note on `recipe`).
     tags: recipe.tags,
+    // -> context.baristaName/drinkerName/finalBeverageType + context.extras'
+    // basket/equipment ids, which is what stamps them onto every shot pulled
+    // on this workflow (see the `dye` note on `recipe`).
+    dye: recipe.dye,
     // Needed for the no-scale volume stop: targetWaterVolume = targetYield * factor.
     volumeCalibration: recipe.volumeCalibration,
     grinderId: recipe.grinderId,
@@ -654,6 +693,9 @@ export async function selectRecipe(entry, { push = true } = {}) {
     beanUnlinked: entry.beanUnlinked === true,
     pinned: entry.pinned === true,
     tags: Array.isArray(entry.tags) ? [...entry.tags] : [],
+    // Older entries predate the field entirely — normalise through core so a
+    // recipe saved before this always reads as "nothing set".
+    dye: NSXCore.normalizeDye(entry.dye),
     roastDate: null,
     volumeCalibration: entry.volumeCalibration && typeof entry.volumeCalibration === 'object'
       ? entry.volumeCalibration
@@ -721,6 +763,7 @@ export async function composeNewRecipe({ bean, profile, seedContext = null, batc
     rating: 0, // a freshly composed recipe starts unrated
     tags: [],  // ...and untagged: tags belong to a recipe, not to the dials
                // the last one happened to leave behind
+    dye: NSXCore.normalizeDye(null), // ...and with no DYE fields, for the same reason
   });
 
   // `batch` present means the caller already resolved one explicitly —
@@ -888,6 +931,10 @@ export async function adoptCurrentWorkflowAsRecipe() {
     // without this the next snapshot would persist that emptiness over the
     // saved recipe's own tags.
     if (!recipe.tags.length && Array.isArray(existing.tags)) recipe.tags = [...existing.tags];
+    // Same guard again for the DYE fields: a workflow left on the machine by a
+    // skin that doesn't set them carries none, and without this the next
+    // snapshot would persist that emptiness over the saved recipe's own.
+    if (NSXCore.isDyeEmpty(recipe.dye) && existing.dye) recipe.dye = { ...recipe.dye, ...existing.dye };
     if (existing.volumeCalibration) recipe.volumeCalibration = existing.volumeCalibration;
     recipe.rating = Number(existing.rating) || 0;
     recipe.stopAtWeight = existing.stopAtWeight !== false;

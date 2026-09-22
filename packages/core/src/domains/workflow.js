@@ -282,6 +282,12 @@
     const pushedYield = workflow.stopAtWeight === false ? 0 : Number(workflow.targetYield || 0);
 
     const tags = Array.isArray(workflow.tags) ? workflow.tags : [];
+    // The recipe's DYE fields ride along the same way its tags do, so every
+    // shot pulled on this workflow records them (equipment.js). The extras
+    // half shares the object with `tags`; the native half is spread into the
+    // context below.
+    const dyeExtras = NSXCore.dyeExtras ? NSXCore.dyeExtras(workflow.dye) : {};
+    const extras = { ...(tags.length > 0 ? { tags } : {}), ...dyeExtras };
     const workflowName = [workflow.coffeeRoaster, workflow.coffeeName, resolvedProfile?.title || workflow.profileTitle]
       .map(v => String(v || "").trim())
       .filter(v => v && v !== "—")
@@ -302,7 +308,9 @@
         targetWaterVolume,
         ...(workflow.grinderId ? { grinderId: workflow.grinderId } : {}),
         ...(workflow.beanBatchId ? { beanBatchId: workflow.beanBatchId } : {}),
-        extras: tags.length > 0 ? { tags } : null,
+        // Always sent (null included) for the same reason targetWaterVolume is.
+        ...(NSXCore.dyeContextFields ? NSXCore.dyeContextFields(workflow.dye) : {}),
+        extras: Object.keys(extras).length > 0 ? extras : null,
       },
       // Bundle the machine-function settings into the same atomic workflow update so the
       // gateway applies them in ONE PUT (instead of 4 racing PUTs that get "Queue Cancelled").

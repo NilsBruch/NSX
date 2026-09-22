@@ -17,7 +17,7 @@ import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { displaySupport } from '../../../composables/useSettings.js';
 import ProfilePicker from '../../ProfilePicker.vue';
-import GrinderPanel from '../../settings/GrinderPanel.vue';
+import EquipmentPanel from '../../settings/EquipmentPanel.vue';
 import MachinePanel from '../../settings/MachinePanel.vue';
 import SkinPanel from '../../settings/SkinPanel.vue';
 import AppPanel from '../../settings/AppPanel.vue';
@@ -35,7 +35,7 @@ const TILES = [
   // Equipment libraries — matches SettingsView.vue's EQUIPMENT_TILES grouping
   // and icons exactly, just flattened into one list instead of two TileCards.
   { id: 'profiles', label: 'settingsPage.profiles', icon: 'M4 19h16 M4 16c3 0 3-9 6-9s3 6 5 6 3-2 5-2' },
-  { id: 'grinders', label: 'settingsPage.grinders', icon: 'M9 3h6l-1 5h-4L9 3z M8 8h8v6H8z M10 14v4h4v-4' },
+  { id: 'equipment', label: 'settingsPage.equipment', icon: 'M4 7h16 M4 12h16 M4 17h16 M8 5v4 M15 10v4 M11 15v4' },
 ];
 
 const active = ref(null);
@@ -69,7 +69,7 @@ const active = ref(null);
       <ProfilePicker v-if="active === 'profiles'" mode="manage" @back="active = null" />
     </PageTransition>
     <PageTransition>
-      <GrinderPanel v-if="active === 'grinders'" @close="active = null" />
+      <EquipmentPanel v-if="active === 'equipment'" @close="active = null" />
     </PageTransition>
     <PageTransition>
       <MachinePanel v-if="active === 'machine'" @close="active = null" />

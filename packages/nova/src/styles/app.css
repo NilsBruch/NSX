@@ -2467,9 +2467,36 @@ a.sw-update { text-decoration: none; }
 .setting-row .sr-name { font-size: var(--fs-base); font-weight: 600; }
 .setting-row .sr-sub { font-size: var(--fs-xs); color: var(--muted); line-height: 1.35; }
 /* The grinder list carries a grinder's whole record on two lines under its
-   model (GrinderPanel.vue). Each stays ONE line, cut with an ellipsis, so
+   model (EquipmentPanel.vue). Each stays ONE line, cut with an ellipsis, so
    every row is the same height whatever a grinder has filled in. */
 .grinder-row .sr-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Equipment panel. The "+" row that ends each section is a setting-row that
+   reads as an action rather than a value, so its name takes the muted colour
+   the values elsewhere have and the plus takes the accent. */
+.eq-add .sr-name { color: var(--muted); font-weight: 500; }
+.eq-add .sr-value { color: var(--accent); font-size: var(--fs-md); }
+/* A custom field is two targets in one row: the pair itself (edits the value)
+   and the × that drops it. The inner button carries the row's own layout, so
+   the outer .setting-row only has to make room for the ×. */
+.eq-field { gap: 12px; }
+.eq-field-main { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; background: none; border: none; padding: 0; font-family: inherit; color: var(--text);
+  text-align: left; cursor: pointer; }
+.eq-field-main .sr-name { font-size: var(--fs-base); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eq-field-del { flex: none; width: 32px; height: 32px; border: none; border-radius: 50%;
+  background: rgba(127, 127, 127, 0.16); color: var(--muted);
+  font-size: var(--fs-md); line-height: 1; cursor: pointer; }
+.eq-hint { font-size: var(--fs-xs); color: var(--muted); line-height: 1.4; margin: 8px 2px 0; }
+/* A picker with an empty library behind it: 0.35 is the opacity every other
+   disabled control in this skin uses. */
+.setting-row.as-btn:disabled, .dye-tile:disabled { opacity: 0.35; }
+/* The read-only blocks and tiles of the recipe DYE page (RecipeDyeModal.vue):
+   the bean, the extraction and analysis a shot has yet to fill in, and the
+   grinder/grind/profile the coffee page owns. They keep their place in the
+   mirrored layout, so this reads as not-yours-to-set-here rather than broken —
+   a lighter hand than :disabled's 0.35, since many of these tiles DO carry a
+   real value and must stay readable. */
+.dye-off { opacity: 0.55; pointer-events: none; }
 .setting-row.as-btn { border: none; cursor: pointer; font-family: inherit; color: var(--text); text-align: left; width: 100%; }
 .setting-row.as-btn.danger .sr-name { color: var(--alert); }
 .setting-row .sr-value { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
