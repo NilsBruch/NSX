@@ -205,7 +205,7 @@ const roastLabel = computed(() =>
        that moved when you switched tabs (and the gap under it grew with the
        screen). No Browse-recipes button: the identity title above is the way
        into the library now, so Edit profile takes the leftmost slot. -->
-  <div class="prep-bottom prep-bottom-even">
+  <div class="prep-bottom prep-bottom-even" :class="{ 'prep-bottom-nodye': !skinSettings.dyeButton }">
     <!-- Edit profile used to lead this row; it's a HOLD on the title now (see
          titlePress), leaving the row to the two things about the shots
          themselves. -->

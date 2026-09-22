@@ -15,12 +15,14 @@
  * bean+profile combinations, so a card's long-press menu (RecipeBrowser.vue)
  * covers that instead of a second, on-page control.
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { formatShortDate } from '../composables/useCore.js';
 import { recipe, roastAge } from '../composables/useRecipe.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
+import { skinSettings } from '../composables/useSettings.js';
+import RecipeDyeModal from './RecipeDyeModal.vue';
 
 const emit = defineEmits(['open-roast']);
 const { t } = useI18n();
@@ -29,6 +31,11 @@ const {
   onDoseClick, doseDrag, onGrindClick, grindDrag, onYieldClick, yieldDrag,
   onTempClick, tempDrag, toggleStopAtWeight,
 } = useRecipeDials();
+
+// The graph layout's only recipe-level action button: it has no Rate/History
+// row (rating is on a card's hold menu, history is the shot stepper), so this
+// one lives in the extras row's empty fourth column — see the template.
+const dyeOpen = ref(false);
 
 // Brew ratio, shown next to the yield it's derived from. calcRatio already
 // returns the full "1:x.x" string (and "—" for a dose of 0), so nothing here
@@ -125,5 +132,20 @@ const ICONS = {
       :aria-label="t('espresso.stopAtWeight')"
       @click="toggleStopAtWeight"
     ></button>
+    <!-- The row's fourth column, which nothing else uses. It belongs here
+         rather than beside the page title: this row is already the CONTEXT
+         around the four dialled values, and who drank it, in what cup, on
+         which basket is exactly that. Costs the page no height either, which
+         matters on a view that deliberately doesn't scroll. -->
+    <button v-if="skinSettings.dyeButton" class="roast-chip rq-dye" @click="dyeOpen = true">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M8 10h8M8 14h5" />
+      </svg>{{ t('recipeDye.button') }}
+    </button>
   </div>
+
+  <PageTransition>
+    <RecipeDyeModal v-if="dyeOpen" @close="dyeOpen = false" />
+  </PageTransition>
 </template>
