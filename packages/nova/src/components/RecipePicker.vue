@@ -107,10 +107,14 @@ function finish() {
         <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
       </template>
     </BatchPicker>
+    <!-- No current-title: that is the profile of the recipe LOADED on the
+         machine, which has nothing to do with the one being created here. It
+         seeded the picker's selection, so this step opened with an answer
+         already filled in — and the confirm button here CREATES the recipe,
+         so a pre-filled answer is one tap from a recipe nobody chose. -->
     <ProfilePicker
       v-else
       mode="pick"
-      :current-title="recipe.profileTitle"
       :confirm-label="t('recipePicker.createRecipe')"
       @select="onProfilePicked"
       @back="step = 'batch'"

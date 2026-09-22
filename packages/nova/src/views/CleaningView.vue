@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { flush } from '../composables/useMachineFunctions.js';
 import { openNumberPad } from '../composables/useModals.js';
 import { useDragDial, DIAL_PX_PER_STEP } from '../composables/useDragDial.js';
+import { useFlushPresets, FLUSH_PRESET_KEYS } from '../composables/useFlushPresets.js';
 import VerticalSlider from '../components/VerticalSlider.vue';
 import CleaningAssistant from '../components/CleaningAssistant.vue';
 
@@ -36,31 +37,9 @@ const onTimeClick = timeDrag.guardClick(editTime);
 function toggleTimer() { NSXCore.setFlushTimerEnabled(!flush.timerEnabled); }
 
 // Three save-slots like Hot Water: tap loads the stored flow+time, hold
-// (~600ms) overwrites it with the current pair. A flush preset legitimately
-// carries both flow and duration, so selectFlushPreset (which loads both and
-// sets the active highlight) is the right call here.
-const LEVEL_KEYS = ['kurz', 'normal', 'lang'];
-const holdTimers = {};
-function onPresetDown(key) {
-  holdTimers[key] = {
-    held: false,
-    timer: setTimeout(() => {
-      holdTimers[key].held = true;
-      NSXCore.setFlushPresets({ ...flush.presets, [key]: { ...flush.presets[key], flow: flush.flow, duration: flush.duration } });
-      NSXCore.selectFlushPreset(key);
-    }, 600),
-  };
-}
-function onPresetUp(key) {
-  const h = holdTimers[key];
-  if (!h) return;
-  clearTimeout(h.timer);
-  if (!h.held) NSXCore.selectFlushPreset(key);
-  delete holdTimers[key];
-}
-function onPresetCancel(key) {
-  if (holdTimers[key]) { clearTimeout(holdTimers[key].timer); delete holdTimers[key]; }
-}
+// (~600ms) overwrites it with the current pair. Shared with the phone's
+// CleaningPanel — see useFlushPresets.js.
+const { onPresetDown, onPresetUp, onPresetCancel } = useFlushPresets(flush);
 
 const assistantMode = ref(null); // null | 'forwardFlush' | 'backflush' | 'descale' | 'transport'
 </script>
@@ -85,7 +64,7 @@ const assistantMode = ref(null); // null | 'forwardFlush' | 'backflush' | 'desca
         <span class="dial-label">{{ t('cleaning.presets') }}</span>
         <div class="preset-stack">
           <button
-            v-for="(key, i) in LEVEL_KEYS"
+            v-for="(key, i) in FLUSH_PRESET_KEYS"
             :key="key"
             class="preset"
             :class="{ selected: flush.active === key }"

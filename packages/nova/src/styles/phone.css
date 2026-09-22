@@ -370,6 +370,28 @@ body[data-phone="true"] .dye-cols { grid-template-columns: 1fr; }
 body[data-phone="true"] .pick-list,
 body[data-phone="true"] .pe-body .pick-list { width: 100%; min-width: 0; }
 
+/* .seg button carries min-width: 120px so a two-up pill keeps a sane size in
+   a tablet's toolbar. Three of those plus the pill's padding needs 368px —
+   wider than a phone is, before the overlay's own side padding — so the
+   ProfilePicker's Recent/Decent/Custom row ran off the screen. The labels are
+   single short words; let them share whatever width there is. */
+body[data-phone="true"] .seg button { min-width: 0; }
+/* ...and give them real height while we're here. The base .seg has 4px of
+   padding and buttons with none of their own — fine in a tablet toolbar next
+   to other 38px controls, too thin to aim at as the Diary's main
+   Browse/History switch on a phone. (The picker's .seg-tall sets its own 14px
+   and is more specific, so it keeps it.) */
+body[data-phone="true"] .seg button { padding: 12px 0; }
+
+/* Where you are in the Diary's drill-down, on its own line under the header:
+   the header itself is a row of icon buttons with a title squeezed between
+   them, and a roaster name never had the room. Wraps rather than ellipsises —
+   it has the width to, and the whole point is to be readable. */
+.phone-path {
+  font-size: var(--fs-sm); font-weight: 600; color: var(--muted);
+  line-height: 1.35; margin: -4px 2px 0;
+}
+
 /* The Steps/Limits/Info switcher sits above .pick-body, so it's on screen in
    both of the editor's phone panes and never collapses on its own — 340px is
    close enough to a small phone's own width that it was one bezel case away
@@ -380,6 +402,20 @@ body[data-phone="true"] .seg.pe-tabseg { width: 100%; }
 body[data-phone="true"] .pe-tabrow { grid-template-columns: 1fr; }
 body[data-phone="true"] .pe-tabrow > span[aria-hidden],
 body[data-phone="true"] .pe-fork-note { display: none; }
+
+/* The recipe wizard's progress trail (RecipeCrumbs) shares the header row with
+   the back button. Each bubble is 16px of side padding around an uppercase,
+   letter-spaced label ("GRINDER", "PROFILE") that has no ellipsis of its own,
+   so four of them held the row open far past a phone's width however much
+   min-width: 0 invited them to shrink. Tighter padding and a gap that can
+   give, and both lines inside cut rather than hold their bubble open. */
+body[data-phone="true"] .crumbs { gap: 6px; }
+body[data-phone="true"] .crumbs .rov-bubble { padding: 6px 8px; min-height: 46px; }
+body[data-phone="true"] .crumbs .rov-bubble-label,
+body[data-phone="true"] .crumbs .rov-bubble-name {
+  max-width: 100%; letter-spacing: 0.04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* .sort-btn.icon-only (Diary/Recipes header buttons) is 38px on the tablet,
    where a stylus-precision touch and a bigger screen make that fine — on a
@@ -416,13 +452,40 @@ body[data-phone="true"] .pe-phone-detail-head .pe-frame-actions { flex: 1; }
 
 /* ProfilePicker's read-only detail pane also splits in two internally
    (.pd-split: the stage list, then the title/notes text) — same reasoning as
-   .pe-groups above, stacked instead of squeezed to ~40% width each.
-   .pd-stages keeps its existing `flex: 0 0 40%` unchanged on purpose: a
-   flex-basis follows whichever axis is current the MAIN one, so the same
-   already-tuned 40% that gave it a sensible width in a row gives it a
-   sensible height in this column instead, with .pd-text's `flex: 1` still
-   claiming the rest for the description. */
+   .pe-groups above, stacked instead of squeezed to ~40% width each. */
 body[data-phone="true"] .pd-split { flex-direction: column; }
+
+/* The profile page scrolls as ONE column under a fixed Select button, rather
+   than being three panes that each shrink and scroll inside themselves. The
+   tablet can divide a pane it knows fits; a phone can't, and dividing it
+   anyway is what left the plot squashed and the notes in a two-line window.
+   .pd-scroll is `display: contents` elsewhere, so this is the only place it
+   exists as a box. */
+body[data-phone="true"] .pd-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+}
+/* Each part now sizes to its content and lets the outer box do the scrolling
+   — a percentage share of a height, or an inner scroller, would both fight
+   it. The plot is the one thing with no natural height (an SVG stretched to
+   its box), so it gets an explicit one. */
+body[data-phone="true"] .pd-scroll .pick-plot { flex: none; height: 160px; min-height: 0; }
+body[data-phone="true"] .pd-scroll .pd-split,
+body[data-phone="true"] .pd-scroll .pd-stages { flex: none; }
+body[data-phone="true"] .pd-scroll .pd-stages-list,
+body[data-phone="true"] .pd-scroll .pd-text { overflow: visible; }
+/* Title, author and notes come BEFORE the stage list in this column: they say
+   what the profile IS, which is what you're deciding on, while the stages are
+   the detail you read once you care. `order` rather than reordering the
+   template — side by side on the tablet the stages are the left column, and
+   that pairing is right there. */
+body[data-phone="true"] .pd-scroll .pd-text { order: -1; }
+
+/* The button keeps the bottom strip to itself — .pd-actions is already
+   flex: none, so it is reserved space rather than something the scroll can
+   push off. Centred, and wide enough to read as the page's one action. */
+body[data-phone="true"] .pick-detail .pd-actions { justify-content: center; padding-top: 4px; }
+body[data-phone="true"] .pick-detail .pd-actions .btn { flex: 1; max-width: 320px; justify-content: center; }
 
 /* LiveShotOverlay.vue's `history` phase reuses the tablet's shot-history
    screen verbatim (.ov-top/.date-nav/.shot-metrics/.glabel from app.css) —

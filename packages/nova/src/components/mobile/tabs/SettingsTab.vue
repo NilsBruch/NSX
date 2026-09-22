@@ -15,14 +15,13 @@
  */
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { displaySupport } from '../../../composables/useSettings.js';
 import ProfilePicker from '../../ProfilePicker.vue';
 import EquipmentPanel from '../../settings/EquipmentPanel.vue';
 import MachinePanel from '../../settings/MachinePanel.vue';
+import CleaningPanel from '../../settings/CleaningPanel.vue';
 import SkinPanel from '../../settings/SkinPanel.vue';
 import AppPanel from '../../settings/AppPanel.vue';
 import UpdateWidget from '../../settings/UpdateWidget.vue';
-import DisplayWidget from '../../settings/DisplayWidget.vue';
 import ConnectionWidget from '../../settings/ConnectionWidget.vue';
 import EnergyWidget from '../../settings/EnergyWidget.vue';
 
@@ -36,6 +35,10 @@ const TILES = [
   // and icons exactly, just flattened into one list instead of two TileCards.
   { id: 'profiles', label: 'settingsPage.profiles', icon: 'M4 19h16 M4 16c3 0 3-9 6-9s3 6 5 6 3-2 5-2' },
   { id: 'equipment', label: 'settingsPage.equipment', icon: 'M4 7h16 M4 12h16 M4 17h16 M8 5v4 M15 10v4 M11 15v4' },
+  // The tablet has Cleaning as a whole tab; the phone's four tabs have no room
+  // for it, so it lives here — same flush settings and the same four guided
+  // routines (CleaningPanel.vue).
+  { id: 'cleaning', label: 'tab.cleaning', icon: 'M12 3.5s5.5 6.3 5.5 10a5.5 5.5 0 0 1-11 0c0-3.7 5.5-10 5.5-10z M8 13h8M10 16h4' },
 ];
 
 const active = ref(null);
@@ -46,10 +49,11 @@ const active = ref(null);
     <h1 class="phone-title">{{ t('tab.settings') }}</h1>
 
     <UpdateWidget />
-    <!-- Nothing to drive where the host has no backlight control (core's
-         display domain, from GET /api/v1/display's platformSupported) —
-         same guard SettingsView.vue uses. -->
-    <DisplayWidget v-if="displaySupport.brightness" />
+    <!-- No brightness rail here. The slider drives the HOST's backlight (the
+         tablet the Decent app runs on), which is not the screen you are
+         holding when you reach for it on a phone — so from here it looks like
+         a control that does nothing, or worse, dims a machine across the
+         room. The tablet's own Settings still has it. -->
     <ConnectionWidget />
     <!-- The Schedule tile is gone with SchedulePanel; the same Energy card the
          tablet grew carries the weekly plan here, so it stays reachable from
@@ -73,6 +77,9 @@ const active = ref(null);
     </PageTransition>
     <PageTransition>
       <MachinePanel v-if="active === 'machine'" @close="active = null" />
+    </PageTransition>
+    <PageTransition>
+      <CleaningPanel v-if="active === 'cleaning'" @close="active = null" />
     </PageTransition>
     <PageTransition>
       <SkinPanel v-if="active === 'skin'" @close="active = null" />

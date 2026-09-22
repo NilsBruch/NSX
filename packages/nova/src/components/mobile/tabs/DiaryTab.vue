@@ -33,9 +33,17 @@ const { t } = useI18n();
 
 onMounted(ensureDiaryLoaded);
 
-const crumb = computed(() => {
-  if (diaryState.view === 'full') return t('diary.fullHistory');
-  if (diaryState.level === 0) return t('diary.roasters');
+/**
+ * The header keeps a SHORT, fixed title; where you are in the drill-down goes
+ * on its own line below (see `path`). The header shares its row with up to
+ * four icon buttons, which leaves a roaster name — let alone "roaster ›
+ * bean" — a few characters before it ellipsises into nothing.
+ */
+const crumb = computed(() =>
+  (diaryState.view === 'full' ? t('diary.fullHistory') : t('diary.roasters')));
+
+const path = computed(() => {
+  if (diaryState.view === 'full' || diaryState.level === 0) return '';
   if (diaryState.level === 1) return diaryState.roasterName;
   return `${diaryState.roasterName} › ${diaryState.bean?.name ?? ''}`;
 });
@@ -194,6 +202,9 @@ async function onRecipeCreated() {
         <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
       </button>
     </div>
+
+    <!-- Where you are, with a full line to say it in. -->
+    <span v-if="path" class="phone-path">{{ path }}</span>
 
     <!-- Browse/History toggle sits right under the header, not at the foot of
          a scrolling list (the tablet can pin it to the page bottom because

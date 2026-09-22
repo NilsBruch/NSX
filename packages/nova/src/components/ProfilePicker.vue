@@ -15,7 +15,6 @@ import { frames, frameDetailText, frameName } from '../composables/useProfileDis
 import { openConfirm, openChooser } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { isPhone } from '../composables/useLayout.js';
-import { fmtTemp } from '../composables/useUnits.js';
 import ProfileEditor from './settings/ProfileEditor.vue';
 
 const props = defineProps({
@@ -88,6 +87,11 @@ const selected = computed(() => sourceList.value.find((p) => p.id === selectedId
 // hidden — the v-show below only actually does anything on the phone. The
 // detail pane needs no equivalent flag: it's already `v-if="selected"`,
 // which is exactly the phone's other state (selectedId set = show detail).
+/**
+ * The phone shows one pane at a time: the list, then the profile you tapped.
+ * A tap is what navigates — the detail page is where the preview and the
+ * Select button are, so the list itself carries no action of its own.
+ */
 const showList = computed(() => !isPhone.value || selectedId.value == null);
 // The header's own Back normally leaves the picker entirely (emit('back')).
 // On the phone, while a detail is open, it should step back to the list
@@ -240,14 +244,6 @@ async function toggleSelectedVisibility() {
   }
 }
 
-function peakPressure(p) {
-  const vals = frames(p).map((f) => Number(f?.pressure)).filter(Number.isFinite);
-  return vals.length ? `${Math.max(...vals).toFixed(1)} bar` : '—';
-}
-function tempLabel(p) {
-  const t2 = NSXCore.resolveProfileTemp(p?.profile);
-  return t2 != null ? fmtTemp(t2) : '—';
-}
 
 // Which frame (0-based) is highlighted on the plot — cleared whenever the
 // selected profile changes, so a stale highlight can't survive onto a
@@ -466,6 +462,11 @@ async function onEditorSaved({ profile: built, originalProfile }) {
       </div>
 
       <div v-if="selected" class="pick-detail">
+        <!-- Everything above the actions, wrapped so the PHONE can scroll it
+             as one piece under a fixed Select button. `display: contents` on
+             the tablet, so this box isn't there at all for the layout that
+             already fits its pane exactly. -->
+        <div class="pd-scroll">
         <div class="pick-plot" v-html="plotSvg(selected, selectedFrameIdx)"></div>
         <div class="glabel">
           <i><span class="sw" style="background: #17c29a"></span>{{ t('profilePicker.legPressure') }}</i>
@@ -495,12 +496,16 @@ async function onEditorSaved({ profile: built, originalProfile }) {
           <div class="pd-text">
             <div class="pd-title">{{ selected.profile?.title || t('profilePicker.unnamed') }}</div>
             <div v-if="selected.profile?.author" class="pd-author">{{ t('profilePicker.by') }} {{ selected.profile.author }}</div>
-            <div class="pd-meta">
-              <span>{{ t('profilePicker.peak') }} <b>{{ peakPressure(selected) }}</b></span>
-              <span>{{ t('profilePicker.temp') }} <b>{{ tempLabel(selected) }}</b></span>
-            </div>
+            <!-- No summary line. Peak pressure was the highest `pressure`
+                 any frame commands, which on a flow-controlled profile is no
+                 frames at all — it read "0.0 bar" for a profile that reaches
+                 perfectly ordinary pressure. The temperature beside it was
+                 just the first stage's own, which the stage list below states
+                 in its place. Both told you less than the plot and the stages
+                 already do. -->
             <p class="pd-desc">{{ selected.profile?.notes || t('profilePicker.noNotes') }}</p>
           </div>
+        </div>
         </div>
 
         <div class="pd-actions">

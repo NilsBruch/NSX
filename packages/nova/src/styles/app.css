@@ -412,13 +412,14 @@ html, body {
    gets the same treatment .wheel already had. One shared rule rather than
    repeating scrollbar-width/::-webkit-scrollbar on each container. */
 .kb-modal .text-field-textarea, .tf-tags, .tf-suggests, .chooser, .rp-list-scroll,
-.pick-items, .pd-stages-list, .pd-text, .pe-detail, .list, .bean-fields, .settings-scroll,
+.pick-items, .pd-stages-list, .pd-text, .pd-scroll, .pe-detail, .list, .bean-fields, .settings-scroll,
 .dye-scroll, .phone-main {
   scrollbar-width: none; -ms-overflow-style: none;
 }
 .kb-modal .text-field-textarea::-webkit-scrollbar, .tf-tags::-webkit-scrollbar,
 .tf-suggests::-webkit-scrollbar, .chooser::-webkit-scrollbar, .rp-list-scroll::-webkit-scrollbar,
 .pick-items::-webkit-scrollbar, .pd-stages-list::-webkit-scrollbar, .pd-text::-webkit-scrollbar,
+.pd-scroll::-webkit-scrollbar,
 .pe-detail::-webkit-scrollbar, .list::-webkit-scrollbar, .bean-fields::-webkit-scrollbar,
 .settings-scroll::-webkit-scrollbar, .dye-scroll::-webkit-scrollbar, .phone-main::-webkit-scrollbar {
   display: none;
@@ -1526,6 +1527,11 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    right gap the user circled; the inner .pe-detail padding above is the rest. */
 .pe-overlay { padding-right: 11px; }
 
+/* Transparent here: the tablet's detail pane is sized so its plot, split and
+   actions each take a share of a height that always fits, and a real box
+   between them would break that. It becomes a scroller on the phone only
+   (phone.css). */
+.pd-scroll { display: contents; }
 .pd-split { flex: 1 1 62%; min-height: 0; display: flex; gap: 16px; }
 .pd-panel-label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 
@@ -1556,8 +1562,6 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .pd-text { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .pd-title { font-size: var(--fs-md); font-weight: 700; }
 .pd-author { font-size: var(--fs-sm); color: var(--muted); margin-top: -6px; }
-.pd-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: var(--fs-sm); color: var(--muted); }
-.pd-meta b { color: var(--text); }
 .pd-desc { color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; background: var(--card-bg); border-radius: var(--r-sm); padding: 10px 12px; }
 
 .pd-actions { flex: none; display: flex; gap: 10px; justify-content: flex-end; }
@@ -2315,6 +2319,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 .preset.selected { border: 2px solid var(--accent); color: var(--accent); }
 .preset-hint { display: block; text-align: center; font-size: var(--fs-xs); color: var(--faint); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4px; }
+/* The same three pods inside a settings row (the phone's CleaningPanel), laid
+   out across it rather than stacked beside a dial. --card-hi, not the pods'
+   usual --card-bg: the row they now sit in is itself --card-bg, which would
+   leave them invisible but for their 1px edge. */
+.clean-presets.setting-row { justify-content: center; gap: 20px; }
+.clean-presets .preset { background: var(--card-hi); }
 
 /* ===== Bean editor ===== */
 .bean-fields { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start; }
