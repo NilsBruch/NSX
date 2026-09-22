@@ -1,9 +1,8 @@
 <script setup>
 /**
  * The lock face — shown by App.vue whenever `locked` is true (see
- * useScreensaver.js). Ported to Nova from NSX's screensaver: a full-bleed photo
- * that crossfades through a set, a clock/date overlay, and — by default — a
- * swipe-to-unlock slider. The slider is not decoration: a lock face that a
+ * useScreensaver.js): a clock/date over a flat dark field and — by default —
+ * a swipe-to-unlock slider. The slider is not decoration: a lock face that a
  * tap dismisses is one that a cloth wiping the screen dismisses too, which is
  * why tapping stopped unlocking in the first place. The "tap to wake" skin
  * setting turns it back into a single tap for people who would rather have
@@ -24,53 +23,22 @@ import { formatClock } from '../utils/clock.js';
 
 const { t } = useI18n();
 
-// Imported (not served from public/) and forced inline as base64 data URIs
-// via the `?inline` query — same reasoning as viteSingleFile bundling JS/CSS
-// into index.html: the Decent app loads Nova's single index.html by
-// injecting its HTML directly rather than navigating to it as a served file,
-// which breaks ANY relative resource reference. A runtime `public/screensaver/
-// *.jpg` path (Nova's previous approach) 404s there even though the exact
-// same relative-path pattern works fine for NSX, which IS served as a real
-// folder — see the design log. Inlining removes the dependency on a base URL
-// existing at all.
-//
-// Which is why the photos themselves are kept at JPEG q75 (mozjpeg), 1280x800
-// -- the tablet's exact panel size. Base64 in index.html means every byte here
-// is a byte the WebView parses at EVERY app start, minutes before the
-// screensaver is ever shown; the originals were near-q95 and cost 3.7MB (5MB
-// once base64'd) for no visible difference on this screen. Re-export at a
-// higher quality and you pay for it on every boot, not on first idle.
-import s1 from '../assets/screensaver/Screen_saver_Decent_1.jpg?inline';
-import s2 from '../assets/screensaver/Screen_saver_Decent_2.jpg?inline';
-import s3 from '../assets/screensaver/Screen_saver_Decent_3.jpg?inline';
-import s4 from '../assets/screensaver/Screen_saver_Decent_4.jpg?inline';
-import s5 from '../assets/screensaver/Screen_saver_Decent_5.jpg?inline';
-import s6 from '../assets/screensaver/Screen_saver_Decent_6.jpg?inline';
-import s7 from '../assets/screensaver/Screen_saver_Decent_7.jpg?inline';
-import s8 from '../assets/screensaver/Screen_saver_Decent_8.jpg?inline';
-import s10 from '../assets/screensaver/Screen_saver_Decent_10.jpg?inline';
-import s12 from '../assets/screensaver/Screen_saver_Decent_12.jpg?inline';
-import s13 from '../assets/screensaver/Screen_saver_Decent_13.jpg?inline';
-import s14 from '../assets/screensaver/Screen_saver_Decent_14.jpg?inline';
-import s15 from '../assets/screensaver/Screen_saver_Decent_15.jpg?inline';
-
-const IMAGES = [s1, s2, s3, s4, s5, s6, s7, s8, s10, s12, s13, s14, s15];
-const CROSSFADE_MS = 8000;
-
-// Two stacked layers crossfaded by opacity: the visible one holds the current
-// image, the hidden one is preloaded with the next, then they swap.
-let idx = Math.floor(Math.random() * IMAGES.length);
-const layerA = ref(IMAGES[idx]);
-const layerB = ref('');
-const aVisible = ref(true);
-let imgTimer = null;
-function advance() {
-  idx = (idx + 1) % IMAGES.length;
-  const next = IMAGES[idx];
-  if (aVisible.value) layerB.value = next;
-  else layerA.value = next;
-  aVisible.value = !aVisible.value;
-}
+/* No background photos.
+ *
+ * There were 13, imported with `?inline` so Vite base64'd them into
+ * index.html — the Decent app injects Nova's HTML rather than serving it, so
+ * a relative `public/screensaver/*.jpg` path 404s there and inlining was the
+ * only thing that worked. The cost is that every byte lands in index.html and
+ * the WebView parses ALL of it at app start, minutes before the lock face is
+ * ever shown, on a tablet that can't afford it. Even at q75/1280x800 that was
+ * ~2MB of base64 on every boot for something most people see as a clock.
+ *
+ * Removed rather than made optional: a skin setting would still have shipped
+ * the bytes. Bringing them back means solving the delivery problem first
+ * (served files with a working base URL, or fetched on first idle rather than
+ * parsed at boot) — `git revert` restores the photos, the crossfade and the
+ * gradient that made text readable over them.
+ */
 
 // ── Clock ──
 const now = ref(new Date());
@@ -78,9 +46,8 @@ let clockTimer = null;
 
 onMounted(() => {
   clockTimer = setInterval(() => { now.value = new Date(); }, 15_000);
-  imgTimer = setInterval(advance, CROSSFADE_MS);
 });
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(imgTimer); });
+onUnmounted(() => clearInterval(clockTimer));
 
 const clockLabel = computed(() => formatClock(now.value));
 const dateLabel = computed(() =>
@@ -125,10 +92,6 @@ function onUp() {
 
 <template>
   <div class="screensaver" @click="skinSettings.tapToUnlock ? unlock() : null">
-    <div class="ss-bg" :style="{ backgroundImage: `url(${layerA})`, opacity: aVisible ? 1 : 0 }"></div>
-    <div class="ss-bg" :style="{ backgroundImage: layerB ? `url(${layerB})` : 'none', opacity: aVisible ? 0 : 1 }"></div>
-    <div class="ss-gradient"></div>
-
     <div class="ss-content">
       <div class="ss-time-wrap">
         <div class="ss-time">{{ clockLabel }}</div>
@@ -164,15 +127,6 @@ function onUp() {
 .screensaver {
   position: fixed; inset: 0; z-index: 50; overflow: hidden;
   background: #07090c; touch-action: none; user-select: none; -webkit-user-select: none;
-}
-.ss-bg {
-  position: absolute; inset: 0;
-  background-size: cover; background-position: center;
-  transition: opacity 0.7s ease; will-change: opacity;
-}
-.ss-gradient {
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,0.40) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.05) 60%, rgba(0,0,0,0.65) 100%);
 }
 .ss-content {
   position: relative; height: 100%;
