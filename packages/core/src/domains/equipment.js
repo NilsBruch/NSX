@@ -186,11 +186,38 @@
    *
    * RPM has no schema field anywhere: `GrinderRequest` carries only
    * rpmSmallStep/rpmBigStep (how far one press moves it), never a value.
+   *
+   * EQUIPMENT IS A LIST. A shot is pulled with a scale AND a WDT tool AND a
+   * dosing ring, so DYE2 stores parallel `equipmentIds` / `equipmentNames`
+   * arrays. It still READS a pre-multi-select shot's singular
+   * equipmentId/equipmentName as a one-element list, and deletes that pair
+   * the moment it writes — equipmentArrays below is the same reader, so an
+   * old shot opens correctly here too and is migrated by the first edit.
    */
   const DYE_CONTEXT_KEYS = ["baristaName", "drinkerName", "finalBeverageType"];
-  const DYE_EXTRAS_KEYS = ["basketId", "basketName", "equipmentId", "equipmentName", "rpm"];
+  const DYE_SCALAR_EXTRAS = ["basketId", "basketName", "rpm"];
+  // Written instead of the legacy pair; sent as explicit nulls beside the
+  // arrays so a shot that still carries them stops disagreeing with itself.
+  const LEGACY_EQUIPMENT_KEYS = ["equipmentId", "equipmentName"];
 
   const blank = (v) => v == null || v === "";
+
+  /**
+   * The equipment on a shot or a workflow, always as `{ ids, names }` — from
+   * the arrays if they're there, from the legacy singular pair if not, and
+   * empty otherwise. Mirrors DYE2's own equipmentArrays exactly, including
+   * that an array present WINS over any stale singular field beside it.
+   */
+  function equipmentArrays(extras) {
+    const ex = extras || {};
+    if (Array.isArray(ex.equipmentIds)) {
+      return { ids: ex.equipmentIds.slice(), names: (ex.equipmentNames || []).slice() };
+    }
+    if (!blank(ex.equipmentId) || !blank(ex.equipmentName)) {
+      return { ids: [ex.equipmentId ?? null], names: [ex.equipmentName ?? null] };
+    }
+    return { ids: [], names: [] };
+  }
 
   /** The DYE fields recorded on a shot (or on the live workflow), read back. */
   function dyeFieldsFromContext(context) {
@@ -198,7 +225,10 @@
     const extras = ctx.extras || {};
     const out = {};
     for (const k of DYE_CONTEXT_KEYS) out[k] = blank(ctx[k]) ? null : ctx[k];
-    for (const k of DYE_EXTRAS_KEYS) out[k] = blank(extras[k]) ? null : extras[k];
+    for (const k of DYE_SCALAR_EXTRAS) out[k] = blank(extras[k]) ? null : extras[k];
+    const equip = equipmentArrays(extras);
+    out.equipmentIds = equip.ids;
+    out.equipmentNames = equip.names;
     return out;
   }
 
@@ -223,7 +253,9 @@
   function dyeExtras(dye) {
     const d = dye || {};
     const out = {};
-    for (const k of DYE_EXTRAS_KEYS) if (!blank(d[k])) out[k] = d[k];
+    for (const k of DYE_SCALAR_EXTRAS) if (!blank(d[k])) out[k] = d[k];
+    const { ids, names } = equipmentArrays(d);
+    if (ids.length) { out.equipmentIds = ids; out.equipmentNames = names; }
     return out;
   }
 
@@ -239,12 +271,38 @@
   function dyeShotExtras(shot) {
     const extras = shot?.annotations?.extras || {};
     const out = {};
-    for (const k of DYE_EXTRAS_KEYS) out[k] = blank(extras[k]) ? null : extras[k];
+    for (const k of DYE_SCALAR_EXTRAS) out[k] = blank(extras[k]) ? null : extras[k];
+    const equip = equipmentArrays(extras);
+    out.equipmentIds = equip.ids;
+    out.equipmentNames = equip.names;
     if (out.rpm == null) {
       const legacy = shot?.workflow?.grinderData?.rpm;
       if (!blank(legacy)) out.rpm = legacy;
     }
     return out;
+  }
+
+  /**
+   * The annotations patch that sets a shot's equipment list.
+   *
+   * The legacy pair goes out as explicit nulls beside the arrays:
+   * `annotations.extras` merges at FIELD level, so there is no deleting a key
+   * the way DYE2 (which rewrites the object) can — and a shot left carrying
+   * both shapes is a shot two readers can disagree about.
+   *
+   * `equipmentCustom` — DYE2's per-shot overrides of an item's custom fields,
+   * keyed by item id — is deliberately untouched: this skin has no editor for
+   * it, and dropping rows for equipment still on the shot would throw away
+   * values only DYE2 can currently set.
+   */
+  function shotEquipmentPatch(rows) {
+    const list = Array.isArray(rows) ? rows.filter((r) => r && r.id != null) : [];
+    const extras = {
+      equipmentIds: list.map((r) => r.id),
+      equipmentNames: list.map((r) => r.name ?? null),
+    };
+    for (const k of LEGACY_EQUIPMENT_KEYS) extras[k] = null;
+    return extras;
   }
 
   /**
@@ -254,7 +312,12 @@
   function normalizeDye(dye) {
     const d = dye || {};
     const out = {};
-    for (const k of [...DYE_CONTEXT_KEYS, ...DYE_EXTRAS_KEYS]) out[k] = blank(d[k]) ? null : d[k];
+    for (const k of [...DYE_CONTEXT_KEYS, ...DYE_SCALAR_EXTRAS]) out[k] = blank(d[k]) ? null : d[k];
+    // A recipe saved before equipment was a list carries the singular pair;
+    // equipmentArrays turns it into the one-element list it always meant.
+    const equip = equipmentArrays(d);
+    out.equipmentIds = equip.ids;
+    out.equipmentNames = equip.names;
     return out;
   }
 
@@ -275,13 +338,16 @@
   /** True when a recipe has nothing DYE-ish set — for "not set" in the UI. */
   function isDyeEmpty(dye) {
     const d = dye || {};
-    return [...DYE_CONTEXT_KEYS, ...DYE_EXTRAS_KEYS].every((k) => blank(d[k]));
+    if (equipmentArrays(d).ids.length) return false;
+    return [...DYE_CONTEXT_KEYS, ...DYE_SCALAR_EXTRAS].every((k) => blank(d[k]));
   }
 
   NSXCore.register({
     dyeBeverageOptions,
     dyeFieldsFromContext,
     dyeShotExtras,
+    equipmentArrays,
+    shotEquipmentPatch,
     normalizeDye,
     dyeContextFields,
     dyeExtras,

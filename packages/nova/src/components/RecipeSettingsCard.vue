@@ -145,7 +145,9 @@ const ICONS = {
     </button>
   </div>
 
-  <PageTransition>
+  <!-- Rises from the bottom, not pushed in from the right: DYE is the page
+       below, the same way it is on a shot (see .dye-up in app.css). -->
+  <PageTransition name="dye-up">
     <RecipeDyeModal v-if="dyeOpen" @close="dyeOpen = false" />
   </PageTransition>
 </template>

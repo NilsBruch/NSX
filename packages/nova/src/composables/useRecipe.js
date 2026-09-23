@@ -86,7 +86,10 @@ export const recipe = reactive({
   // still reads correctly after the row behind it is deleted.
   dye: {
     basketId: null, basketName: null,
-    equipmentId: null, equipmentName: null,
+    // A LIST: a shot is pulled with a scale AND a WDT tool AND a dosing ring.
+    // A recipe saved before this carried a singular equipmentId/equipmentName,
+    // which NSXCore.normalizeDye migrates into a one-element list on load.
+    equipmentIds: [], equipmentNames: [],
     // Only for grinders whose speed adjusts at all — see the RPM tile's guard
     // in RecipeDyeModal (NSXCore.grinderHasVariableRpm).
     rpm: null,
@@ -214,7 +217,9 @@ function snapshotFromCurrentRecipe(existing = {}) {
     beanUnlinked: recipe.beanUnlinked,
     pinned: recipe.pinned,
     tags: Array.isArray(recipe.tags) ? [...recipe.tags] : [],
-    dye: { ...recipe.dye },
+    // Arrays copied, not shared: the persisted snapshot must not alias the
+    // live recipe's equipment list.
+    dye: NSXCore.normalizeDye(recipe.dye),
     volumeCalibration: recipe.volumeCalibration,
     rating: Number(recipe.rating) || 0,
   };
@@ -937,7 +942,12 @@ export async function adoptCurrentWorkflowAsRecipe() {
     // Same guard again for the DYE fields: a workflow left on the machine by a
     // skin that doesn't set them carries none, and without this the next
     // snapshot would persist that emptiness over the saved recipe's own.
-    if (NSXCore.isDyeEmpty(recipe.dye) && existing.dye) recipe.dye = { ...recipe.dye, ...existing.dye };
+    // Through normalizeDye, not a bare spread: a recipe saved before equipment
+    // was a list still holds the singular pair, and this is one of the paths
+    // that would otherwise put it on `recipe` unmigrated.
+    if (NSXCore.isDyeEmpty(recipe.dye) && existing.dye) {
+      recipe.dye = NSXCore.normalizeDye({ ...recipe.dye, ...existing.dye });
+    }
     if (existing.volumeCalibration) recipe.volumeCalibration = existing.volumeCalibration;
     recipe.rating = Number(existing.rating) || 0;
     recipe.stopAtWeight = existing.stopAtWeight !== false;

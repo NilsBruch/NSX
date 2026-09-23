@@ -1493,6 +1493,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .pick-items { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .pick-item { flex: none; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: none; border-radius: var(--r-md); padding: 10px 12px; color: var(--text); font-family: inherit; text-align: left; }
 .pick-item.sel { background: var(--card-hi); }
+/* The tick column in a multi-select chooser. Fixed width whether or not the
+   row is ticked, so the labels stay in one column instead of shifting as you
+   pick. */
+.chooser-item .ch-tick { display: inline-block; width: 1.2em; color: var(--accent); font-weight: 700; }
 .pick-item.grouped { padding-left: 28px; }
 .pick-item .pname { font-size: var(--fs-sm); font-weight: 600; flex: 1; }
 /* Hidden profiles stay in the list (when "show hidden" is on) but read as
@@ -1923,13 +1927,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 /* min-height reserves the row on an untagged recipe, so tagging one doesn't
    make its card grow past its neighbours (and so the overlay's horizontal
    strip is sized for tags from the start). */
-.rp-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 26px; }
+/* No min-height: the row only exists when it has tags in it now (RecipeCard),
+   so there is nothing to hold open. */
+.rp-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .rp-tag {
   border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 3px 10px;
   font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.02em; color: var(--accent);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.rp-list .rp-card .rp-tags { min-height: 22px; }
 .rp-list .rp-card .rp-tag { padding: 2px 8px; }
 .rp-del {
   /* Sits on .rp-card, which is itself var(--card-bg) — keep the original
@@ -2973,6 +2978,15 @@ a.sw-update { text-decoration: none; }
 :root { --page-slide: 0.3s cubic-bezier(0.22, 0.8, 0.22, 1); }
 .page-enter-active, .page-leave-active { transition: transform var(--page-slide); }
 .page-enter-from, .page-leave-to { transform: translateX(100%); }
+/* DYE comes from BELOW, wherever you open it. On a shot it literally is one
+   page down — the graph and the DYE page ride one slider (.dye-slider), and
+   the button brings the lower one up. The coffee page can't host that slider
+   (two layouts, its own overlays), but the recipe's DYE settings can share
+   the motion: same direction, same 0.32s curve, the screen underneath
+   staying put rather than being pushed aside the way .page does it. So DYE
+   is always down there, and always arrives the same way. */
+.dye-up-enter-active, .dye-up-leave-active { transition: transform 0.32s cubic-bezier(0.4, 0.0, 0.2, 1); }
+.dye-up-enter-from, .dye-up-leave-to { transform: translateY(100%); }
 /* The layers a page can push. The transition lives on them permanently (it
    only animates when .page-pushed comes or goes); the class moves the layer
    one screen to the left while a page is open over it. */
@@ -2989,6 +3003,8 @@ a.sw-update { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   .page-enter-active, .page-leave-active { transition: opacity 0.12s ease; }
   .page-enter-from, .page-leave-to { transform: none; opacity: 0; }
+  .dye-up-enter-active, .dye-up-leave-active { transition: opacity 0.12s ease; }
+  .dye-up-enter-from, .dye-up-leave-to { transform: none; opacity: 0; }
   /* No push without motion: the layer beneath simply stays, covered. */
   .stage, .phone-shell, .overlay-full, .page-host { transition: none; }
   .page-pushed { transform: none; }

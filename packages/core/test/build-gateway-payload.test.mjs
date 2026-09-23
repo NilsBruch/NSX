@@ -211,7 +211,8 @@ test("a recipe's DYE fields ride into the context, split by where readers look",
     ...DYE_WORKFLOW,
     dye: {
       baristaName: "Nils", drinkerName: "Ada", finalBeverageType: "espresso",
-      basketId: "bskt-1", basketName: "VST 18g", equipmentId: "eqp-1", equipmentName: "Lunar",
+      basketId: "bskt-1", basketName: "VST 18g",
+      equipmentIds: ["eqp-1", "eqp-2"], equipmentNames: ["Lunar", "WDT tool"],
     },
   }, {});
 
@@ -220,9 +221,11 @@ test("a recipe's DYE fields ride into the context, split by where readers look",
   assert.equal(payload.context.drinkerName, "Ada");
   assert.equal(payload.context.finalBeverageType, "espresso");
   // Basket/equipment have no native home — they go under the names DYE2
-  // denormalises onto a shot, so it can read a shot we pulled.
+  // denormalises onto a shot, so it can read a shot we pulled. Equipment is a
+  // LIST: one shot, a scale and a WDT tool.
   assert.deepEqual(payload.context.extras, {
-    basketId: "bskt-1", basketName: "VST 18g", equipmentId: "eqp-1", equipmentName: "Lunar",
+    basketId: "bskt-1", basketName: "VST 18g",
+    equipmentIds: ["eqp-1", "eqp-2"], equipmentNames: ["Lunar", "WDT tool"],
   });
 });
 

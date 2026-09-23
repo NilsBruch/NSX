@@ -34,7 +34,7 @@ import {
 import { beans, grinders, shots, baskets, equipment, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
-import { openTextField, openNumberPad, openChooser, openRating } from '../composables/useModals.js';
+import { openTextField, openNumberPad, openChooser, openMultiChooser, openRating } from '../composables/useModals.js';
 // Section icons from Lucide. Named imports, so only these four end up in the
 // build; the style (colour, size, stroke) comes from .dye-head in app.css.
 import { PaperBag, Coffee, LensConcave, Users } from '@lucide/vue';
@@ -273,9 +273,23 @@ async function editExtrasRef({ title, rows, idField, nameField }) {
 const editBasket = () => editExtrasRef({
   title: t('recipeDye.basket'), rows: baskets.value, idField: 'basketId', nameField: 'basketName',
 });
-const editEquipment = () => editExtrasRef({
-  title: t('recipeDye.equipment'), rows: equipment.value, idField: 'equipmentId', nameField: 'equipmentName',
-});
+/**
+ * Equipment is a LIST on a shot — parallel equipmentIds/equipmentNames in
+ * `annotations.extras`. Core builds the patch (shotEquipmentPatch), which
+ * also nulls the legacy singular pair a pre-multi-select shot may still
+ * carry, so the record stops describing itself two ways.
+ */
+async function editEquipment() {
+  const rows = equipment.value;
+  const ids = await openMultiChooser({
+    title: t('recipeDye.equipment'),
+    options: rows.map((r) => [r.id, r.name || '—']),
+    current: shotExtras.value.equipmentIds ?? [],
+  });
+  if (ids == null) return;
+  const picked = ids.map((id) => rows.find((r) => r.id === id)).filter(Boolean);
+  await setShotAnnotations({ extras: NSXCore.shotEquipmentPatch(picked) });
+}
 
 async function editRpm() {
   const v = await openNumberPad({
@@ -288,7 +302,10 @@ async function editRpm() {
 // library. That's the point of DYE2 denormalising it: a basket deleted since
 // does not blank out the shots pulled with it.
 const basketLabel = computed(() => shotExtras.value.basketName || null);
-const equipmentLabel = computed(() => shotExtras.value.equipmentName || null);
+const equipmentLabel = computed(() => {
+  const names = (shotExtras.value.equipmentNames ?? []).filter(Boolean);
+  return names.length ? names.join(', ') : null;
+});
 // The field is always shown (with the integration on), but only editable on
 // a grinder whose speed adjusts — core's grinderHasVariableRpm. A shot that
 // already recorded an RPM stays editable regardless, so a value the record
@@ -528,7 +545,9 @@ async function editEnjoyment() {
                 <span class="dl">{{ t('recipeDye.basket') }}</span>
                 <span class="dv" :class="{ muted: !basketLabel }">{{ dash(basketLabel) }}</span>
               </button>
-              <button class="dye-tile" :disabled="!equipment.length" @click="editEquipment">
+              <!-- Two columns, as on the recipe page: an equipment LIST does
+                   not fit a half tile. -->
+              <button class="dye-tile dye-span2" :disabled="!equipment.length" @click="editEquipment">
                 <span class="dl">{{ t('recipeDye.equipment') }}</span>
                 <span class="dv" :class="{ muted: !equipmentLabel }">{{ dash(equipmentLabel) }}</span>
               </button>

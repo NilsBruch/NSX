@@ -94,10 +94,12 @@ const tags = computed(() => (Array.isArray(props.entry.tags) ? props.entry.tags 
     <!-- The recipe's CURRENT tags (the hold menu edits them). A shot shows the
          tags it was pulled with instead, off its own record — see useRecipe's
          `tags`, and the shot view's own row.
-         Always rendered, even with no tags: the row reserves its height so
-         every card is the same size whether or not it's tagged. Hidden
-         entirely (height and all) when the skin setting is off. -->
-    <div v-if="skinSettings.showTags" class="rp-tags">
+         Only rendered when there ARE tags. It used to render empty so every
+         card matched height whether tagged or not, which bought that
+         evenness with a band of nothing under every untagged card — and most
+         are untagged, so the list paid for it everywhere to look tidy in the
+         rare case. A tagged card simply being taller reads fine. -->
+    <div v-if="skinSettings.showTags && tags.length" class="rp-tags">
       <span v-for="tag in tags" :key="tag" class="rp-tag">{{ tag }}</span>
     </div>
   </div>

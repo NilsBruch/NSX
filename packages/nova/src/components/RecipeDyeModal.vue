@@ -42,7 +42,7 @@ import {
   recipe, roastAge, setRecipeDye, dyeNamesUsed, beanForRecipe,
 } from '../composables/useRecipe.js';
 import { baskets, equipment, grinders, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
-import { openTextField, openChooser, openNumberPad } from '../composables/useModals.js';
+import { openTextField, openChooser, openMultiChooser, openNumberPad } from '../composables/useModals.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
 // The same four section icons the shot page uses — the mirror is the point.
@@ -111,8 +111,31 @@ async function pickFromLibrary({ title, rows, idField, nameField }) {
 const pickBasket = () => pickFromLibrary({
   title: t('recipeDye.basket'), rows: baskets.value, idField: 'basketId', nameField: 'basketName',
 });
-const pickEquipment = () => pickFromLibrary({
-  title: t('recipeDye.equipment'), rows: equipment.value, idField: 'equipmentId', nameField: 'equipmentName',
+/**
+ * Equipment is a LIST — a shot is pulled with a scale AND a WDT tool AND a
+ * dosing ring — so this is the multi-select, and the recipe stores parallel
+ * id/name arrays (core's equipmentArrays). The names are stored beside the
+ * ids for the same reason a basket's is: a shot has to still read correctly
+ * once a row behind it is deleted.
+ */
+async function pickEquipment() {
+  const rows = equipment.value;
+  const ids = await openMultiChooser({
+    title: t('recipeDye.equipment'),
+    options: rows.map((r) => [r.id, r.name || '—']),
+    current: dye.value.equipmentIds ?? [],
+  });
+  if (ids == null) return;
+  const picked = ids.map((id) => rows.find((r) => r.id === id)).filter(Boolean);
+  await setRecipeDye({
+    equipmentIds: picked.map((r) => r.id),
+    equipmentNames: picked.map((r) => r.name ?? null),
+  });
+}
+
+const equipmentLabel = computed(() => {
+  const names = (dye.value.equipmentNames ?? []).filter(Boolean);
+  return names.length ? names.join(', ') : null;
 });
 
 // Most grinders run at one speed. The field is always SHOWN — so the layout
@@ -297,9 +320,11 @@ async function pickBeverage() {
               <span class="dl">{{ t('recipeDye.basket') }}</span>
               <span class="dv" :class="{ muted: !dye.basketName }">{{ dash(dye.basketName) }}</span>
             </button>
-            <button class="dye-tile" :disabled="!equipment.length" @click="pickEquipment">
+            <!-- Two columns: it holds a LIST now ("Lunar, WDT tool, dosing
+                 ring"), which a half tile ellipsised down to the first name. -->
+            <button class="dye-tile dye-span2" :disabled="!equipment.length" @click="pickEquipment">
               <span class="dl">{{ t('recipeDye.equipment') }}</span>
-              <span class="dv" :class="{ muted: !dye.equipmentName }">{{ dash(dye.equipmentName) }}</span>
+              <span class="dv" :class="{ muted: !equipmentLabel }">{{ dash(equipmentLabel) }}</span>
             </button>
             <div class="dye-pair dye-off">
               <div class="dye-tile static">

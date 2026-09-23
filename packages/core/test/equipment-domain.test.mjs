@@ -175,8 +175,8 @@ test("dyeFieldsFromContext reads both halves of a recorded context", () => {
     }),
     {
       baristaName: "Nils", drinkerName: null, finalBeverageType: "espresso",
-      basketId: "bskt-1", basketName: "VST 18g", equipmentId: null, equipmentName: null,
-      rpm: null,
+      basketId: "bskt-1", basketName: "VST 18g", rpm: null,
+      equipmentIds: [], equipmentNames: [],
     },
   );
 });
@@ -184,7 +184,7 @@ test("dyeFieldsFromContext reads both halves of a recorded context", () => {
 test("a shot pulled before any of this, or with no context at all, reads as empty", () => {
   const empty = {
     baristaName: null, drinkerName: null, finalBeverageType: null,
-    basketId: null, basketName: null, equipmentId: null, equipmentName: null, rpm: null,
+    basketId: null, basketName: null, rpm: null, equipmentIds: [], equipmentNames: [],
   };
   assert.deepEqual(NSXCore.dyeFieldsFromContext({}), empty);
   assert.deepEqual(NSXCore.dyeFieldsFromContext(null), empty);
@@ -204,8 +204,8 @@ test("dyeShotExtras reads annotations.extras — the object DYE2 actually reads"
   };
 
   assert.deepEqual(NSXCore.dyeShotExtras(shot), {
-    basketId: 'bskt-1', basketName: 'VST 18g',
-    equipmentId: null, equipmentName: null, rpm: 900,
+    basketId: 'bskt-1', basketName: 'VST 18g', rpm: 900,
+    equipmentIds: [], equipmentNames: [],
   });
 });
 
@@ -219,7 +219,7 @@ test("RPM falls back to the legacy workflow.grinderData.rpm DYE2 still reads", (
 });
 
 test("a shot with no extras at all reads as empty, not as a crash", () => {
-  const empty = { basketId: null, basketName: null, equipmentId: null, equipmentName: null, rpm: null };
+  const empty = { basketId: null, basketName: null, rpm: null, equipmentIds: [], equipmentNames: [] };
   assert.deepEqual(NSXCore.dyeShotExtras({}), empty);
   assert.deepEqual(NSXCore.dyeShotExtras(null), empty);
 });
@@ -227,4 +227,73 @@ test("a shot with no extras at all reads as empty, not as a crash", () => {
 test("a recipe's RPM pushes in context.extras, beside basket and equipment", () => {
   assert.deepEqual(NSXCore.dyeExtras({ rpm: 900, basketId: 'bskt-1' }), { rpm: 900, basketId: 'bskt-1' });
   assert.equal('rpm' in NSXCore.normalizeDye(null), true);
+});
+
+
+/* ── Equipment is a LIST ─────────────────────────────────────────────────── */
+
+test("a shot's equipment reads as parallel id/name arrays", () => {
+  const shot = { annotations: { extras: {
+    equipmentIds: ['eqp-1', 'eqp-2'], equipmentNames: ['Lunar', 'WDT tool'],
+  } } };
+  const got = NSXCore.dyeShotExtras(shot);
+  assert.deepEqual(got.equipmentIds, ['eqp-1', 'eqp-2']);
+  assert.deepEqual(got.equipmentNames, ['Lunar', 'WDT tool']);
+});
+
+test("a shot written before multi-select still opens, as a list of one", () => {
+  // DYE2 reads the singular pair the same way and drops it on its next write.
+  const legacy = { annotations: { extras: { equipmentId: 'eqp-1', equipmentName: 'Lunar' } } };
+  assert.deepEqual(NSXCore.equipmentArrays(legacy.annotations.extras),
+    { ids: ['eqp-1'], names: ['Lunar'] });
+  assert.deepEqual(NSXCore.dyeShotExtras(legacy).equipmentNames, ['Lunar']);
+});
+
+test("an array present wins over a stale singular field beside it", () => {
+  assert.deepEqual(
+    NSXCore.equipmentArrays({ equipmentIds: ['eqp-2'], equipmentNames: ['WDT'], equipmentId: 'eqp-1' }),
+    { ids: ['eqp-2'], names: ['WDT'] },
+  );
+});
+
+test("the shot patch writes the arrays and nulls the legacy pair", () => {
+  // annotations.extras merges at FIELD level, so a key can't be deleted the
+  // way DYE2 deletes it — an explicit null is how the old shape stops
+  // disagreeing with the new one.
+  assert.deepEqual(
+    NSXCore.shotEquipmentPatch([{ id: 'eqp-1', name: 'Lunar' }, { id: 'eqp-2', name: 'WDT tool' }]),
+    {
+      equipmentIds: ['eqp-1', 'eqp-2'], equipmentNames: ['Lunar', 'WDT tool'],
+      equipmentId: null, equipmentName: null,
+    },
+  );
+  // Clearing every row still writes the empty arrays, not nothing.
+  assert.deepEqual(NSXCore.shotEquipmentPatch([]), {
+    equipmentIds: [], equipmentNames: [], equipmentId: null, equipmentName: null,
+  });
+});
+
+test("a recipe pushes its equipment list into context.extras, or omits it when empty", () => {
+  assert.deepEqual(
+    NSXCore.dyeExtras({ equipmentIds: ['eqp-1'], equipmentNames: ['Lunar'] }),
+    { equipmentIds: ['eqp-1'], equipmentNames: ['Lunar'] },
+  );
+  assert.deepEqual(NSXCore.dyeExtras({ equipmentIds: [], equipmentNames: [] }), {});
+  // A recipe saved before the list existed pushes as a list of one.
+  assert.deepEqual(
+    NSXCore.dyeExtras({ equipmentId: 'eqp-1', equipmentName: 'Lunar' }),
+    { equipmentIds: ['eqp-1'], equipmentNames: ['Lunar'] },
+  );
+});
+
+test("normalizeDye migrates an older recipe's single equipment to the list", () => {
+  const got = NSXCore.normalizeDye({ equipmentId: 'eqp-1', equipmentName: 'Lunar' });
+  assert.deepEqual(got.equipmentIds, ['eqp-1']);
+  assert.deepEqual(got.equipmentNames, ['Lunar']);
+  assert.equal('equipmentId' in got, false, "the legacy pair is not carried forward");
+});
+
+test("isDyeEmpty counts an equipment list as something set", () => {
+  assert.equal(NSXCore.isDyeEmpty({ equipmentIds: [], equipmentNames: [] }), true);
+  assert.equal(NSXCore.isDyeEmpty({ equipmentIds: ['eqp-1'], equipmentNames: ['Lunar'] }), false);
 });

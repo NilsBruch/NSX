@@ -82,8 +82,29 @@ export function resolveTextField(value) {
  * continuous scroll of WheelPicker. Used by Settings rows like charging mode
  * or log level. */
 export const chooserState = reactive({
-  open: false, title: '', options: [], current: null, _resolve: null,
+  open: false, title: '', options: [], current: null, multi: false, picked: [], _resolve: null,
 });
+
+/**
+ * The same list, but you tick several and press Done — for a field that holds
+ * a LIST rather than one answer (a shot's equipment: a scale AND a WDT tool
+ * AND a dosing ring). Resolves an array of values, in the order they were
+ * ticked, or null if cancelled.
+ *
+ * @param {{ title: string, options: Array<[value: string, label: string]>, current?: string[] }} opts
+ * @returns {Promise<string[]|null>}
+ */
+export function openMultiChooser({ title, options, current = [] }) {
+  return new Promise((resolve) => {
+    chooserState.title = title;
+    chooserState.options = options;
+    chooserState.multi = true;
+    chooserState.picked = Array.isArray(current) ? [...current] : [];
+    chooserState.current = null;
+    chooserState._resolve = resolve;
+    chooserState.open = true;
+  });
+}
 
 /**
  * @param {{ title: string, options: Array<[value: string, label: string]>, current: string }} opts
@@ -94,6 +115,7 @@ export function openChooser({ title, options, current }) {
     chooserState.title = title;
     chooserState.options = options;
     chooserState.current = current;
+    chooserState.multi = false;
     chooserState._resolve = resolve;
     chooserState.open = true;
   });
