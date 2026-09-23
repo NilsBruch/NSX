@@ -86,15 +86,6 @@ const historyStripSeries = computed(() => {
     temperature: s.temperature, targetTemperature: s.targetTemperature,
   };
 });
-// The recipe tags as RECORDED WITH this shot (workflow.context.extras.tags —
-// where pushRecipe puts them, see useRecipe's `tags`), not the recipe's tags as
-// they stand today: re-tagging a recipe must not rewrite what past shots say
-// about themselves. Same source NSX's shot review reads.
-const shotTags = computed(() => {
-  const tags = currentFullShot.value?.workflow?.context?.extras?.tags
-    ?? currentShot.value?.workflow?.context?.extras?.tags;
-  return Array.isArray(tags) ? tags : [];
-});
 
 // "05. Sep 2026" rather than "05/09/26": which number was the month, and of
 // which century, was a puzzle — the same reason the bag list writes its dates
@@ -323,12 +314,6 @@ async function editGrindSetting() {
             <i><span class="sw" :style="{ background: LIVE_COLORS.flow }"></span><b v-if="scrub">{{ fmt(scrub.flow) }}<small>ml/s</small></b><template v-else>{{ t('liveShot.mFlow') }}</template></i>
             <i><span class="sw" :style="{ background: LIVE_COLORS.wflow }"></span><b v-if="scrub">{{ fmt(scrub.weightFlow) }}<small>g/s</small></b><template v-else>{{ t('liveShot.mWflow') }}</template></i>
           </div>
-        </div>
-        <!-- Read-only: these are what the recipe carried when the shot was
-             pulled. Editing tags is a recipe action (the card hold menu). -->
-        <div v-if="skinSettings.showTags && shotTags.length" class="shot-tags">
-          <span class="st-label">{{ t('liveShot.shotTags') }}</span>
-          <span v-for="tag in shotTags" :key="tag" class="st-tag">{{ tag }}</span>
         </div>
         <div class="shot-metrics">
           <button class="metric as-btn" @click="editGrindSetting">

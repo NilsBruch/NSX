@@ -2,7 +2,6 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
-import { skinSettings } from '../composables/useSettings.js';
 import StarRating from './StarRating.vue';
 import { fmtTemp } from '../composables/useUnits.js';
 
@@ -28,7 +27,24 @@ function grinderDisplay(entry) {
 }
 const num = (v, digits = 1) => (Number.isFinite(Number(v)) ? Number(v).toFixed(digits) : '—');
 const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight) || 0, Number(entry.targetYield) || 0);
-const tags = computed(() => (Array.isArray(props.entry.tags) ? props.entry.tags : []));
+/**
+ * The kit this recipe brews with — its basket, then each piece of equipment,
+ * in the order they were picked. Read off the recipe's own DYE fields, which
+ * store the names beside the ids for exactly this: a card can say "Decent
+ * 18g" without resolving anything, and still says it after the library row
+ * behind it is deleted.
+ *
+ * This slot used to hold free-text tags. Kit is what people were mostly
+ * writing there, and it now has a real home — with an identity that survives
+ * a rename, fields of its own, and a second app that reads it.
+ */
+const kit = computed(() => {
+  const d = props.entry.dye || {};
+  return [d.basketName, ...(Array.isArray(d.equipmentNames) ? d.equipmentNames : [])]
+    .map((v) => String(v || '').trim())
+    .filter(Boolean);
+});
+
 </script>
 
 <template>
@@ -88,19 +104,21 @@ const tags = computed(() => (Array.isArray(props.entry.tags) ? props.entry.tags 
       <!-- Plain .rp-val, not a pill: the profile is one of the card's FACTS,
            like the grinder or the dose, so it's read the same way. The pill it
            used to be made it look like a control, and put a third shape on a
-           card that already carries label/value pairs and (accented) tags. -->
+           card that already carries label/value pairs and (accented) kit
+           chips. -->
       <span class="rp-val">{{ entry.profileTitle }}</span>
     </div>
-    <!-- The recipe's CURRENT tags (the hold menu edits them). A shot shows the
-         tags it was pulled with instead, off its own record — see useRecipe's
-         `tags`, and the shot view's own row.
-         Only rendered when there ARE tags. It used to render empty so every
-         card matched height whether tagged or not, which bought that
-         evenness with a band of nothing under every untagged card — and most
-         are untagged, so the list paid for it everywhere to look tidy in the
-         rare case. A tagged card simply being taller reads fine. -->
-    <div v-if="skinSettings.showTags && tags.length" class="rp-tags">
-      <span v-for="tag in tags" :key="tag" class="rp-tag">{{ tag }}</span>
+    <!-- Only rendered when there IS kit: the row used to render empty so
+         every card matched height either way, which bought that evenness
+         with a band of nothing under most of them. A card with kit simply
+         being taller reads fine. -->
+    <!-- One line, scrolled by hand when there is more kit than card. Not
+         wrapped: a card that grows a line for its third chip changes height,
+         and these sit in a list whose even heights are what you scan down.
+         Not ellipsised either — "Decent 18g, RD…" hides exactly the part that
+         tells two recipes on the same basket apart. -->
+    <div v-if="kit.length" class="rp-kit">
+      <span v-for="name in kit" :key="name" class="rp-kit-chip">{{ name }}</span>
     </div>
   </div>
 </template>

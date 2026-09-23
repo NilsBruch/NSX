@@ -69,16 +69,8 @@ export const recipe = reactive({
   beanUnlinked: false,
   // Sorted to the top of the recipe browser — see togglePinRecipe.
   pinned: false,
-  // Free-text labels on the recipe ("morning", "for guests", "dialling in").
-  // They ride along in the workflow pushed to the gateway
-  // (context.extras.tags — see NSXCore.buildGatewayPayload), so every shot
-  // pulled on this recipe RECORDS the tags it carried at the time: the shot
-  // view reads them back off the shot itself, not off today's recipe. That's
-  // the whole point of them — a permanent note about the conditions a shot was
-  // pulled under, which editing the recipe later cannot rewrite.
-  tags: [],
   // The DYE plugin's fields: who pulled it, who drank it, what it was, and on
-  // what kit. Exactly like `tags` above, they ride into the pushed workflow
+  // what kit. They ride into the pushed workflow
   // context (NSXCore.dyeContextFields / dyeExtras) so every shot pulled on
   // this recipe RECORDS them, and the shot view reads them back off the shot
   // rather than off today's recipe. Basket and equipment reference rows in
@@ -216,7 +208,6 @@ function snapshotFromCurrentRecipe(existing = {}) {
     beanBatchId: recipe.beanBatchId,
     beanUnlinked: recipe.beanUnlinked,
     pinned: recipe.pinned,
-    tags: Array.isArray(recipe.tags) ? [...recipe.tags] : [],
     // Arrays copied, not shared: the persisted snapshot must not alias the
     // live recipe's equipment list.
     dye: NSXCore.normalizeDye(recipe.dye),
@@ -252,25 +243,16 @@ export async function setRecipeRating(value) {
   await persistCurrentRecipeEdits();
 }
 
-/** Sets the loaded recipe's tags and pushes, so the machine's workflow carries
- *  them from the very next shot on. Pushing is also what persists them
- *  (pushRecipe -> persistCurrentRecipeEdits, and the deferred branch persists
- *  too), so there's no separate save here. */
-export async function setRecipeTags(tags) {
-  recipe.tags = Array.isArray(tags) ? tags.filter(Boolean) : [];
-  await pushRecipe();
-}
-
 /** Patches the loaded recipe's DYE fields and pushes, so the machine's
  *  workflow carries them from the very next shot on. Pushing persists them
- *  too (pushRecipe -> persistCurrentRecipeEdits), exactly like setRecipeTags. */
+ *  too (pushRecipe -> persistCurrentRecipeEdits). */
 export async function setRecipeDye(patch) {
   recipe.dye = NSXCore.normalizeDye({ ...recipe.dye, ...(patch || {}) });
   await pushRecipe();
 }
 
 /** Every barista or drinker name any recipe carries, for the text editors'
- *  suggestions — same idea as allRecipeTags, so you retype a name once. */
+ *  suggestions, so you retype a name once. */
 export function dyeNamesUsed(field) {
   const seen = new Set();
   for (const r of recipes.value) {
@@ -279,19 +261,6 @@ export function dyeNamesUsed(field) {
   }
   return [...seen];
 }
-
-/** Every tag any recipe in the library carries, for the editor's suggestions —
- *  most-recently-used first, since `recipes` is kept in use order. */
-export const allRecipeTags = computed(() => {
-  const seen = new Set();
-  for (const r of recipes.value) {
-    for (const tag of (Array.isArray(r.tags) ? r.tags : [])) {
-      const v = String(tag || '').trim();
-      if (v) seen.add(v);
-    }
-  }
-  return [...seen];
-});
 
 /** Applied by useLiveShot.js's post-shot hook once the calibration feedback
  *  loop (NSXCore.updateVolumeCalibration) has computed a refined factor for
@@ -459,12 +428,7 @@ async function syncFromWorkflow(wf) {
     selectedProfileId: wf?.profileId ?? keptProfileId,
     // stopAtWeight isn't recoverable from a pushed gateway workflow — keep
     // whatever the recipe already has (defaults to true) rather than guessing.
-    // The gateway is the truth for tags the same way it is for the rest of the
-    // context: a workflow we pushed carries them, one pushed from elsewhere
-    // carries whatever that skin set. Boot is the exception (the machine's own
-    // workflow may predate them) — see adoptCurrentWorkflowAsRecipe.
-    tags: Array.isArray(wf?.context?.extras?.tags) ? [...wf.context.extras.tags] : [],
-    // Same rule as tags: the gateway is the truth. A workflow pushed from
+    // The gateway is the truth here: a workflow pushed from
     // another skin or from DYE2 itself carries whatever IT set.
     dye: NSXCore.dyeFieldsFromContext(wf?.context),
     grinderId: wf?.context?.grinderId ?? null,
@@ -560,9 +524,6 @@ export async function pushRecipe({ silent = false } = {}) {
     // recipe's very next push, with no extra plumbing needed here.
     selectedProfileId: recipe.selectedProfileId,
     stopAtWeight: recipe.stopAtWeight,
-    // -> context.extras.tags, which is what stamps them onto every shot pulled
-    // on this workflow (see the `tags` note on `recipe`).
-    tags: recipe.tags,
     // -> context.baristaName/drinkerName/finalBeverageType + context.extras'
     // basket/equipment ids, which is what stamps them onto every shot pulled
     // on this workflow (see the `dye` note on `recipe`).
@@ -700,7 +661,6 @@ export async function selectRecipe(entry, { push = true } = {}) {
     beanBatchId: entry.beanBatchId ?? null,
     beanUnlinked: entry.beanUnlinked === true,
     pinned: entry.pinned === true,
-    tags: Array.isArray(entry.tags) ? [...entry.tags] : [],
     // Older entries predate the field entirely — normalise through core so a
     // recipe saved before this always reads as "nothing set".
     dye: NSXCore.normalizeDye(entry.dye),
@@ -769,8 +729,6 @@ export async function composeNewRecipe({ bean, profile, seedContext = null, batc
     roastDate: batch?.roastDate ?? null,
     volumeCalibration: { factor: 1.0, samples: [] },
     rating: 0, // a freshly composed recipe starts unrated
-    tags: [],  // ...and untagged: tags belong to a recipe, not to the dials
-               // the last one happened to leave behind
     dye: NSXCore.normalizeDye(null), // ...and with no DYE fields, for the same reason
   });
 
@@ -934,11 +892,6 @@ export async function adoptCurrentWorkflowAsRecipe() {
     // until the next recipe switch. Guarded: a profileId the gateway DID carry
     // wins, and `existing` was matched on this very profile title anyway.
     if (!recipe.selectedProfileId) recipe.selectedProfileId = existing.selectedProfileId ?? null;
-    // Same guard for tags: a workflow already on the machine from before this
-    // feature (or pushed by a skin that doesn't set them) carries none, and
-    // without this the next snapshot would persist that emptiness over the
-    // saved recipe's own tags.
-    if (!recipe.tags.length && Array.isArray(existing.tags)) recipe.tags = [...existing.tags];
     // Same guard again for the DYE fields: a workflow left on the machine by a
     // skin that doesn't set them carries none, and without this the next
     // snapshot would persist that emptiness over the saved recipe's own.

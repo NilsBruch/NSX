@@ -454,12 +454,6 @@ export const skinSettings = reactive({
   // its own right-hand scale) and a legend that toggles series and goals.
   // Same renderer either way — see ShotStripChart.vue.
   graphMode: 'normal',
-  // false hides recipe tags everywhere in the UI: the chip on the coffee page,
-  // the pills on recipe cards, the row in the shot view, and the hold menus'
-  // own Tags entry. It does NOT touch the data — tags stay on the recipes and
-  // keep riding along to the shots (see useRecipe's `tags`), so turning this
-  // back on shows everything that was recorded while it was off.
-  showTags: true,
   // true = the coffee page becomes a browser: recipe cards on the left, the
   // selected recipe's shot graph on the right, a shot stepper + Edit Recipe
   // button at the bottom, instead of the single-recipe dial layout. OFF by
@@ -493,7 +487,6 @@ const SKIN_KEYS = {
   shotReviewAutoCloseSec: 'nova_shot_review_autoclose',
   showTargets: 'nova_show_targets',
   graphMode: 'nova_graph_mode',
-  showTags: 'nova_show_tags',
   coffeeGraph: 'nova_coffee_graph',
   dyeButton: 'nova_dye_button',
   tempUnit: 'nova_temp_unit',
@@ -524,7 +517,6 @@ export function loadSkinSettings() {
   skinSettings.shotReviewAutoCloseSec = s.nova_shot_review_autoclose != null ? Number(s.nova_shot_review_autoclose) : 5;
   skinSettings.showTargets = s.nova_show_targets === true; // default off
   skinSettings.graphMode = s.nova_graph_mode || 'normal';
-  skinSettings.showTags = s.nova_show_tags !== false; // default on
   skinSettings.coffeeGraph = s.nova_coffee_graph === true; // default off
   skinSettings.dyeButton = s.nova_dye_button !== false; // default on
   skinSettings.tempUnit = s.nova_temp_unit === 'F' ? 'F' : 'C';

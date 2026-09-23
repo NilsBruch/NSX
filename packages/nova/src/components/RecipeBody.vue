@@ -3,7 +3,6 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipeIdentityParts, formatShortDate } from '../composables/useCore.js';
 import { recipe, roastAge, hasProfile } from '../composables/useRecipe.js';
-import { useRecipeList } from '../composables/useRecipeList.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
@@ -27,9 +26,6 @@ const {
   onDoseClick, doseDrag, onGrindClick, grindDrag, onYieldClick, yieldDrag,
   onTempClick, tempDrag, toggleStopAtWeight, rateRecipe,
 } = useRecipeDials();
-// Only for the tag editor — the same one both recipe browsers' hold menus
-// open, so tags are edited identically wherever you reach them from.
-const { editTags } = useRecipeList();
 
 // Tap the title to browse recipes, HOLD it to edit the loaded recipe's
 // profile. That freed the bottom row's leftmost slot, which was the only
@@ -66,9 +62,6 @@ const titleParts = computed(() => recipeIdentityParts(recipe));
 // One chip, not a row of pills: this sits in a fixed-width dial column, so a
 // wrapping list would push the orbs around. Empty reads as the invitation to
 // add some, the same way the roast chip does when no date is set.
-const tagLabel = computed(() =>
-  recipe.tags?.length ? recipe.tags.join(' · ') : t('espresso.tags')
-);
 
 const roastLabel = computed(() =>
   recipe.roastDate ? `${t('espresso.roasted')} ${formatShortDate(recipe.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
@@ -178,20 +171,6 @@ const roastLabel = computed(() =>
             @click="toggleStopAtWeight"
           ></button>
         </div>
-        <!-- The recipe's tags, under the stop-at column — a chip in the same
-             slot the roast chip takes under the dose orb (a sibling of the
-             orbs, not part of them). They belong to the whole recipe rather
-             than to the orbs above, which is why the label reads "Tags" rather
-             than being implied by what it sits under; this is just the column
-             wide enough to carry a tag list. Tapping opens the same editor the
-             recipe cards' hold menus do. -->
-        <button v-if="skinSettings.showTags" class="roast-chip tag-chip" @click="editTags()">
-          <!-- The icon sits OUTSIDE the outline: the pill is the tag, the icon
-               labels what the pill is — enclosing it made the two read as one
-               oversized chip. -->
-          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.tag"></svg>
-          <span class="tag-chip-text">{{ tagLabel }}</span>
-        </button>
       </div>
     </div>
 

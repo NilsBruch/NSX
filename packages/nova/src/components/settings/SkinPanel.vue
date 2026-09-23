@@ -191,16 +191,6 @@ async function pickSkin(skin) {
           <button :class="{ on: skinSettings.coffeeGraph }" @click="saveSkinSetting('coffeeGraph', true)">{{ t('skinSettings.coffeeList') }}</button>
         </div>
       </div>
-      <!-- Display only: the tags stay on the recipes and keep being recorded on
-           every shot either way, so turning this back on shows what was saved
-           while it was off. -->
-      <div class="setting-row">
-        <span class="sr-main">
-          <span class="sr-name">{{ t('skinSettings.showTags') }}</span>
-          <span class="sr-sub">{{ t('skinSettings.showTagsSub') }}</span>
-        </span>
-        <button class="switch" :class="{ on: skinSettings.showTags }" role="switch" :aria-checked="skinSettings.showTags" @click="saveSkinSetting('showTags', !skinSettings.showTags)"></button>
-      </div>
       <!-- Off leaves the history view at its graph and stars. Nothing is lost:
            notes, TDS and the rest stay on the shots that have them. -->
       <div class="setting-row">

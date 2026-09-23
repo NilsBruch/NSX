@@ -59,7 +59,7 @@ onMounted(() => {
 // own default sortMode), and with no way to set a query, listedRecipes and
 // its old query-filtered visibleRecipes are the same list; only the former
 // is needed now.
-const { isCurrent, listedRecipes, editTags } = useRecipeList();
+const { isCurrent, listedRecipes } = useRecipeList();
 
 async function pick(entry) {
   if (isCurrent(entry)) return;
@@ -97,9 +97,6 @@ async function openCardMenu(entry) {
       // rule useRecipe's hasProfile applies, but read off THIS entry rather than
       // the loaded one, since the menu can be opened on any card.
       ...(entryHasProfile(entry) ? [['editProfile', t('espresso.editProfile')]] : []),
-      // Hidden with the tags themselves: with the display off there is nothing
-      // the entry could show the result of (skinSettings.showTags).
-      ...(skinSettings.showTags ? [['tags', t('espresso.tags')]] : []),
       ['bean', t('espresso.changeBean')],
       ['grinder', t('espresso.changeGrinder')],
       ['profile', t('espresso.changeProfile')],
@@ -108,8 +105,6 @@ async function openCardMenu(entry) {
   });
   if (choice === 'pin') {
     await togglePinRecipe(entry);
-  } else if (choice === 'tags') {
-    await editTags(entry);
   } else if (choice === 'rate' || choice === 'editProfile' || choice === 'bean' || choice === 'grinder' || choice === 'profile') {
     if (!isCurrent(entry)) await pick(entry);
     if (choice === 'rate') await rateRecipe();

@@ -102,8 +102,6 @@ export default {
     changeGrinder: 'Change grinder',
     changeProfile: 'Change profile',
     openRecipes: 'Browse recipes',
-    tags: 'Tags',
-    tagsPlaceholder: 'e.g. morning, for guests',
     editProfile: 'Edit profile',
     editRecipe: 'Edit recipe',
     history: 'History',
@@ -308,8 +306,6 @@ export default {
     mWflow: 'Weight flow',
     // The expert graph's legend chip that shows/hides every target curve.
     goals: 'Goals',
-    // The recipe's tags as recorded ON this shot — see useRecipe's `tags`.
-    shotTags: 'Recipe tags',
     mTime: 'Time',
     mGrind: 'Grind',
     mIn: 'In',
@@ -528,8 +524,6 @@ export default {
     graphModeSub: 'Expert adds axes, a temperature scale and a legend that toggles each line',
     graphNormal: 'Normal',
     graphExpert: 'Expert',
-    showTags: 'Recipe tags',
-    showTagsSub: 'Show tags on recipes and on the shots pulled with them',
     dyeButton: 'Enable DYE plugin integration',
     dyeButtonSub: 'Baskets and equipment shared with the DYE2 plugin, DYE settings on a recipe, and a shot’s full record — notes, TDS, people — from the history view',
     tabColors: 'Colour by tab',
