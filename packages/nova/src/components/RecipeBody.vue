@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipeIdentityParts, formatShortDate } from '../composables/useCore.js';
+import { recipeIdentityParts, formatMediumDate } from '../composables/useCore.js';
 import { recipe, roastAge, hasProfile } from '../composables/useRecipe.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { skinSettings } from '../composables/useSettings.js';
@@ -63,8 +63,21 @@ const titleParts = computed(() => recipeIdentityParts(recipe));
 // wrapping list would push the orbs around. Empty reads as the invitation to
 // add some, the same way the roast chip does when no date is set.
 
+/**
+ * "Roasted 05. Sep 2026 (3 weeks)".
+ *
+ * formatMediumDate, not formatShortDate: the short one follows the locale's
+ * own digit order, which on en-US is 09/05/26 — a date most of the world
+ * reads as the 9th of May. Day-first with the month spelled is unambiguous to
+ * everyone, and this chip has room for it.
+ *
+ * The age in brackets because it is the derived half: the date is the fact,
+ * how long ago is what you do with it.
+ */
 const roastLabel = computed(() =>
-  recipe.roastDate ? `${t('espresso.roasted')} ${formatShortDate(recipe.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
+  (recipe.roastDate
+    ? `${t('espresso.roasted')} ${formatMediumDate(recipe.roastDate)} (${roastAge.value})`
+    : t('espresso.setRoastDate'))
 );
 </script>
 

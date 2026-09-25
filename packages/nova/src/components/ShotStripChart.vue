@@ -70,6 +70,12 @@ const props = defineProps({
   // first sample. Fixes the right-hand scale for the whole shot — see
   // tempRange(). Without it a live chart falls back to fitting the data.
   tempAnchor: { type: Number, default: null },
+  // Pins the right-hand temperature scale outright, e.g. [135, 170] for steam.
+  // Beats tempAnchor and beats fitting: for a process whose working range is
+  // known, a fixed axis is what makes two of them comparable at a glance.
+  tempBand: { type: Array, default: null },
+  // Ceiling of the shared pressure/flow scale. 12 (a shot's) when unset.
+  maxY: { type: Number, default: 0 },
   // Legend keys this caller has no data for, so they are neither drawn nor
   // offered as a toggle: 'pressure' | 'flow' | 'weight' | 'temperature' |
   // 'goals'. The steam graph omits weight (no scale in a steam jug) and goals
@@ -98,7 +104,14 @@ const cursorIdx = ref(null); // index into series.* while scrubbing, else null
 const { t } = useI18n();
 
 const BIN_S = 0.5; // flow-bar averaging bin ("schmale Balken")
-const MAX_Y = 12;  // shared pressure/flow scale — same fixed 0-12 as the old ShotGraph
+// Shared pressure/flow scale — 0-12 for a shot, the same fixed range as the
+// old ShotGraph. A caller can pin a lower ceiling: steam works nowhere near
+// 12, so on that axis its whole curve was squashed into the bottom third
+// (see SimpleLiveOverlay).
+const MAX_Y = computed(() => (props.maxY > 0 ? props.maxY : 12));
+// Gridlines at quarters — 3s on the shot's 12, which is what this was before
+// it was derived. Labels stay every 2 whatever the ceiling.
+const Y_GRID_STEP = computed(() => MAX_Y.value / 4);
 
 // Chart-internal colors; the legend swatches in LiveShotOverlay must match.
 const COLORS = {
@@ -199,7 +212,7 @@ function geometry(w, h) {
   return {
     px, py, pw, ph, live, now, span, pps,
     xFor: (t) => px + pw - (now - t) * pps,
-    yFor: (v) => py + ph - (Math.min(Math.max(v, 0), MAX_Y) / MAX_Y) * ph,
+    yFor: (v) => py + ph - (Math.min(Math.max(v, 0), MAX_Y.value) / MAX_Y.value) * ph,
   };
 }
 
@@ -217,6 +230,10 @@ function geometry(w, h) {
  *  down from the setpoint. A reading outside it is pinned to the edge (see
  *  yTemp) rather than widening the axis. */
 function tempRange() {
+  // A caller that knows the band outright pins it, so the axis never moves and
+  // two of the same thing are the same picture. Steam does: the wand works a
+  // narrow, known range.
+  if (Array.isArray(props.tempBand) && props.tempBand.length === 2) return [...props.tempBand];
   if (props.mode === 'scroll' && Number.isFinite(props.tempAnchor) && props.tempAnchor > 0) {
     const lo = Math.floor((props.tempAnchor - 8) / 5) * 5;
     const hi = Math.ceil((props.tempAnchor + 4) / 5) * 5;
@@ -374,7 +391,7 @@ function drawNormal(g, gridColor, windowStart, w, h) {
   // bars exist. Static: ticks sit at fixed 0, 5, 10... positions.
   ctx.strokeStyle = gridColor;
   ctx.lineWidth = 1;
-  for (let v = 3; v < MAX_Y; v += 3) {
+  for (let v = Y_GRID_STEP.value; v < MAX_Y.value; v += Y_GRID_STEP.value) {
     ctx.beginPath(); ctx.moveTo(0, yFor(v)); ctx.lineTo(w, yFor(v)); ctx.stroke();
   }
   const tickStart = live ? Math.max(0, Math.ceil((now - span) / 5) * 5) : 0;
@@ -448,10 +465,10 @@ function drawExpert(g, gridColor, windowStart) {
   ctx.font = '10px system-ui, -apple-system, sans-serif';
   ctx.lineWidth = 1;
 
-  // Left scale: the shared 0-12 pressure/flow axis, one gridline per label.
+  // Left scale: the shared pressure/flow axis, one gridline per label.
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  for (let v = 0; v <= MAX_Y; v += 2) {
+  for (let v = 0; v <= MAX_Y.value; v += 2) {
     const y = yFor(v);
     ctx.strokeStyle = gridColor;
     ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + pw, y); ctx.stroke();

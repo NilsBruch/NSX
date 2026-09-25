@@ -31,7 +31,7 @@ import {
   reviewShot, currentFullShot, grindSetting,
   setShotAnnotations, setShotContext, setActualDose, setActualYield, setGrindSetting,
 } from '../composables/useLiveShot.js';
-import { beans, grinders, shots, baskets, equipment, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
+import { beans, grinders, shots, baskets, equipment, formatGrinderLabel, formatShortDate } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
 import { openTextField, openNumberPad, openChooser, openMultiChooser, openRating } from '../composables/useModals.js';
@@ -88,10 +88,11 @@ watch(() => ctx.value.beanBatchId, async (id) => {
   roastDate.value = batchCache.get(id)?.roastDate ?? null;
 }, { immediate: true });
 
+/** The bag's AGE rather than its date — see RecipeDyeModal's copy for why. */
 const roastLabel = computed(() => {
   if (!roastDate.value) return null;
   const age = NSXCore.getBatchAge(roastDate.value);
-  return age ? `${formatLongDate(roastDate.value)} · ${age}` : formatLongDate(roastDate.value);
+  return age && age !== '—' ? age : formatShortDate(roastDate.value);
 });
 
 // ── What came out ──

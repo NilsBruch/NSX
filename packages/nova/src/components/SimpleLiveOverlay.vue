@@ -90,11 +90,70 @@ const steamSeries = reactive({
 const showGraph = ref(false);
 const graphOriginMs = ref(0);
 
+/**
+ * The curve is the POUR, and nothing else.
+ *
+ * Measured on a real DE1XXL (fw 1333), a steam walks:
+ *
+ *   steam/preparingForShot   3.1s   the wand opening, flow ramping
+ *   steam/pouring            9.8s   the actual steam
+ *   steam/pouringDone       11.5s   decay: targetFlow 0, pressure bleeding off
+ *   idle/idle
+ *
+ * The tail was LONGER than the steam, so over half the plot was a curve
+ * falling to nothing — which is what made the chart look wrong. The ramp
+ * before it is no more interesting: it is the wand clearing, not the milk.
+ *
+ * Active steam is `substate === 'pouring'` AND the machine still COMMANDING
+ * it (targetFlow > 0) — NSX's rule, whose comment records the DE1 sometimes
+ * holding 'pouring' after dropping targetFlow to 0 (it measured that tail
+ * inflating a 5s steam to 12s). Both halves earn their place: across 75
+ * pouring samples targetFlow never once hit 0, while during pouringDone it
+ * bounced back up to 4.0 — so a targetFlow-only rule would have un-frozen
+ * mid-tail, and a substate-only rule would miss the case NSX documents.
+ */
+let steamSawCommand = false;   // has targetFlow ever been reported > 0?
+let steamWasActive = false;    // has the real pour started?
+let steamIdleTicks = 0;        // consecutive inactive samples since it did
+const steamFrozen = ref(false);
+
 function resetSteamSeries() {
   for (const key of Object.keys(steamSeries)) steamSeries[key].length = 0;
+  steamSawCommand = false;
+  steamWasActive = false;
+  steamIdleTicks = 0;
+  steamFrozen.value = false;
 }
 
 function sampleSteam(now) {
+  if (steamFrozen.value) return;
+
+  const pouring = machine.substate === 'pouring';
+  const commanded = (liveShot.targetFlow || 0) > 0;
+  if (commanded) steamSawCommand = true;
+  // targetFlow is the better signal, but only once this machine has shown it
+  // reports one during steam at all — otherwise a gateway that leaves it at 0
+  // would read as "never pouring" and the curve would never freeze, which is
+  // exactly the behaviour being fixed.
+  const active = pouring && (steamSawCommand ? commanded : true);
+
+  if (!active) {
+    // Before the pour there is nothing to draw yet; after it, the two-tick
+    // wait (500ms) is only about WHEN to freeze, never about plotting more —
+    // one dropped or transient sample must not be able to end the curve
+    // mid-pour, and freezing is not undoable.
+    if (steamWasActive && ++steamIdleTicks >= 2) steamFrozen.value = true;
+    return;
+  }
+  if (!steamWasActive) {
+    steamWasActive = true;
+    // x starts where the steam does, not where the state did: the ramp before
+    // it is no longer plotted, so an origin at state-entry would open the
+    // chart with three seconds of empty axis.
+    graphOriginMs.value = now;
+  }
+  steamIdleTicks = 0;
+
   if (steamSeries.elapsed.length >= SAMPLE_CAP) return;
   steamSeries.elapsed.push((now - graphOriginMs.value) / 1000);
   steamSeries.pressure.push(liveShot.pressure || 0);
@@ -136,8 +195,9 @@ function tick() {
     flowVolume.value += (liveShot.flow || 0) * (now - lastTickMs) / 1000;
   }
   lastTickMs = now;
-  // Before the advancing guard: the wand heating up (substate != 'pouring')
-  // is part of the curve even though the TIMER deliberately doesn't run then.
+  // Before the advancing guard because sampleSteam keeps its own notion of
+  // when the pour starts and ends (see there) — the timer's is not the same
+  // question.
   if (isSteam.value) sampleSteam(now);
   if (!advancing.value) return;               // steam: freeze between/after pours
   if (startMs === 0) startMs = now;
@@ -203,8 +263,14 @@ async function stop() {
        doesn't plot it (it's an extraction-dynamics view). Scroll mode, like
        the live shot — a steam is watched as it happens. -->
   <div v-if="isSteam && showGraph" class="sl-graph">
+    <!-- Both scales pinned rather than fitted. Steam pressure and flow live
+         well under a shot's 0-12, which squashed the whole curve into the
+         bottom third; and the wand's working temperature is a known band, so
+         fixing it is what makes two steams the same picture instead of two
+         differently-scaled ones. -->
     <ShotStripChart
       :series="steamSeries" mode="scroll" :origin-ms="graphOriginMs" :window-s="35"
+      :max-y="8" :temp-band="[135, 170]"
       expert :omit="['weight', 'goals']"
     />
   </div>

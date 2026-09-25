@@ -17,7 +17,7 @@
  */
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { formatShortDate } from '../composables/useCore.js';
+import { formatMediumDate } from '../composables/useCore.js';
 import { recipe, roastAge } from '../composables/useRecipe.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
@@ -42,9 +42,12 @@ const dyeOpen = ref(false);
 // needs to re-derive or format it.
 const ratio = computed(() => NSXCore.calcRatio(recipe.targetDoseWeight, recipe.targetYield));
 
-// Same label as RecipeBody's roast chip (see its own copy of this computed).
+// Same label as RecipeBody's roast chip (see its own copy of this computed,
+// including why the date is spelled rather than the locale's digit order).
 const roastLabel = computed(() =>
-  recipe.roastDate ? `${t('espresso.roasted')} ${formatShortDate(recipe.roastDate)} · ${roastAge.value}` : t('espresso.setRoastDate')
+  (recipe.roastDate
+    ? `${t('espresso.roasted')} ${formatMediumDate(recipe.roastDate)} (${roastAge.value})`
+    : t('espresso.setRoastDate'))
 );
 
 const ICONS = {

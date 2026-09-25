@@ -41,7 +41,7 @@ import { useI18n } from 'vue-i18n';
 import {
   recipe, roastAge, setRecipeDye, dyeNamesUsed, beanForRecipe,
 } from '../composables/useRecipe.js';
-import { baskets, equipment, grinders, formatGrinderLabel, formatLongDate } from '../composables/useCore.js';
+import { baskets, equipment, grinders, formatGrinderLabel, formatShortDate } from '../composables/useCore.js';
 import { openTextField, openChooser, openMultiChooser, openNumberPad } from '../composables/useModals.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
@@ -71,11 +71,20 @@ onMounted(async () => {
 const bean = computed(() => beanForRecipe(recipe));
 const beanOrigin = computed(() =>
   [bean.value?.country, bean.value?.region].filter(Boolean).join(' · ') || null);
+/**
+ * The bag's AGE, not its date: "3 weeks", not "12 September 2026 · 3 weeks",
+ * which was wider than the tile it sits in. Age is also the thing you act on
+ * — nobody decides anything from the calendar date itself.
+ *
+ * Core's getBatchAge coarsens as it goes (whole days under a week, then whole
+ * weeks, months, years), so the string stays short however old the bag is. It
+ * answers "—" for a missing, unparseable or future date; the short date is a
+ * better thing to show than a dash in that case, and it fits.
+ */
 const roastLabel = computed(() => {
   if (!recipe.roastDate) return null;
-  return roastAge.value
-    ? `${formatLongDate(recipe.roastDate)} · ${roastAge.value}`
-    : formatLongDate(recipe.roastDate);
+  const age = roastAge.value;
+  return age && age !== '—' ? age : formatShortDate(recipe.roastDate);
 });
 
 /* ── Extraction (read-only) ─────────────────────────────────────────────── */
