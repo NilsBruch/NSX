@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
+import { recipeKitNames } from '../composables/useRecipeKit.js';
 import StarRating from './StarRating.vue';
 import { fmtTemp } from '../composables/useUnits.js';
 
@@ -30,21 +31,14 @@ const num = (v, digits = 1) => (Number.isFinite(Number(v)) ? Number(v).toFixed(d
 const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight) || 0, Number(entry.targetYield) || 0);
 /**
  * The kit this recipe brews with — its basket, then each piece of equipment,
- * in the order they were picked. Read off the recipe's own DYE fields, which
- * store the names beside the ids for exactly this: a card can say "Decent
- * 18g" without resolving anything, and still says it after the library row
- * behind it is deleted.
+ * in the order they were picked. Resolved through the library by id, so a
+ * renamed basket reads by its new name here (see useRecipeKit).
  *
  * This slot used to hold free-text tags. Kit is what people were mostly
  * writing there, and it now has a real home — with an identity that survives
  * a rename, fields of its own, and a second app that reads it.
  */
-const kit = computed(() => {
-  const d = props.entry.dye || {};
-  return [d.basketName, ...(Array.isArray(d.equipmentNames) ? d.equipmentNames : [])]
-    .map((v) => String(v || '').trim())
-    .filter(Boolean);
-});
+const kit = computed(() => recipeKitNames(props.entry));
 
 </script>
 

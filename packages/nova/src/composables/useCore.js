@@ -431,6 +431,13 @@ export async function bootCore({ onStoreLoaded } = {}) {
       NSXCore.loadBeans(),
       NSXCore.loadGrinders(),
       NSXCore.loadRecipes(),
+      // Baskets and equipment (DYE2's KV store). Needed at boot, not just when
+      // a picker opens: a recipe card shows its kit by resolving the id
+      // against this list (useRecipeKit), so without it a renamed basket would
+      // read by its old name until something else happened to load it. One
+      // ETag'd request that 304s afterwards — cheap enough not to make it
+      // conditional on the DYE setting and risk an import cycle for it.
+      NSXCore.loadEquipmentLibrary(),
       loadShots(200),
     ]);
     if (workflowResult.status === 'fulfilled') currentWorkflow.value = workflowResult.value;

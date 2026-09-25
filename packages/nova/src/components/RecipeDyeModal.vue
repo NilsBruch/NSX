@@ -43,7 +43,7 @@ import {
 } from '../composables/useRecipe.js';
 import { baskets, equipment, grinders, formatGrinderLabel, formatShortDate } from '../composables/useCore.js';
 import { openTextField, openChooser, openNumberPad } from '../composables/useModals.js';
-import { useRecipeKit } from '../composables/useRecipeKit.js';
+import { useRecipeKit, recipeBasketName, recipeEquipmentNames } from '../composables/useRecipeKit.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
 // The same four section icons the shot page uses — the mirror is the point.
@@ -114,8 +114,10 @@ const tempLabel = computed(() =>
 // useRecipeKit.js.
 const { pickBasket, pickEquipment } = useRecipeKit();
 
+// Both through the library by id — a renamed row reads by its new name here.
+const basketLabel = computed(() => recipeBasketName(recipe));
 const equipmentLabel = computed(() => {
-  const names = (dye.value.equipmentNames ?? []).filter(Boolean);
+  const names = recipeEquipmentNames(recipe);
   return names.length ? names.join(', ') : null;
 });
 
@@ -299,7 +301,7 @@ async function pickBeverage() {
             </div>
             <button class="dye-tile" :disabled="!baskets.length" @click="pickBasket">
               <span class="dl">{{ t('recipeDye.basket') }}</span>
-              <span class="dv" :class="{ muted: !dye.basketName }">{{ dash(dye.basketName) }}</span>
+              <span class="dv" :class="{ muted: !basketLabel }">{{ dash(basketLabel) }}</span>
             </button>
             <!-- Two columns: it holds a LIST now ("Lunar, WDT tool, dosing
                  ring"), which a half tile ellipsised down to the first name. -->

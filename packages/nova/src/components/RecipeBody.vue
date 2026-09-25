@@ -5,7 +5,7 @@ import { recipeIdentityParts, formatMediumDate } from '../composables/useCore.js
 import { recipe, roastAge, hasProfile } from '../composables/useRecipe.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { skinSettings } from '../composables/useSettings.js';
-import { useRecipeKit } from '../composables/useRecipeKit.js';
+import { useRecipeKit, recipeBasketName, recipeEquipmentNames } from '../composables/useRecipeKit.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import StarRating from './StarRating.vue';
@@ -68,9 +68,9 @@ const dyeOpen = ref(false);
  * toggle — the rows come from DYE2's store.
  */
 const { pickBasket, pickEquipment } = useRecipeKit();
-const basketName = computed(() => recipe.dye?.basketName || null);
-const equipmentNames = computed(() =>
-  (recipe.dye?.equipmentNames ?? []).map((v) => String(v || '').trim()).filter(Boolean));
+// Through the library by id, so renaming a basket renames it here too.
+const basketName = computed(() => recipeBasketName(recipe));
+const equipmentNames = computed(() => recipeEquipmentNames(recipe));
 
 // The combined identity title — shared with the Diary's recipe rows so the two
 // render the same recipe identically (see useCore's recipeIdentityParts).

@@ -10,25 +10,61 @@
  *   - the coffee page's kit chips (RecipeBody), where they are the shortcut
  *
  * Basket is one, equipment is a LIST — a shot is pulled with a scale AND a WDT
- * tool AND a dosing ring — so they take different pickers. Both store the NAME
- * beside the id (core's dye fields): a card can then render without resolving
- * the library, and a shot still reads correctly once the row behind it is
- * deleted.
+ * tool AND a dosing ring — so they take different pickers. Both store the id
+ * AND the name (core's dye fields); which of the two is DISPLAYED is the
+ * subject of currentName below, and it is not the same answer for a recipe as
+ * for a shot.
  */
-import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { baskets, equipment } from './useCore.js';
 import { recipe, setRecipeDye } from './useRecipe.js';
 import { openChooser, openMultiChooser } from './useModals.js';
 import { reportRuntimeError } from './useErrorReporting.js';
 
-/** The kit as text — basket first, then each piece, in the order picked. */
-export const recipeKitNames = computed(() => {
-  const d = recipe.dye || {};
-  return [d.basketName, ...(Array.isArray(d.equipmentNames) ? d.equipmentNames : [])]
-    .map((v) => String(v || '').trim())
-    .filter(Boolean);
-});
+/**
+ * The CURRENT name of a library row, falling back to the one stored with the
+ * recipe.
+ *
+ * A recipe stores both the id and the name. The id is the link; the stored
+ * name exists so a row that has since been DELETED still reads as something
+ * rather than blanking out. Resolving through the library first is what makes
+ * a rename show up: rename a basket in Settings — or in DYE2, which we get no
+ * write-hook for at all — and every recipe pointing at it follows, because
+ * they point at it.
+ *
+ * A SHOT deliberately does not do this (see ShotDyePage): what it was called
+ * when it was pulled is part of what the shot records, and correcting that
+ * later would be rewriting history rather than fixing a label.
+ */
+function currentName(rows, id, stored) {
+  const fromLibrary = id ? rows.find((r) => r.id === id)?.name : null;
+  return String(fromLibrary || stored || '').trim();
+}
+
+/** The recipe's basket, by its current name. `entry` is any recipe record. */
+export function recipeBasketName(entry) {
+  const d = entry?.dye || {};
+  return currentName(baskets.value, d.basketId, d.basketName) || null;
+}
+
+/** Its equipment, in the order picked, by their current names. */
+export function recipeEquipmentNames(entry) {
+  const d = entry?.dye || {};
+  const ids = Array.isArray(d.equipmentIds) ? d.equipmentIds : [];
+  const names = Array.isArray(d.equipmentNames) ? d.equipmentNames : [];
+  const out = [];
+  for (let i = 0; i < Math.max(ids.length, names.length); i++) {
+    const name = currentName(equipment.value, ids[i], names[i]);
+    if (name) out.push(name);
+  }
+  return out;
+}
+
+/** The whole kit as one list — basket first, then each piece. */
+export function recipeKitNames(entry) {
+  const basket = recipeBasketName(entry);
+  return [...(basket ? [basket] : []), ...recipeEquipmentNames(entry)];
+}
 
 export function useRecipeKit() {
   const { t } = useI18n();
