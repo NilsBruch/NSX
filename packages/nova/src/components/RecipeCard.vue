@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
+import { grinders, singleGrinder, formatGrinderLabel, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { recipeKitNames } from '../composables/useRecipeKit.js';
 import StarRating from './StarRating.vue';
@@ -53,7 +53,7 @@ const kit = computed(() => recipeKitNames(props.entry));
            beside the coffee name gives the name the whole width back; five
            stars beside it cropped every name to a few letters. -->
       <span class="rp-roaster">
-        <span class="rp-roaster-text">{{ entry.coffeeRoaster }}</span>
+        <span class="rp-roaster-text">{{ recipeRoasterName(entry) }}</span>
         <svg v-if="entry.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
         </svg>
@@ -66,7 +66,7 @@ const kit = computed(() => recipeKitNames(props.entry));
           :size="15"
         />
       </span>
-      <span class="rp-name">{{ entry.coffeeName }}</span>
+      <span class="rp-name">{{ recipeCoffeeName(entry) }}</span>
     </div>
     <div class="rp-rows">
       <div v-if="!singleGrinder" class="rp-row-duo">
@@ -101,7 +101,7 @@ const kit = computed(() => recipeKitNames(props.entry));
            used to be made it look like a control, and put a third shape on a
            card that already carries label/value pairs and (accented) kit
            chips. -->
-      <span class="rp-val">{{ entry.profileTitle }}</span>
+      <span class="rp-val">{{ recipeProfileTitle(entry) }}</span>
     </div>
     <!-- Only rendered when there IS kit: the row used to render empty so
          every card matched height either way, which bought that evenness

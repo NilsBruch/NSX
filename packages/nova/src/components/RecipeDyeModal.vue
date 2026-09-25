@@ -41,7 +41,7 @@ import { useI18n } from 'vue-i18n';
 import {
   recipe, roastAge, setRecipeDye, dyeNamesUsed, beanForRecipe,
 } from '../composables/useRecipe.js';
-import { baskets, equipment, grinders, formatGrinderLabel, formatShortDate } from '../composables/useCore.js';
+import { baskets, equipment, grinders, formatGrinderLabel, formatShortDate, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from '../composables/useCore.js';
 import { openTextField, openChooser, openNumberPad } from '../composables/useModals.js';
 import { useRecipeKit, recipeBasketName, recipeEquipmentNames } from '../composables/useRecipeKit.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
@@ -183,11 +183,11 @@ async function pickBeverage() {
           <div class="dye-grid">
             <div class="dye-tile static">
               <span class="dl">{{ t('dye.roaster') }}</span>
-              <span class="dv" :class="{ muted: recipe.coffeeRoaster === '—' }">{{ dash(recipe.coffeeRoaster) }}</span>
+              <span class="dv" :class="{ muted: recipe.coffeeRoaster === '—' }">{{ dash(recipeRoasterName(recipe)) }}</span>
             </div>
             <div class="dye-tile static">
               <span class="dl">{{ t('dye.bean') }}</span>
-              <span class="dv" :class="{ muted: recipe.coffeeName === '—' }">{{ dash(recipe.coffeeName) }}</span>
+              <span class="dv" :class="{ muted: recipe.coffeeName === '—' }">{{ dash(recipeCoffeeName(recipe)) }}</span>
             </div>
             <div class="dye-tile static">
               <span class="dl">{{ t('dye.bag') }}</span>
@@ -312,7 +312,7 @@ async function pickBeverage() {
             <div class="dye-pair dye-off">
               <div class="dye-tile static">
                 <span class="dl">{{ t('dye.profile') }}</span>
-                <span class="dv fit" :class="{ muted: recipe.profileTitle === '—' }">{{ dash(recipe.profileTitle) }}</span>
+                <span class="dv fit" :class="{ muted: recipe.profileTitle === '—' }">{{ dash(recipeProfileTitle(recipe)) }}</span>
               </div>
               <div class="dye-tile static">
                 <span class="dl">{{ t('dye.temperature') }}</span>

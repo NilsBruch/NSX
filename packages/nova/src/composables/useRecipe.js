@@ -32,7 +32,7 @@
  * on that bag reports. The bean itself is managed in the Diary.
  */
 import { reactive, computed, ref, watch } from 'vue';
-import { currentWorkflow, machine, grinders, beans, shots } from './useCore.js';
+import { currentWorkflow, machine, grinders, beans, shots, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from './useCore.js';
 import { reportSilentFailure } from './useErrorReporting.js';
 
 const { NSXCore, NSXApi } = window;
@@ -510,14 +510,19 @@ export async function pushRecipe({ silent = false } = {}) {
   await ensureRecipeBatch();
 
   const workflowForPayload = {
-    coffeeRoaster: recipe.coffeeRoaster,
-    coffeeName: recipe.coffeeName,
+    // The CURRENT names, not the ones stored when this recipe was built (see
+    // useCore's recipeRoasterName). A rename has to reach the shot as well as
+    // the card, or the card would say "Ethiopia Guji" while the shot it just
+    // produced says "Ethiopia". The stored strings stay as the fallback for a
+    // bean that has since been deleted.
+    coffeeRoaster: recipeRoasterName(recipe),
+    coffeeName: recipeCoffeeName(recipe),
     grinderModel: recipe.grinderModel,
     grinderSetting: recipe.grinderSetting,
     targetDoseWeight: recipe.targetDoseWeight,
     targetYield: recipe.targetYield,
     groupTemp: recipe.groupTemp,
-    profileTitle: recipe.profileTitle,
+    profileTitle: recipeProfileTitle(recipe),
     // No embedded profile: buildGatewayPayload resolves this against the live
     // library (id, falling back to title, preferring the highest version) on
     // EVERY push — so an edit to the referenced profile takes effect on the

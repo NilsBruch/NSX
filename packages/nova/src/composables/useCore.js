@@ -293,6 +293,45 @@ export function formatDateParts(iso) {
  * implicit then. Looked up by id, falling back to a model-name match for
  * legacy recipes saved before grinderId existed.
  */
+/**
+ * A recipe's identity, by the CURRENT names of the things it points at.
+ *
+ * A recipe stores an id and a display string for each of its bean, grinder
+ * and profile. The id is the link; the string is what survives the row being
+ * deleted. Rendering the string alone means renaming a bean leaves every
+ * recipe showing the old name — the grinder was already resolved this way,
+ * these two now match it.
+ *
+ * The resolved name is also what gets PUSHED (useRecipe's workflowForPayload),
+ * so the shot records what the card says. Resolving only the display would
+ * have traded one inconsistency for a worse one: the card saying "Ethiopia
+ * Guji" while the shot it produced says "Ethiopia".
+ *
+ * A SHOT never resolves — see ShotDyePage. What the coffee was called when it
+ * was pulled is part of what the shot records.
+ */
+function currentBean(entry) {
+  return entry?.beanId ? beans.value.find((b) => b.id === entry.beanId) ?? null : null;
+}
+/** The roaster, by its current name. */
+export function recipeRoasterName(entry) {
+  return currentBean(entry)?.roaster || entry?.coffeeRoaster || '';
+}
+/** The coffee, by its current name. */
+export function recipeCoffeeName(entry) {
+  return currentBean(entry)?.name || entry?.coffeeName || '';
+}
+/**
+ * The profile, by its current title. Matched on selectedProfileId only: the
+ * stored title is precisely what may be stale, so falling back to a
+ * title-match would just re-find the old one.
+ */
+export function recipeProfileTitle(entry) {
+  const id = entry?.selectedProfileId;
+  const found = id ? profiles.value.find((p) => p.id === id) : null;
+  return found?.profile?.title || entry?.profileTitle || '';
+}
+
 export function recipeIdentityParts(recipe) {
   let grinderLabel = null;
   if (!singleGrinder.value) {
@@ -302,8 +341,9 @@ export function recipeIdentityParts(recipe) {
       grinderLabel = g ? formatGrinderLabel(g) : model;
     }
   }
-  return [recipe?.coffeeRoaster, recipe?.coffeeName, grinderLabel, recipe?.profileTitle]
-    .filter((v) => v && v !== '—');
+  return [
+    recipeRoasterName(recipe), recipeCoffeeName(recipe), grinderLabel, recipeProfileTitle(recipe),
+  ].filter((v) => v && v !== '—');
 }
 
 NSXCore.on('machineState', ({ state, substate }) => {

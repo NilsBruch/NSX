@@ -7,7 +7,7 @@
  */
 import { useI18n } from 'vue-i18n';
 import { recipe, grinderUnset } from '../composables/useRecipe.js';
-import { singleGrinder } from '../composables/useCore.js';
+import { singleGrinder, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from '../composables/useCore.js';
 
 const emit = defineEmits(['pickBean', 'pickGrinder', 'pickProfile']);
 const { t } = useI18n();
@@ -17,7 +17,7 @@ const { t } = useI18n();
   <div class="rov-identity">
     <button class="rov-bubble" @click="emit('pickBean')">
       <span class="rov-bubble-label">{{ t('espresso.bean') }}</span>
-      <span class="rov-bubble-name">{{ recipe.coffeeRoaster }} {{ recipe.coffeeName }}</span>
+      <span class="rov-bubble-name">{{ recipeRoasterName(recipe) }} {{ recipeCoffeeName(recipe) }}</span>
     </button>
     <!-- Nothing to switch TO with a single grinder (see useCore's
          singleGrinder) — plain, not a button. Unless the recipe has no
@@ -32,7 +32,7 @@ const { t } = useI18n();
     </div>
     <button class="rov-bubble" @click="emit('pickProfile')">
       <span class="rov-bubble-label">{{ t('espresso.profile') }}</span>
-      <span class="rov-bubble-name">{{ recipe.profileTitle }}</span>
+      <span class="rov-bubble-name">{{ recipeProfileTitle(recipe) }}</span>
     </button>
   </div>
 </template>
