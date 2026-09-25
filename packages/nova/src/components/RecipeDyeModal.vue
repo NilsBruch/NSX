@@ -42,7 +42,8 @@ import {
   recipe, roastAge, setRecipeDye, dyeNamesUsed, beanForRecipe,
 } from '../composables/useRecipe.js';
 import { baskets, equipment, grinders, formatGrinderLabel, formatShortDate } from '../composables/useCore.js';
-import { openTextField, openChooser, openMultiChooser, openNumberPad } from '../composables/useModals.js';
+import { openTextField, openChooser, openNumberPad } from '../composables/useModals.js';
+import { useRecipeKit } from '../composables/useRecipeKit.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
 // The same four section icons the shot page uses — the mirror is the point.
@@ -109,38 +110,9 @@ const grinderLabel = computed(() => {
 const tempLabel = computed(() =>
   (recipe.groupTemp > 0 ? `${dispTemp(recipe.groupTemp, 1).toFixed(1)} ${tempUnitLabel.value}` : null));
 
-/** A library pick, or "— None —" to clear the field back to nothing. */
-async function pickFromLibrary({ title, rows, idField, nameField }) {
-  const options = [['', t('recipeDye.none')], ...rows.map((r) => [r.id, r.name || '—'])];
-  const id = await openChooser({ title, options, current: dye.value[idField] ?? '' });
-  if (id == null) return;
-  const row = rows.find((r) => r.id === id);
-  await setRecipeDye({ [idField]: row?.id ?? null, [nameField]: row?.name ?? null });
-}
-const pickBasket = () => pickFromLibrary({
-  title: t('recipeDye.basket'), rows: baskets.value, idField: 'basketId', nameField: 'basketName',
-});
-/**
- * Equipment is a LIST — a shot is pulled with a scale AND a WDT tool AND a
- * dosing ring — so this is the multi-select, and the recipe stores parallel
- * id/name arrays (core's equipmentArrays). The names are stored beside the
- * ids for the same reason a basket's is: a shot has to still read correctly
- * once a row behind it is deleted.
- */
-async function pickEquipment() {
-  const rows = equipment.value;
-  const ids = await openMultiChooser({
-    title: t('recipeDye.equipment'),
-    options: rows.map((r) => [r.id, r.name || '—']),
-    current: dye.value.equipmentIds ?? [],
-  });
-  if (ids == null) return;
-  const picked = ids.map((id) => rows.find((r) => r.id === id)).filter(Boolean);
-  await setRecipeDye({
-    equipmentIds: picked.map((r) => r.id),
-    equipmentNames: picked.map((r) => r.name ?? null),
-  });
-}
+// The pickers themselves are shared with the coffee page's kit chips — see
+// useRecipeKit.js.
+const { pickBasket, pickEquipment } = useRecipeKit();
 
 const equipmentLabel = computed(() => {
   const names = (dye.value.equipmentNames ?? []).filter(Boolean);

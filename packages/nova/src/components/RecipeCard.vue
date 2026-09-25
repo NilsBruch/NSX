@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
+import { skinSettings } from '../composables/useSettings.js';
 import StarRating from './StarRating.vue';
 import { fmtTemp } from '../composables/useUnits.js';
 
@@ -117,7 +118,9 @@ const kit = computed(() => {
          and these sit in a list whose even heights are what you scan down.
          Not ellipsised either — "Decent 18g, RD…" hides exactly the part that
          tells two recipes on the same basket apart. -->
-    <div v-if="kit.length" class="rp-kit">
+    <!-- Follows the DYE integration toggle, like everything else fed by
+         DYE2's store: with it off these rows are not yours to have. -->
+    <div v-if="skinSettings.dyeButton && kit.length" class="rp-kit">
       <span v-for="name in kit" :key="name" class="rp-kit-chip">{{ name }}</span>
     </div>
   </div>

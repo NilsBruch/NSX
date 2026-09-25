@@ -13,7 +13,7 @@
  *     Managing the library (deleting, reviewing shots per recipe) is the
  *     Diary's Recipes view; creating one is the Diary's "+".
  */
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots } from '../composables/useCore.js';
@@ -35,6 +35,25 @@ onMounted(() => {
 });
 
 const { query, isCurrent, cycleSort, sortLabel, listedRecipes, visibleRecipes, openSearch } = useRecipeList();
+
+/**
+ * Nothing in here is hit-testable for the first 400ms.
+ *
+ * This panel opens from a TAP on the recipe title, and it deliberately places
+ * its identity bubbles at that title's own offset so the title "appears to
+ * stay put and split" — which puts a button exactly under the finger that
+ * just opened it. The browser then delivers that gesture's compatibility
+ * mouse events here: useLongPress swallows the click, but :active has already
+ * been painted by the mousedown underneath it, so the Grinder bubble visibly
+ * depressed on every open.
+ *
+ * pointer-events: none is the only thing that stops all of it at once — an
+ * element that isn't hit-tested is not clicked, not focused and not styled
+ * active. 400ms covers the old Android WebView's ~300ms click delay, and the
+ * panel is animating in for most of it anyway.
+ */
+const armed = ref(false);
+onMounted(() => { setTimeout(() => { armed.value = true; }, 400); });
 
 async function pick(entry) {
   await selectRecipe(entry);
@@ -82,7 +101,7 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
   <!-- .self so only a tap that lands on the scrim itself closes. The panel is
        pointer-events:none (see app.css), so taps on its empty areas DO land
        here and dismiss; its three interactive sections opt back in. -->
-  <div class="rov-scrim" @click.self="emit('close')">
+  <div class="rov-scrim" :class="{ 'is-arming': !armed }" @click.self="emit('close')">
     <div class="rov-panel">
       <!-- Sits at the same offset as EspressoView's own .page-title +
            .recipe-identity, so the title the user tapped appears to stay put

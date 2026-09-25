@@ -5,6 +5,7 @@ import { recipeIdentityParts, formatMediumDate } from '../composables/useCore.js
 import { recipe, roastAge, hasProfile } from '../composables/useRecipe.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { skinSettings } from '../composables/useSettings.js';
+import { useRecipeKit } from '../composables/useRecipeKit.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import StarRating from './StarRating.vue';
@@ -54,6 +55,22 @@ const ICONS = {
 };
 
 const dyeOpen = ref(false);
+
+/**
+ * The recipe's kit, under the stop-at/temp column — the slot the free-text
+ * tags used to hold, and a better tenant for it: kit is most of what people
+ * were writing there, and here each chip goes straight to its own picker
+ * rather than to a text field.
+ *
+ * Basket and equipment are separate chips because they take different
+ * pickers (one answer vs a list), and because a shortcut you have to open a
+ * menu to disambiguate is not a shortcut. Both follow the DYE integration
+ * toggle — the rows come from DYE2's store.
+ */
+const { pickBasket, pickEquipment } = useRecipeKit();
+const basketName = computed(() => recipe.dye?.basketName || null);
+const equipmentNames = computed(() =>
+  (recipe.dye?.equipmentNames ?? []).map((v) => String(v || '').trim()).filter(Boolean));
 
 // The combined identity title — shared with the Diary's recipe rows so the two
 // render the same recipe identically (see useCore's recipeIdentityParts).
@@ -183,6 +200,23 @@ const roastLabel = computed(() =>
             :aria-label="t('espresso.stopAtWeight')"
             @click="toggleStopAtWeight"
           ></button>
+        </div>
+        <!-- The same outlined pills the recipe cards wear, so a basket reads
+             as a basket wherever you meet it — and each pill IS its picker.
+             Only what is actually SET: a recipe with no kit shows nothing
+             here rather than two placeholders, exactly as its card does. The
+             DYE page is where an empty one is still reachable.
+             Equipment gets one pill per piece rather than a comma list,
+             because that is what the cards show and because each is a thing,
+             not a phrase. -->
+        <div v-if="skinSettings.dyeButton && (basketName || equipmentNames.length)" class="kit-row">
+          <div class="kit-chips">
+            <button v-if="basketName" class="kit-chip" @click="pickBasket">{{ basketName }}</button>
+            <button
+              v-for="name in equipmentNames" :key="name"
+              class="kit-chip" @click="pickEquipment"
+            >{{ name }}</button>
+          </div>
         </div>
       </div>
     </div>

@@ -1247,6 +1247,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    ~96, which supports backdrop-filter but still ships the prefixed name in
    some builds. The rgba() tint is the fallback if neither applies — without
    it an unsupported blur would leave the list sitting on raw page content. */
+/* Just-opened: not hit-testable at all, so the tap that opened this panel
+   cannot click, focus or even :active-style whatever it landed on. See the
+   `armed` note in RecipeOverlay.vue. */
+.rov-scrim.is-arming, .rov-scrim.is-arming * { pointer-events: none; }
 .rov-scrim {
   position: fixed; inset: 0; z-index: 15;
   background: var(--scrim-blur);
@@ -1320,6 +1324,47 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 /* .rp-strip already carries flex:1/min-height:0 and its own scrolling — the
    .rov-strip class exists only for the pointer-events rules above. */
+
+/* The recipe's kit under the stop-at/temp column (RecipeBody) — the slot the
+   free-text tags used to hold. The SAME outlined accent pill the recipe cards
+   wear (.rp-kit-chip), so a basket reads as a basket wherever you meet it;
+   these ones are buttons that open their own picker.
+   ONE line, and it GROWS LEFT. This is the rightmost dial column, so a row
+   that outruns it has only one direction to go: align-self pins its right
+   edge to the column's and the pills extend back across the empty band under
+   the dials, which is space nothing else wants.
+   Not clipped and not scrolled — an earlier version capped the width and let
+   it scroll, which just cut the last pill off at the right where nothing
+   suggested there was more. Not wrapped either: a second line would push the
+   dials above it out of place, and this row is the one thing on the page
+   whose length the recipe decides. */
+/* Centred under the two orbs while it fits, and growing LEFT once it doesn't.
+   Auto margins on an over-constrained box do exactly this, and have since
+   CSS2 — which matters, because the tablet this runs on is old: `safe center`
+   expresses the same idea in one line and would fall back to flush-right
+   there, which is the thing being avoided.
+     - fits:        margin: 0 auto centres it.
+     - doesn't fit: both autos resolve to 0, the box is over-constrained, and
+                    direction decides which margin gives. Under rtl that is
+                    the LEFT one, so the right edge stays pinned to the column
+                    and the overflow goes left, across the empty band under
+                    the dials that nothing else wants.
+   direction: ltr puts the pills back in reading order inside: only the BOX's
+   overflow direction is flipped, never the content. */
+.kit-row { align-self: stretch; margin-top: 12px; direction: rtl; }
+.kit-chips {
+  direction: ltr; width: max-content; margin: 0 auto;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 6px;
+}
+/* flex: none and no max-width — a pill keeps the width of its own name rather
+   than being squeezed to fit, which is the thing the scroll exists to avoid. */
+.kit-chip {
+  flex: none; white-space: nowrap;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 3px 10px;
+  background: none; font-family: inherit;
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.02em; color: var(--accent);
+  cursor: pointer;
+}
 
 .roast-chip {
   display: inline-flex; align-items: center; gap: 8px;
@@ -1811,11 +1856,22 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 /* Bottom bar: sort toggle (left) + search icon (right), filter chip centred. */
 .rp-bottom { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px 4px 4px; }
 
+/* A one-row GRID, not a flex row: every card gets the height of the tallest,
+   so a rated card with three kit chips doesn't stand a head above a bare one
+   beside it. Read across, they are one row of things being compared — uneven
+   heights there read as a broken list rather than as information, which is
+   not true of the vertical lists, where a taller card is simply a card with
+   more in it.
+   Grid does it without a magic number: the implicit row is as tall as its
+   tallest item and every item stretches to it. align-content keeps that row
+   centred in the band, which is what align-items: center used to do here.
+   grid-auto-columns carries the width .rp-card's own flex-basis gave it (a
+   grid item ignores flex properties, and the vertical list's own
+   `.rp-list .rp-card` override still applies there). */
 .rp-strip {
   flex: 1; min-height: 0;
-  /* Cards centred vertically (align-items: center) so they sit mid-screen with
-     empty space above/below — natural card height, not stretched to fill. */
-  display: flex; flex-wrap: nowrap; align-items: center; gap: 14px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 28px) / 3);
+  align-content: center; gap: 14px;
   overflow-x: auto; overflow-y: hidden; padding-bottom: 6px;
 }
 .rp-card {
