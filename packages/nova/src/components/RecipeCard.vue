@@ -16,6 +16,19 @@ import { fmtTemp } from '../composables/useUnits.js';
  * long-press-for-menu gesture works unchanged with no props for it here.
  */
 const props = defineProps({
+  /**
+   * Keep the kit row's height even when this recipe has no kit.
+   *
+   * Only the horizontal strip asks for it. There every card is stretched to
+   * the tallest, and .rp-profile is bottom-anchored (margin-top: auto), so a
+   * card without chips let its profile fall all the way to the floor while
+   * the card beside it had one held up by its chips. Reserving the row costs
+   * nothing there — the card is already that tall.
+   *
+   * The vertical lists do NOT pass it: a card with no kit is simply shorter
+   * there, which is the whole reason the row stopped being reserved.
+   */
+  reserveKit: { type: Boolean, default: false },
   entry: { type: Object, required: true },
   current: { type: Boolean, default: false },
 });
@@ -114,8 +127,12 @@ const kit = computed(() => recipeKitNames(props.entry));
          tells two recipes on the same basket apart. -->
     <!-- Follows the DYE integration toggle, like everything else fed by
          DYE2's store: with it off these rows are not yours to have. -->
-    <div v-if="skinSettings.dyeButton && kit.length" class="rp-kit">
+    <div v-if="skinSettings.dyeButton && (kit.length || reserveKit)" class="rp-kit">
       <span v-for="name in kit" :key="name" class="rp-kit-chip">{{ name }}</span>
+      <!-- A real chip, just invisible: it reserves EXACTLY a chip's height,
+           whatever that becomes, instead of a magic number here that has to be
+           kept in step with .rp-kit-chip's padding and font size. -->
+      <span v-if="!kit.length" class="rp-kit-chip rp-kit-ghost" aria-hidden="true">—</span>
     </div>
   </div>
 </template>

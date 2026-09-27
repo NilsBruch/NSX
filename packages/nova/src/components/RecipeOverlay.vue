@@ -127,6 +127,7 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
           :key="entry.id"
           :entry="entry"
           :current="isCurrent(entry)"
+          reserve-kit
           @pointerdown="cardPress.down($event, entry)"
           @pointermove="cardPress.move"
           @pointerup="cardPress.up(entry)"
