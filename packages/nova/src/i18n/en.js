@@ -452,6 +452,22 @@ export default {
   toast: {
     scaleConnecting: 'Connecting to scale…', scaleTared: 'Scale tared',
     tareFailed: 'Tare failed', controlFailed: 'Command failed',
+    // The four edge cases in useRecipe.js. Each one used to be a silent
+    // failure; the point of them is that something the user did did NOT
+    // happen, so they say which thing rather than just "error".
+    //
+    // A recipe this device still had loaded, deleted on another one — the
+    // dial edit, rating or pin just made has nowhere to go.
+    recipeEditLost: 'That recipe is no longer in your library — the change was not saved',
+    // A shot finished on such a recipe: the shot itself is safe, only the
+    // "recently used" credit for the recipe is lost.
+    recipeUsageLost: 'Shot saved, but its recipe is no longer in your library',
+    // The machine cannot take a workflow right now (asleep, heating, mid-shot).
+    // Already persisted and queued, so this is reassurance, not a failure.
+    recipeQueued: 'Saved — it will reach the machine once it is ready',
+    // A real push failure. Worth saying plainly: the machine is still running
+    // whatever it had, which may not be what the screen shows.
+    recipePushFailed: 'Could not send the recipe to the machine',
   },
   machineSettings: {
     pairings: 'Paired devices',

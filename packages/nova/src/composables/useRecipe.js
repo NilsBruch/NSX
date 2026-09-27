@@ -34,6 +34,12 @@
 import { reactive, computed, ref, watch } from 'vue';
 import { currentWorkflow, machine, grinders, beans, shots, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from './useCore.js';
 import { reportSilentFailure } from './useErrorReporting.js';
+// Nova's OWN strings, not core's NSXI18n table. These four are Nova-only and
+// the skin is English-only (main.js pins setLang('en')), so core's de/en table
+// was both the wrong home and a second place to look — its `t()` ends in
+// `?? key`, which is why these four rendered as "toast.recipeQueued" on
+// screen. `legacy: false` makes i18n.global.t usable outside a component.
+import i18n from '../i18n/index.js';
 
 const { NSXCore, NSXApi } = window;
 
@@ -226,8 +232,7 @@ async function persistCurrentRecipeEdits() {
     // device this one has not revalidated against yet (see useRevalidate.js).
     // Used to return here with no trace at all; the dial edit the user just
     // made was gone, and nothing said so.
-    const t = window.NSXI18n?.t || ((k) => k);
-    reportSilentFailure(t('toast.recipeEditLost'));
+    reportSilentFailure(i18n.global.t('toast.recipeEditLost'));
     return;
   }
   const snapshot = snapshotFromCurrentRecipe(recipes.value[idx]);
@@ -306,8 +311,7 @@ export async function bumpRecipeLastUsed(id) {
     // library — e.g. deleted elsewhere. Used to drop the "Recent" credit for
     // that shot with no trace; now at least visible, matching NSX's fix for
     // the identical class of bug (recipes bound by id, and a miss reported).
-    const t = window.NSXI18n?.t || ((k) => k);
-    reportSilentFailure(t('toast.recipeUsageLost'));
+    reportSilentFailure(i18n.global.t('toast.recipeUsageLost'));
     return;
   }
   const updated = recipes.value.map((r, i) => (i === idx ? { ...r, lastUsed: Date.now() } : r));
@@ -501,8 +505,7 @@ export async function pushRecipe({ silent = false } = {}) {
     if (!silent) {
       await persistCurrentRecipeEdits();
       markPendingPush();
-      const t = window.NSXI18n?.t || ((k) => k);
-      NSXCore.emit('toast', t('toast.recipeQueued'));
+      NSXCore.emit('toast', i18n.global.t('toast.recipeQueued'));
     }
     return;
   }
@@ -579,8 +582,7 @@ function _maybeRepushForScale() {
       // `silent: true` only means "don't queue/toast for routine boot healing";
       // it was never meant to hide the machine running with the wrong stop mode.
       console.error('[Nova] scale re-push failed', err?.message || err);
-      const t = window.NSXI18n?.t || ((k) => k);
-      NSXCore.emit('toast', t('toast.recipePushFailed'));
+      NSXCore.emit('toast', i18n.global.t('toast.recipePushFailed'));
     });
   }, 800);
 }
@@ -600,8 +602,7 @@ NSXCore.on('machineState', ({ state }) => {
     // push attempt failed — the queued edit the user was told would "apply
     // when the machine wakes" just silently didn't, until this toast.
     console.error('[Nova] deferred recipe push failed', err?.message || err);
-    const t = window.NSXI18n?.t || ((k) => k);
-    NSXCore.emit('toast', t('toast.recipePushFailed'));
+    NSXCore.emit('toast', i18n.global.t('toast.recipePushFailed'));
   });
 });
 
@@ -1074,8 +1075,7 @@ export async function patchRecipeEntry(id, patch) {
     // recipe — including one another device deleted since this device last
     // fetched the library. Used to drop the edit (a rating tap, a pin) with
     // no trace; report it instead.
-    const t = window.NSXI18n?.t || ((k) => k);
-    reportSilentFailure(t('toast.recipeEditLost'));
+    reportSilentFailure(i18n.global.t('toast.recipeEditLost'));
     return;
   }
   recipes.value = await NSXCore.saveRecipes(
