@@ -61,6 +61,8 @@ import router from './router';
 import i18n from './i18n';
 import { bootCore } from './composables/useCore.js';
 import { adoptCurrentWorkflowAsRecipe } from './composables/useRecipe.js';
+import { repairRecipeLinks } from './composables/useRecipeLinkRepair.js';
+import { showToast } from './composables/useToast.js';
 import { skinSettings, loadSkinSettings, loadDisplaySupport } from './composables/useSettings.js';
 import { wireRevalidateTriggers } from './composables/useRevalidate.js';
 import { installErrorReporting } from './composables/useErrorReporting.js';
@@ -95,6 +97,18 @@ bootCore({ onStoreLoaded: loadSkinSettings }).then(() => {
 
   adoptCurrentWorkflowAsRecipe();
   loadSkinSettings();
+
+  // ONE-OFF MIGRATION — remove this and useRecipeLinkRepair.js once it has run.
+  // Backfills the bean/grinder/profile/basket/equipment IDS on recipes old
+  // enough to carry only the name. Runs after bootCore so every library it
+  // matches against is loaded, and it never blocks the UI: it reports what it
+  // fixed and otherwise stays out of the way.
+  repairRecipeLinks().then((stats) => {
+    if (!stats.changed) return;
+    // Plain string, no i18n entry: this ships for one boot and then the whole
+    // feature is deleted. The skin is English-only regardless (setLang above).
+    showToast(`${stats.changed} recipe${stats.changed === 1 ? '' : 's'} relinked`);
+  });
 
   // The router's own '/' -> '/espresso' redirect runs synchronously at mount,
   // before the store (and so nova_start_tab) has loaded — reading it there
