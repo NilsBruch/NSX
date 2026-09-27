@@ -33,7 +33,7 @@ import {
   diaryState, recipeRows, ensureDiaryLoaded, cycleSort,
 } from '../../../composables/useDiary.js';
 import { recipe, selectRecipe, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
-import { recipeIdentityParts } from '../../../composables/useCore.js';
+import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName } from '../../../composables/useCore.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
 import { showToast } from '../../../composables/useToast.js';
@@ -93,7 +93,7 @@ async function openRowMenu(row) {
 async function removeRow(row) {
   const ok = await openConfirm({
     title: t('diary.deleteRecipeConfirm'),
-    message: `${row.recipe.coffeeRoaster} – ${row.recipe.coffeeName}`,
+    message: `${recipeRoasterName(row.recipe)} – ${recipeCoffeeName(row.recipe)}`,
     danger: true,
     confirmLabel: t('common.delete'),
   });

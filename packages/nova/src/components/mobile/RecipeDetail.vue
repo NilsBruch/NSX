@@ -25,7 +25,7 @@
  */
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { grinders, profiles, formatGrinderLabel, singleGrinder, recipeIdentityParts, formatShortDate } from '../../composables/useCore.js';
+import { grinders, profiles, formatGrinderLabel, singleGrinder, recipeIdentityParts, formatShortDate, recipeCoffeeName, recipeProfileTitle, recipeRoasterName } from '../../composables/useCore.js';
 import {
   recipe, recipes, pushRecipe, deleteRecipe, togglePinRecipe, patchRecipeEntry,
   setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, roastAge, beanForRecipe,
@@ -192,7 +192,7 @@ async function pin() {
 async function removeThis() {
   const ok = await openConfirm({
     title: t('diary.deleteRecipeConfirm'),
-    message: `${source.value.coffeeRoaster} – ${source.value.coffeeName}`,
+    message: `${recipeRoasterName(source.value)} – ${recipeCoffeeName(source.value)}`,
     danger: true,
     confirmLabel: t('common.delete'),
   });
@@ -241,7 +241,7 @@ async function removeThis() {
              would look like it worked and silently revert on next load. -->
         <button v-if="isLoaded" class="phone-tile" @click="showBeanChooser = true">
           <span class="tl">{{ t('espresso.bean') }}</span>
-          <span class="tv">{{ source.coffeeName }}</span>
+          <span class="tv">{{ recipeCoffeeName(source) }}</span>
         </button>
         <button v-if="isLoaded" class="phone-tile" @click="recipeBean && (showBatchPicker = true)">
           <span class="tl">{{ t('espresso.roasted') }}</span>
@@ -276,7 +276,7 @@ async function removeThis() {
              apart, so a half tile ellipsised away the useful half of it. -->
         <button class="phone-tile phone-tile-wide" @click="showProfilePicker = true">
           <span class="tl">{{ t('espresso.profile') }}</span>
-          <span class="tv">{{ source.profileTitle }}</span>
+          <span class="tv">{{ recipeProfileTitle(source) }}</span>
         </button>
         <button class="phone-tile" @click="editYield">
           <span class="tl">{{ t('espresso.targetYield') }}</span>

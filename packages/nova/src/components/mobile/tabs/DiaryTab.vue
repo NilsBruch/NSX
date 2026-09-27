@@ -22,7 +22,7 @@ import { findRecipeForBeanProfile, togglePinRecipe, deleteRecipe } from '../../.
 import { toggleArchiveBean, confirmAndDeleteBean } from '../../../composables/useBeanActions.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { openHistoryAt } from '../../../composables/useLiveShot.js';
-import { singleGrinder, formatShortDate } from '../../../composables/useCore.js';
+import { singleGrinder, formatShortDate, recipeCoffeeName, recipeRoasterName } from '../../../composables/useCore.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
 import { goPhoneTab } from '../../../composables/usePhoneNav.js';
 import RecipePicker from '../../RecipePicker.vue';
@@ -125,7 +125,7 @@ async function loadGroupRecipe(group) {
 async function removeGroupRecipe(recipe) {
   const ok = await openConfirm({
     title: t('diary.deleteRecipeConfirm'),
-    message: `${recipe.coffeeRoaster} – ${recipe.coffeeName}`,
+    message: `${recipeRoasterName(recipe)} – ${recipeCoffeeName(recipe)}`,
     danger: true,
     confirmLabel: t('common.delete'),
   });

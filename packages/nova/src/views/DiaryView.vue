@@ -15,7 +15,7 @@ import { useLongPress } from '../composables/useLongPress.js';
 // A `vFoo` binding in <script setup> registers as the v-foo directive.
 import { vScrollEdges } from '../composables/useScrollEdges.js';
 import { confirmAndDeleteBean, toggleArchiveBean } from '../composables/useBeanActions.js';
-import { recipeIdentityParts } from '../composables/useCore.js';
+import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
 import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
 import BagsPanel from '../components/BagsPanel.vue';
@@ -169,7 +169,7 @@ async function openGroupMenu(group) {
 async function removeRecipe(recipe) {
   const ok = await openConfirm({
     title: t('diary.deleteRecipeConfirm'),
-    message: `${recipe.coffeeRoaster} – ${recipe.coffeeName}`,
+    message: `${recipeRoasterName(recipe)} – ${recipeCoffeeName(recipe)}`,
     danger: true,
     confirmLabel: t('common.delete'),
   });

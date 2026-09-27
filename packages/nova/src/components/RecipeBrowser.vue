@@ -22,7 +22,7 @@ import { useI18n } from 'vue-i18n';
 import { recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
-import { shots, loadShots, formatDateParts } from '../composables/useCore.js';
+import { shots, loadShots, formatDateParts, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
@@ -89,7 +89,7 @@ async function pick(entry) {
  */
 async function openCardMenu(entry) {
   const choice = await openChooser({
-    title: `${entry.coffeeRoaster} ${entry.coffeeName}`,
+    title: `${recipeRoasterName(entry)} ${recipeCoffeeName(entry)}`,
     options: [
       ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
       ['rate', t('rating.rate')],
@@ -115,7 +115,7 @@ async function openCardMenu(entry) {
   } else if (choice === 'delete') {
     const ok = await openConfirm({
       title: t('diary.deleteRecipeConfirm'),
-      message: `${entry.coffeeRoaster} – ${entry.coffeeName}`,
+      message: `${recipeRoasterName(entry)} – ${recipeCoffeeName(entry)}`,
       confirmLabel: t('common.delete'),
       danger: true,
     });

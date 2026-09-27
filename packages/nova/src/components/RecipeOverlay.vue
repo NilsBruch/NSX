@@ -16,7 +16,7 @@
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
-import { shots, loadShots } from '../composables/useCore.js';
+import { shots, loadShots, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { skinSettings } from '../composables/useSettings.js';
@@ -72,7 +72,7 @@ async function pick(entry) {
  */
 async function openCardMenu(entry) {
   const choice = await openChooser({
-    title: `${entry.coffeeRoaster} ${entry.coffeeName}`,
+    title: `${recipeRoasterName(entry)} ${recipeCoffeeName(entry)}`,
     options: [
       ['load', t('diary.loadRecipe')],
       ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
@@ -86,7 +86,7 @@ async function openCardMenu(entry) {
   } else if (choice === 'delete') {
     const ok = await openConfirm({
       title: t('diary.deleteRecipeConfirm'),
-      message: `${entry.coffeeRoaster} – ${entry.coffeeName}`,
+      message: `${recipeRoasterName(entry)} – ${recipeCoffeeName(entry)}`,
       confirmLabel: t('common.delete'),
       danger: true,
     });

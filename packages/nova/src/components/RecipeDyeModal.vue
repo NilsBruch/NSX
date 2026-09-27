@@ -183,11 +183,11 @@ async function pickBeverage() {
           <div class="dye-grid">
             <div class="dye-tile static">
               <span class="dl">{{ t('dye.roaster') }}</span>
-              <span class="dv" :class="{ muted: recipe.coffeeRoaster === '—' }">{{ dash(recipeRoasterName(recipe)) }}</span>
+              <span class="dv" :class="{ muted: !recipeRoasterName(recipe) }">{{ dash(recipeRoasterName(recipe)) }}</span>
             </div>
             <div class="dye-tile static">
               <span class="dl">{{ t('dye.bean') }}</span>
-              <span class="dv" :class="{ muted: recipe.coffeeName === '—' }">{{ dash(recipeCoffeeName(recipe)) }}</span>
+              <span class="dv" :class="{ muted: !recipeCoffeeName(recipe) }">{{ dash(recipeCoffeeName(recipe)) }}</span>
             </div>
             <div class="dye-tile static">
               <span class="dl">{{ t('dye.bag') }}</span>
@@ -312,7 +312,7 @@ async function pickBeverage() {
             <div class="dye-pair dye-off">
               <div class="dye-tile static">
                 <span class="dl">{{ t('dye.profile') }}</span>
-                <span class="dv fit" :class="{ muted: recipe.profileTitle === '—' }">{{ dash(recipeProfileTitle(recipe)) }}</span>
+                <span class="dv fit" :class="{ muted: !recipeProfileTitle(recipe) }">{{ dash(recipeProfileTitle(recipe)) }}</span>
               </div>
               <div class="dye-tile static">
                 <span class="dl">{{ t('dye.temperature') }}</span>
