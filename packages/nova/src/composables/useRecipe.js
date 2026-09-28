@@ -267,13 +267,20 @@ export async function setRecipeDye(patch) {
  * recipe's name is the one being reused deliberately; shots then add whoever
  * only ever appeared on a pull.
  *
+ * Barista and drinker share ONE pool: they are the same people in two roles,
+ * and whoever pulls the shot usually drinks it. Keeping the lists apart meant
+ * typing a name a second time the first time someone changed sides.
+ *
  * Shared with ShotDyePage so both pages suggest from the same set.
  */
+const PEOPLE_FIELDS = ['baristaName', 'drinkerName'];
+
 export function dyeNamesUsed(field) {
+  const fields = PEOPLE_FIELDS.includes(field) ? PEOPLE_FIELDS : [field];
   const seen = new Set();
   const add = (v) => { const s = String(v || '').trim(); if (s) seen.add(s); };
-  for (const r of recipes.value) add(r?.dye?.[field]);
-  for (const s of shots.value) add(s?.workflow?.context?.[field]);
+  for (const r of recipes.value) for (const f of fields) add(r?.dye?.[f]);
+  for (const s of shots.value) for (const f of fields) add(s?.workflow?.context?.[f]);
   return [...seen];
 }
 
