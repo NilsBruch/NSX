@@ -31,7 +31,7 @@ import {
   reviewShot, currentFullShot, grindSetting,
   setShotAnnotations, setShotContext, setActualDose, setActualYield, setGrindSetting,
 } from '../composables/useLiveShot.js';
-import { beans, grinders, shots, baskets, equipment, formatGrinderLabel, formatShortDate } from '../composables/useCore.js';
+import { beans, grinders, baskets, equipment, formatGrinderLabel, formatShortDate } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
 import { openTextField, openNumberPad, openChooser, openMultiChooser, openRating } from '../composables/useModals.js';
@@ -39,6 +39,7 @@ import { openTextField, openNumberPad, openChooser, openMultiChooser, openRating
 // build; the style (colour, size, stroke) comes from .dye-head in app.css.
 import { PaperBag, Coffee, LensConcave, Users } from '@lucide/vue';
 import { shotMatchesBean } from '../composables/useDiary.js';
+import { dyeNamesUsed } from '../composables/useRecipe.js';
 import StarRating from './StarRating.vue';
 import BeanChooser from './BeanChooser.vue';
 import BatchPicker from './BatchPicker.vue';
@@ -140,12 +141,11 @@ const analysisItems = computed(() => {
 });
 
 // ── Edits ──
-// Names already used on other shots, so the same barista/drinker is spelled
-// one way across a history — the same reason the bean editor offers its own
-// past values (see openTextField's `suggestions`).
-const namesUsed = (field) => [...new Set(
-  shots.value.map((s) => s.workflow?.context?.[field]).filter((v) => typeof v === 'string' && v.trim()),
-)];
+// Names already used on a shot OR on a recipe, so the same barista/drinker is
+// spelled one way across a history — the same reason the bean editor offers
+// its own past values (see openTextField's `suggestions`). dyeNamesUsed reads
+// both stores; the recipe's DYE page offers the very same list.
+const namesUsed = (field) => dyeNamesUsed(field);
 
 async function editText(title, current, apply, suggestions = []) {
   const v = await openTextField({ title, value: current ?? '', suggestions });

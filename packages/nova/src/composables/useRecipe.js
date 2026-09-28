@@ -256,14 +256,24 @@ export async function setRecipeDye(patch) {
   await pushRecipe();
 }
 
-/** Every barista or drinker name any recipe carries, for the text editors'
- *  suggestions, so you retype a name once. */
+/**
+ * Every barista or drinker name already in use, for the text editors'
+ * suggestions, so you retype a name once.
+ *
+ * Both halves matter: a name lives on a RECIPE under `dye`, and on a SHOT
+ * under `workflow.context` — two different stores. Typing a drinker on a
+ * historic shot and then finding no suggestion on the recipe page (or the
+ * other way round) is the bug this reads both for. Recipes first because a
+ * recipe's name is the one being reused deliberately; shots then add whoever
+ * only ever appeared on a pull.
+ *
+ * Shared with ShotDyePage so both pages suggest from the same set.
+ */
 export function dyeNamesUsed(field) {
   const seen = new Set();
-  for (const r of recipes.value) {
-    const v = String(r?.dye?.[field] || '').trim();
-    if (v) seen.add(v);
-  }
+  const add = (v) => { const s = String(v || '').trim(); if (s) seen.add(s); };
+  for (const r of recipes.value) add(r?.dye?.[field]);
+  for (const s of shots.value) add(s?.workflow?.context?.[field]);
   return [...seen];
 }
 

@@ -1367,6 +1367,12 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 }
 
 .roast-chip {
+  /* One line, always. A chip that breaks across two reads as a broken box
+     rather than as a long label — and this one sits under a dial, where the
+     second line pushes everything below it down. It is allowed to be wider
+     than the column it sits in: there is room either side, which a wrap
+     refuses to use. */
+  white-space: nowrap;
   display: inline-flex; align-items: center; gap: 8px;
   background: none; border: none; color: var(--muted); font-family: inherit;
   font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.04em; padding: 2px 10px;
