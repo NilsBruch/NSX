@@ -318,8 +318,11 @@ export default {
   // The DYE page (ShotDyePage.vue) — the shot's own record, in full.
   dye: {
     enjoyment: 'Enjoyment',
-    title: 'Describe your espresso',
-    open: 'DYE',
+    title: 'Describe your coffee',
+    // Spelled out rather than the acronym: DYE means nothing unless you
+    // already know the Decent ecosystem, and this is the word for it.
+    // "coffee", not "espresso" — the beverage type can be filter or lungo.
+    open: 'Describe your coffee',
     backToGraph: 'Graph',
     secBeans: 'Beans', secEquipment: 'Equipment',
     secExtraction: 'Extraction', secPeople: 'People',
@@ -541,7 +544,7 @@ export default {
     graphNormal: 'Normal',
     graphExpert: 'Expert',
     dyeButton: 'Enable DYE plugin integration',
-    dyeButtonSub: 'Baskets and equipment shared with the DYE2 plugin, DYE settings on a recipe, and a shot’s full record — notes, TDS, people — from the history view',
+    dyeButtonSub: 'Baskets and equipment shared with the DYE2 plugin, the description pages for a recipe and for a shot, and a shot’s full record — notes, TDS, people — from the history view',
     tabColors: 'Colour by tab',
     tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',
@@ -568,8 +571,10 @@ export default {
   },
   recipeDye: {
     // The button on the coffee page, left of Rate.
-    button: 'DYE settings',
-    title: 'DYE settings',
+    // Not "settings": the page is mostly a record, and only a handful of its
+    // tiles are editable — see RecipeDyeModal's own header.
+    button: 'Describe your recipe',
+    title: 'Describe your recipe',
     basket: 'Basket', equipment: 'Equipment', rpm: 'RPM',
     barista: 'Barista', drinker: 'Drinker', beverage: 'Beverage',
     none: '— None —',
