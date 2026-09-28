@@ -151,19 +151,39 @@
 
   // A sane new frame for the "Add step" button, seeded from whichever frame
   // precedes it (or defaults, for the very first frame in a profile).
+  /**
+   * A new step, continuing from the one before it.
+   *
+   * Everything describing HOW the step runs is inherited — pump mode, its
+   * goal, the temperature and its sensor, the transition, the duration and
+   * the limiter. A new step is nearly always a variation on the one before
+   * it, so starting from scratch meant re-entering values that were right
+   * already.
+   *
+   * Everything describing how the step ENDS is not: the volume and weight
+   * caps and the exit condition start off, and the name starts empty. Those
+   * are what distinguishes one step from the next — a weight cap silently
+   * inherited onto the following step would end it at a total the user never
+   * asked for, and two steps sharing an exit condition is rarely meant.
+   *
+   * That line is also what keeps Add and Duplicate different buttons: the
+   * editor offers both, and Duplicate is the one that copies a step whole,
+   * ending conditions and name included.
+   */
   function makeDefaultFrame(lastFrame) {
     return {
       name: "",
       pump: lastFrame?.pump ?? "pressure",
       flow: lastFrame?.flow ?? 2.0,
       pressure: lastFrame?.pressure ?? 6.0,
-      seconds: 10,
+      seconds: lastFrame?.seconds ?? 10,
       temperature: lastFrame?.temperature ?? 93.0,
       transition: lastFrame?.transition ?? "fast",
       sensor: lastFrame?.sensor ?? "coffee",
-      limiterEnabled: false,
-      limiterValue: 0,
-      limiterRange: 0.6,
+      // The limiter shapes the step rather than ending it, so it comes along.
+      limiterEnabled: lastFrame?.limiterEnabled ?? false,
+      limiterValue: lastFrame?.limiterValue ?? 0,
+      limiterRange: lastFrame?.limiterRange ?? 0.6,
       volumeEnabled: false,
       volumeValue: 0,
       weightEnabled: false,

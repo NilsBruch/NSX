@@ -169,6 +169,40 @@ test("makeDefaultFrame: seeds from the previous frame, or sensible defaults for 
   assert.equal(seeded.sensor, "water");
 });
 
+test("makeDefaultFrame carries HOW the step runs — duration and limiter included", () => {
+  // These used to reset, so every added step began by re-entering a duration
+  // and a limiter that were already right on the step before it.
+  const prev = {
+    pump: "flow", flow: 2.2, seconds: 25, temperature: 88,
+    limiterEnabled: true, limiterValue: 6, limiterRange: 1.2,
+  };
+  const next = NSXCore.makeDefaultFrame(prev);
+  assert.equal(next.seconds, 25);
+  assert.equal(next.limiterEnabled, true);
+  assert.equal(next.limiterValue, 6);
+  assert.equal(next.limiterRange, 1.2);
+});
+
+test("makeDefaultFrame does NOT carry how the step ENDS", () => {
+  // The caps and the exit are what tell one step from the next: a weight cap
+  // inherited onto the following step would end it at a total nobody asked
+  // for. It is also the line that keeps Add and Duplicate different buttons.
+  const prev = {
+    name: "Preinfusion",
+    volumeEnabled: true, volumeValue: 30,
+    weightEnabled: true, weightValue: 36,
+    exitEnabled: true, exitType: "pressure_over", exitValue: 4,
+  };
+  const next = NSXCore.makeDefaultFrame(prev);
+  assert.equal(next.name, "", "a new step is not the same step");
+  assert.equal(next.volumeEnabled, false);
+  assert.equal(next.volumeValue, 0);
+  assert.equal(next.weightEnabled, false);
+  assert.equal(next.weightValue, 0);
+  assert.equal(next.exitEnabled, false);
+  assert.equal(next.exitValue, 0);
+});
+
 // --- normalizeProfileLimits ---
 
 test("normalizeProfileLimits: reads the profile-wide fields, and only those", () => {
