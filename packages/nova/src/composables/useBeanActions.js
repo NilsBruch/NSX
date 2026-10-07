@@ -24,6 +24,8 @@
 import i18n from '../i18n/index.js';
 import { openConfirm } from './useModals.js';
 import { recipesUsingBean, deleteRecipesUsingBean, refreshRecipes } from './useRecipe.js';
+import { loadBatchMap } from './useDiary.js';
+import { formatLongDate } from './useCore.js';
 
 const { NSXCore, NSXApi } = window;
 const t = (...args) => i18n.global.t(...args);
@@ -112,6 +114,56 @@ export async function setBatchRoastDate(batch, iso) {
   if (!batch?.id) return null;
   const { id, createdAt, updatedAt, ...rest } = batch;
   return NSXApi.updateBatch(batch.id, { ...rest, roastDate: iso });
+}
+
+/**
+ * Mark a bag finished (or open it again) — the Diary's Batches view "Done".
+ * Uses the gateway's own `archived` flag on the batch, so other skins see the
+ * same state. Same whole-record body as setBatchRoastDate above, for the same
+ * reason. Reversible, so no confirm: the row moving to the greyed end of the
+ * list is the feedback.
+ */
+export async function toggleArchiveBatch(batch) {
+  if (!batch?.id) return null;
+  const { id, createdAt, updatedAt, ...rest } = batch;
+  return NSXApi.updateBatch(batch.id, { ...rest, archived: !batch.archived });
+}
+
+/**
+ * After a new bag of a coffee is opened: offer to mark the bean's OTHER open
+ * bags done. Asked rather than done silently — two bags open at once is real
+ * (one in the freezer) — but the confirm button is the primary one, because
+ * finishing the old bag is what you almost always want: while two are open,
+ * the newer roast wins (core's resolveBrewBatch), which may not be the one on
+ * the counter.
+ *
+ * Resolves true if anything was archived. Failures are reported, never thrown:
+ * the new bag is already in place, and that is the part that matters.
+ */
+export async function offerFinishOtherBags(beanId, keepBatchId) {
+  if (!beanId) return false;
+  try {
+    const res = await NSXApi.fetchBatches(beanId, false);
+    const others = (Array.isArray(res) ? res : (res?.items ?? []))
+      .filter((b) => b?.id && b.id !== keepBatchId && !b.archived);
+    if (!others.length) return false;
+    const dates = others
+      .map((b) => (b.roastDate ? formatLongDate(b.roastDate) : t('diary.noRoastDate')))
+      .join(', ');
+    const ok = await openConfirm({
+      title: t('diary.finishOldBag', others.length),
+      message: t('diary.finishOldBagMsg', { dates }),
+      confirmLabel: t('diary.batchDone'),
+    });
+    if (!ok) return false;
+    for (const b of others) await toggleArchiveBatch(b);
+    await loadBatchMap();
+    return true;
+  } catch (err) {
+    console.warn('[Nova] could not finish the previous bag', err?.message);
+    NSXCore.emit('toast', err?.message || String(err));
+    return false;
+  }
 }
 
 /**

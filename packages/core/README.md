@@ -109,7 +109,10 @@ global (keeps core app-state-free).
   Also owns **bean/batch resolution**: `normalizeRoastDate(v)` (day-granular, so
   a timestamp and a bare date compare equal), `findBatchForRoastDate(batches, d)`
   (pure), `resolveBean(roaster, name)` and `resolveBatch(beanId, roastDate)` —
-  both **find-or-create**.
+  both **find-or-create**. `resolveBrewBatch(beanId)` is the bag a recipe on
+  that bean brews from now: the bean's newest open dated bag, else its open
+  undated bag (created if missing). The open bag belongs to the bean, so every
+  recipe of a coffee shares it.
   A *batch* is one **bag** of a bean, identified by **(beanId, roastDate)** —
   *not* one per shot: every shot from the same bag resolves to the same batch.
   A batch's `roastDate` is treated as **immutable**; a new roast date means a

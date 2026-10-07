@@ -2876,6 +2876,21 @@ a.sw-update { text-decoration: none; }
   letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; cursor: pointer;
 }
 
+/* Diary Batches view. "Done" keeps the page's accent fill from
+   .load-recipe-btn above; a done bag is greyed, and its Reopen drops to an
+   outline so the greyed end of the list stays quiet. */
+.diary-batch-row.archived .row-main { opacity: 0.45; }
+/* Done/Reopen re-sorts the list: TransitionGroup's FLIP move slides the row
+   to its new place, and the greying fades along with it. */
+.diary-batch-row-move { transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.diary-batch-row .row-main, .diary-batch-row .load-recipe-btn { transition: opacity 0.4s ease, color 0.4s ease, background-color 0.4s ease; }
+.diary-batch-row.archived .load-recipe-btn {
+  background: none; color: var(--muted); border: 1px solid var(--line);
+}
+/* BeanRecipesPage (new-bag wizard + a Diary bag): the Coffee page's
+   horizontal card strip. */
+.bean-recipe-strip .rp-card { cursor: pointer; }
+
 /* Title line of a Browse profile row, so a pin marker can sit inline with the
    name instead of stacking above it in .rmeta's column. */
 .bean-row .row-title { display: inline-flex; align-items: center; min-width: 0; }

@@ -385,7 +385,11 @@ async function ensureRecipeBatch() {
       recipe.beanId = bean.id;
     }
 
-    const batch = await NSXCore.resolveBatch(recipe.beanId, recipe.roastDate);
+    // An explicit roast date (setRoastDate) names the bag; otherwise the
+    // recipe brews from its bean's open bag — see adoptBrewBatch.
+    const batch = recipe.roastDate
+      ? await NSXCore.resolveBatch(recipe.beanId, recipe.roastDate)
+      : await NSXCore.resolveBrewBatch(recipe.beanId);
     recipe.beanBatchId = batch?.id ?? null;
     // The batch is the source of truth for the date — adopt whatever it holds
     // (an existing bag may already have one even if this recipe didn't know it).
@@ -458,6 +462,30 @@ async function syncFromWorkflow(wf) {
     roastDate: null,
   });
   await adoptBatch(recipe.beanBatchId);
+}
+
+/**
+ * The bag a library recipe brews from is its BEAN's open bag (core's
+ * resolveBrewBatch), not the one stored on the entry: opening a new bag of a
+ * coffee moves every recipe of that coffee, and a bag marked done never gets
+ * another shot. The stored beanBatchId is only a cache — and for an older
+ * entry with no beanId, the way to learn which bean it is.
+ *
+ * A failed lookup falls back to the stored bag, as before this rule existed.
+ */
+async function adoptBrewBatch(storedBatchId) {
+  if (!recipe.beanId) await adoptBatch(storedBatchId);
+  if (!recipe.beanId || recipe.beanUnlinked) return;
+  try {
+    const batch = await NSXCore.resolveBrewBatch(recipe.beanId);
+    if (!batch?.id) return;
+    recipe.beanBatchId = batch.id;
+    recipe.roastDate = batch.roastDate ?? null;
+  } catch (err) {
+    console.warn('[Nova] could not resolve the open bag for this bean', err?.message);
+    recipe.beanBatchId = storedBatchId;
+    await adoptBatch(storedBatchId);
+  }
 }
 
 /** Reads roastDate + beanId back off a batch the recipe already references.
@@ -693,7 +721,7 @@ export async function selectRecipe(entry, { push = true } = {}) {
       : { factor: 1.0, samples: [] },
     rating: Number(entry.rating) || 0,
   });
-  await adoptBatch(recipe.beanBatchId);
+  await adoptBrewBatch(recipe.beanBatchId);
   if (push) await pushRecipe(); // ensureRecipeBatch heals an older, batch-less recipe here
 }
 
@@ -758,7 +786,7 @@ export async function composeNewRecipe({ bean, profile, seedContext = null, batc
   // `batch` present means the caller already resolved one explicitly —
   // RecipePicker.vue's wizard now has its own bag-picking step
   // (BatchPicker.vue), right after Bean, so it always passes one. Only fall
-  // back to auto-joining the bean's CURRENT bag when nothing was passed —
+  // back to joining the bean's open bag (resolveBrewBatch) when nothing was passed —
   // loadOrCreateRecipeForBeanProfile has no such step and still needs this.
   // Same coffee, same roast, different profile is the ordinary reason to
   // build a second recipe on a bean, and both should sit on the one bag so
@@ -769,7 +797,7 @@ export async function composeNewRecipe({ bean, profile, seedContext = null, batc
   let inheritedRoastDate = batch ? (batch.roastDate ?? null) : null;
   if (!batch) {
     try {
-      const current = await NSXCore.fetchCurrentBatch(recipe.beanId);
+      const current = recipe.beanId ? await NSXCore.resolveBrewBatch(recipe.beanId) : null;
       if (current?.id) {
         recipe.beanBatchId = current.id;
         recipe.roastDate = current.roastDate ?? null;
@@ -973,6 +1001,11 @@ export async function adoptCurrentWorkflowAsRecipe() {
  *
  * The bag the recipe just left keeps its shots. If it has none — the "I mistyped
  * the date" case — gcBatchIfUnused removes it so strays don't pile up.
+ *
+ * The open bag belongs to the bean (see adoptBrewBatch), so this is "a new bag
+ * of this coffee": the bean's other recipes follow on their next load. The
+ * caller offers to mark the previous bag done (useBeanActions'
+ * offerFinishOtherBags) — while two bags are open, the newer roast wins.
  */
 export async function setRoastDate(iso) {
   const previousBatchId = recipe.beanBatchId;

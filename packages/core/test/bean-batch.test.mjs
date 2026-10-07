@@ -137,3 +137,44 @@ test("resolveBean creates a missing bean so a workflow always has a real one to 
   assert.equal(bean.id, "bean-new");
   assert.ok(NSXCore.getBeans().some((b) => b.id === "bean-new"), "the cache is refreshed so the skin sees it");
 });
+
+test("resolveBrewBatch picks the bean's newest open dated bag", async () => {
+  let created = 0;
+  window.NSXApi = {
+    fetchBatches: async () => [
+      { id: "undated" },
+      { id: "old", roastDate: "2026-06-01" },
+      { id: "new", roastDate: "2026-06-20" },
+    ],
+    createBatch: async () => { created++; return { id: "x" }; },
+  };
+  assert.equal((await NSXCore.resolveBrewBatch("bean-1")).id, "new");
+  assert.equal(created, 0);
+});
+
+test("resolveBrewBatch never brews into a bag marked done", async () => {
+  window.NSXApi = {
+    fetchBatches: async () => [
+      { id: "done", roastDate: "2026-06-20", archived: true },
+      { id: "open", roastDate: "2026-06-01" },
+    ],
+    createBatch: async () => ({ id: "x" }),
+  };
+  assert.equal((await NSXCore.resolveBrewBatch("bean-1")).id, "open");
+});
+
+test("resolveBrewBatch falls back to the open undated bag, then creates one", async () => {
+  window.NSXApi = {
+    fetchBatches: async () => [{ id: "done", roastDate: "2026-06-20", archived: true }, { id: "undated" }],
+    createBatch: async () => ({ id: "x" }),
+  };
+  assert.equal((await NSXCore.resolveBrewBatch("bean-1")).id, "undated");
+
+  const creates = [];
+  window.NSXApi = {
+    fetchBatches: async () => [{ id: "done", roastDate: "2026-06-20", archived: true }],
+    createBatch: async (beanId, payload) => { creates.push([beanId, payload]); return { id: "batch-new" }; },
+  };
+  assert.equal((await NSXCore.resolveBrewBatch("bean-1")).id, "batch-new");
+  assert.deepEqual(creates, [["bean-1", {}]]);
+});

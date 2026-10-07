@@ -37,7 +37,8 @@ watch(
   phoneTab,
   (tab) => {
     if (tab === 'recipes') { if (diaryState.view !== 'recipes') setView('recipes'); }
-    else if (tab === 'diary' && diaryState.view === 'recipes') setView('browse');
+    // 'batches' is tablet-only for now — the phone's Diary has no pane for it.
+    else if (tab === 'diary' && (diaryState.view === 'recipes' || diaryState.view === 'batches')) setView('browse');
   },
   { immediate: true }
 );

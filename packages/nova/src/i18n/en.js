@@ -361,6 +361,24 @@ export default {
     browse: 'Browse',
     fullHistory: 'History',
     recipes: 'Recipes',
+    // Batches view — one row per bag; "Done" archives the bag.
+    batches: 'Batches',
+    coffees: 'Coffees', // the tablet's label for the Browse view
+    batchDone: 'Done',
+    batchReopen: 'Reopen',
+    noRoastDate: 'No roast date',
+    roastedOn: 'Roasted {date}',
+    lastBrewed: 'last brewed {date}',
+    // Asked after a new bag of a coffee is opened (offerFinishOtherBags).
+    // Plural forms (one | other) via the call site's count argument.
+    finishOldBag: 'Mark the previous bag done? | Mark the previous bags done?',
+    finishOldBagMsg: 'Roasted {dates}. Recipes of this coffee now brew from the new bag.',
+    newBag: 'New bag',
+    // Title of the full-screen recipe list opened from a bag (BeanRecipesPage):
+    // recipes belong to the coffee, not to the bag.
+    recipesForCoffee: 'Recipes for this coffee',
+    otherProfile: 'Other profile',
+    recipeForBag: 'Continue with',
     // vue-i18n plural forms (zero | one | other) — selected by the third
     // argument at the call site: t('diary.shotCount', { n }, n).
     shotCount: 'no shots | 1 shot | {n} shots',

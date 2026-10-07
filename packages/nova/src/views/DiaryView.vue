@@ -8,14 +8,15 @@ import {
   profileGroupsInBean, toggleProfileExpanded, openRecipeForBeanProfile,
   ensureShotMetrics, hasMoreHistory, loadMoreHistory,
   recipeRows, toggleRecipeExpanded, toggleEditingRecipes,
+  batchRows, batchShots, enterBatch, loadBatchMap,
 } from '../composables/useDiary.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { openTextField, openConfirm, openChooser } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
 // A `vFoo` binding in <script setup> registers as the v-foo directive.
 import { vScrollEdges } from '../composables/useScrollEdges.js';
-import { confirmAndDeleteBean, toggleArchiveBean } from '../composables/useBeanActions.js';
-import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
+import { confirmAndDeleteBean, toggleArchiveBean, toggleArchiveBatch } from '../composables/useBeanActions.js';
+import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName, formatLongDate } from '../composables/useCore.js';
 import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
 import BagsPanel from '../components/BagsPanel.vue';
@@ -52,6 +53,10 @@ async function goToRecipe(group) {
 const SHOW_RECIPES_VIEW = false;
 
 const showRecipeCreator = ref(false);
+// 'bag' = the "+ New bag" flow (coffee -> roast date -> recipe), 'recipe' =
+// "+ New recipe" — the same wizard, see RecipePicker's `mode`.
+const creatorMode = ref('recipe');
+function openCreator(mode) { creatorMode.value = mode; showRecipeCreator.value = true; }
 function closeRecipeCreator() { showRecipeCreator.value = false; }
 async function onRecipeCreated() {
   await ensureDiaryLoaded(); // the new bean/bag should show up in the Diary immediately
@@ -150,6 +155,11 @@ watch(
   () => diaryState.level,
   (level, prev) => { drill.value = level >= prev ? 'drill-fwd' : 'drill-back'; }
 );
+// The Batches view has two levels of its own: the list, and one bag opened.
+watch(
+  () => !!diaryState.batch,
+  (open) => { drill.value = open ? 'drill-fwd' : 'drill-back'; }
+);
 
 async function openGroupMenu(group) {
   const saved = savedRecipeForGroup(group);
@@ -176,9 +186,43 @@ async function removeRecipe(recipe) {
   if (ok) await deleteRecipe(recipe.id);
 }
 
+/**
+ * Batches view: a bag's second line — roaster, then when it was roasted and
+ * how long ago, then when it was last brewed (only if that is in the recent
+ * shots window; see batchRows).
+ */
+function batchFacts(row) {
+  const { batch, bean } = row;
+  const roast = batch.roastDate
+    ? `${t('diary.roastedOn', { date: formatLongDate(batch.roastDate) })} (${window.NSXCore.getBatchAge(batch.roastDate)})`
+    : t('diary.noRoastDate');
+  const parts = [bean.roaster, roast];
+  if (row.lastShot) parts.push(t('diary.lastBrewed', { date: formatLongDate(new Date(row.lastShot).toISOString()) }));
+  return parts.filter(Boolean).join(' · ');
+}
+
+async function toggleBatchDone(row) {
+  try {
+    await toggleArchiveBatch(row.batch);
+    // Flip it locally first so the row slides to its new place right away;
+    // the reload (one request per bean) then just confirms it.
+    row.batch.archived = !row.batch.archived;
+    await loadBatchMap();
+  } catch (err) {
+    window.NSXCore.emit('toast', err?.message || String(err));
+  }
+}
+
+
+const showBack = computed(() =>
+  (diaryState.view === 'browse' && diaryState.level > 0)
+  || (diaryState.view === 'batches' && !!diaryState.batch)
+);
+
 const sortLabel = computed(() => t(`diary.sort${diaryState.sort[0].toUpperCase()}${diaryState.sort.slice(1)}`));
 const searchPlaceholder = computed(() => {
   if (diaryState.view === 'full') return t('diary.searchProfile');
+  if (diaryState.view === 'batches') return diaryState.batch ? t('diary.searchProfile') : t('diary.searchRoaster');
   return [t('diary.searchRoaster'), t('diary.searchBean'), t('diary.searchProfile')][diaryState.level];
 });
 
@@ -205,6 +249,12 @@ async function onLoadMore() {
 const crumb = computed(() => {
   if (diaryState.view === 'full') return t('diary.fullHistory');
   if (diaryState.view === 'recipes') return t('diary.recipes');
+  if (diaryState.view === 'batches') {
+    const open = diaryState.batch;
+    if (!open) return t('diary.batches');
+    const date = open.batch.roastDate ? formatLongDate(open.batch.roastDate) : t('diary.noRoastDate');
+    return `${open.bean.name} › ${date}`;
+  }
   if (diaryState.level === 0) return t('diary.roasters');
   if (diaryState.level === 1) return diaryState.roasterName;
   return `${diaryState.roasterName} › ${diaryState.bean?.name ?? ''}`;
@@ -247,6 +297,7 @@ watch(
     if (group) ensureShotMetrics(group.shots);
   }
 );
+watch(batchShots, (list) => ensureShotMetrics(list));
 watch(
   () => diaryState.expandedRecipe,
   (id) => {
@@ -270,8 +321,8 @@ watch(
            which removes the box from flow exactly like v-if would. -->
       <button
         class="ov-back"
-        :class="{ invisible: !(diaryState.view === 'browse' && diaryState.level > 0) }"
-        :tabindex="diaryState.view === 'browse' && diaryState.level > 0 ? 0 : -1"
+        :class="{ invisible: !showBack }"
+        :tabindex="showBack ? 0 : -1"
         @click="goBack"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>{{ t('diary.back') }}
@@ -297,7 +348,9 @@ watch(
         <button v-if="diaryState.view === 'recipes'" class="sort-btn" @click="toggleEditingRecipes">
           {{ diaryState.editingRecipes ? t('common.done') : t('common.edit') }}
         </button>
-        <button class="sort-btn" @click="cycleSort">
+        <!-- The Batches view has one fixed order (open bags by last use, done
+             bags at the end), so there is nothing for the sort to cycle. -->
+        <button v-if="diaryState.view !== 'batches'" class="sort-btn" @click="cycleSort">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>{{ sortLabel }}
         </button>
       </div>
@@ -370,6 +423,51 @@ watch(
         </div>
       </template>
       <div v-if="!recipeRows.length" class="list-row"><span class="rsub">{{ t('diary.noRecipesYet') }}</span></div>
+    </div>
+
+    <!-- Batches: same sliding stage as Browse below. Pane one is one row per
+         bag — tap opens its shots, Done archives the bag, which sends it
+         greyed to the end of the list (Reopen undoes that). Pane two is that
+         bag's own shots, newest first. A coffee's recipes live in Coffees. Labels sit here, not inside <Transition>,
+         which rejects a comment as an extra child. -->
+    <div v-if="diaryState.view === 'batches'" class="drill-stage">
+      <Transition :name="drill">
+        <div v-if="!diaryState.batch" key="batches" v-scroll-edges class="list list-cards">
+          <!-- TransitionGroup, not a plain div: Done/Reopen re-sorts the list,
+               and the row should slide to its new place, not jump there. -->
+          <TransitionGroup tag="div" name="diary-batch-row" class="lc-inner">
+            <div
+              v-for="row in batchRows"
+              :key="row.batch.id"
+              class="list-row bean-row diary-batch-row"
+              :class="{ archived: row.batch.archived }"
+            >
+              <button class="row-main" @click="enterBatch(row)">
+                <span class="rmeta">{{ row.bean.name }}<span class="rsub">{{ batchFacts(row) }}</span></span>
+                <span class="chev">›</span>
+              </button>
+              <button class="load-recipe-btn" @click="toggleBatchDone(row)">
+                {{ row.batch.archived ? t('diary.batchReopen') : t('diary.batchDone') }}
+              </button>
+            </div>
+            <div v-if="!batchRows.length" key="empty" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
+          </TransitionGroup>
+        </div>
+
+        <div v-else key="batch-shots" v-scroll-edges class="list list-cards">
+          <div class="lc-inner">
+            <button
+              v-for="shot in batchShots"
+              :key="shot.id"
+              class="list-row shot-row as-btn"
+              @click="openHistoryAt(batchShots, shot)"
+            >
+              <DiaryShotRow :shot="shot" scope="batch" />
+            </button>
+            <div v-if="!batchShots.length" class="list-row"><span class="rsub">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</span></div>
+          </div>
+        </div>
+      </Transition>
     </div>
 
     <!-- One stage, three panes: the levels slide instead of cutting, so
@@ -470,17 +568,18 @@ watch(
     </div>
 
     <div class="diary-bottom">
-      <!-- seg-3 only while there are three: the thumb's width and its
-           travel per position are both derived from the count, so leaving the
-           class on with a button hidden would size it for a segment that
-           isn't there. -->
+      <!-- seg-3: Batches (what is open), Coffees (the Browse drill-down:
+           roaster -> bean -> profiles, plus bean/bag management on long-press),
+           History. The thumb's width and travel are derived from the count,
+           so turning SHOW_RECIPES_VIEW back on needs a four-segment variant
+           first. The phone's Diary still labels Browse "Browse". -->
       <div
-        class="seg"
-        :class="{ 'seg-3': SHOW_RECIPES_VIEW }"
-        :data-pos="diaryState.view === 'full' ? 1 : diaryState.view === 'recipes' ? 2 : 0"
+        class="seg seg-3"
+        :data-pos="diaryState.view === 'browse' ? 1 : diaryState.view === 'full' ? 2 : 0"
       >
         <span class="seg-thumb"></span>
-        <button :class="{ on: diaryState.view === 'browse' }" @click="setView('browse')">{{ t('diary.browse') }}</button>
+        <button :class="{ on: diaryState.view === 'batches' }" @click="setView('batches')">{{ t('diary.batches') }}</button>
+        <button :class="{ on: diaryState.view === 'browse' }" @click="setView('browse')">{{ t('diary.coffees') }}</button>
         <button :class="{ on: diaryState.view === 'full' }" @click="setView('full')">{{ t('diary.fullHistory') }}</button>
         <button v-if="SHOW_RECIPES_VIEW" :class="{ on: diaryState.view === 'recipes' }" @click="setView('recipes')">{{ t('diary.recipes') }}</button>
       </div>
@@ -490,16 +589,13 @@ watch(
         <span class="x" :aria-label="t('diary.clearFilter')">×</span>
       </button>
       <span class="spacer" style="flex: 1"></span>
-      <!-- Present in all three views, not just Browse: what these create (a
-           recipe, a bean on its own) is equally the thing you'd want to add
-           while looking at the shot history or the recipe list, and a button
-           that comes and goes with the segment is one the hand can't learn.
-           Two separate buttons, not one "+" leading to a chooser, so the
-           user decides up front whether they want a full recipe or just the
-           bean — same "+ New ___" phrasing BeanChooser's own inline add
-           already uses for this exact action. -->
-      <button class="btn" @click="showRecipeCreator = true">+ {{ t('diary.addRecipe') }}</button>
-      <button class="btn" @click="openEditBean(null)">+ {{ t('diary.newBean') }}</button>
+      <!-- Present in every view: a button that comes and goes with the
+           segment is one the hand can't learn. A new bag is the usual way in
+           (it ends on a recipe, ready to brew); a new recipe is for trying
+           another profile on a coffee. No separate "+ New bean": both flows
+           add one inline in their coffee step. -->
+      <button class="btn" @click="openCreator('bag')">+ {{ t('diary.newBag') }}</button>
+      <button class="btn" @click="openCreator('recipe')">+ {{ t('diary.addRecipe') }}</button>
       <button class="rbtn" :aria-label="t('diary.search')" @click="openSearch">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
       </button>
@@ -524,7 +620,9 @@ watch(
     <PageTransition>
       <RecipePicker
         v-if="showRecipeCreator"
-        :preset-bean="diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
+        :mode="creatorMode"
+        :preset-bean="diaryState.view === 'batches' && diaryState.batch ? diaryState.batch.bean
+          : diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
         :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
 
         @back="closeRecipeCreator"

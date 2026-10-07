@@ -23,6 +23,8 @@
  *   'recipe'  — a whole recipe. findShotsForWorkflow matches on a key that
  *               INCLUDES the grinder, so every shot here has the same one by
  *               construction — printing it per row is pure noise.
+ *   'batch'   — one bag (the Batches view). One coffee, but the profile
+ *               varies shot to shot, so it stays on the setup line.
  * Outside 'history' the title line has no coffee to carry (the list is already
  * one coffee), so the result moves up into it and the card keeps its shape.
  *
@@ -39,10 +41,11 @@ import ShotSparkline from './ShotSparkline.vue';
 
 const props = defineProps({
   shot: { type: Object, required: true },
-  scope: { type: String, default: 'history' }, // 'history' | 'profile' | 'recipe'
+  scope: { type: String, default: 'history' }, // 'history' | 'profile' | 'recipe' | 'batch'
 });
 
 const showIdentity = computed(() => props.scope === 'history');
+const showProfile = computed(() => props.scope === 'history' || props.scope === 'batch');
 const showGrinder = computed(() => props.scope !== 'recipe' && !singleGrinder.value);
 
 const { t } = useI18n();
@@ -83,7 +86,7 @@ const yieldText = computed(() => {
       </span>
 
       <span class="sc-setup">
-        <span v-if="showIdentity">{{ facts.profileTitle }}</span>
+        <span v-if="showProfile">{{ facts.profileTitle }}</span>
         <span v-if="showGrinder">{{ facts.grinderModel }}</span>
         <span>{{ t('espresso.grindSize') }} {{ facts.grinderSetting }}</span>
         <span>{{ facts.profileTemp }}</span>

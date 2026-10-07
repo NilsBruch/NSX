@@ -39,7 +39,7 @@
  *   Commands:  loadBeans(includeArchived?), setBeansCache(list),
  *              createBean(payload), updateBean(id, payload), deleteBean(id),
  *              resolveBean(roaster, name), resolveBatch(beanId, roastDate),
- *              fetchCurrentBatch(beanId)
+ *              fetchCurrentBatch(beanId), resolveBrewBatch(beanId)
  *   Event:     'beansLoaded' -> { beans }
  */
 (function () {
@@ -221,6 +221,30 @@
     return createBatch(beanId, date ? { roastDate: date } : {});
   }
 
+  /**
+   * The bag a recipe on this bean brews from RIGHT NOW. The open bag hangs off
+   * the BEAN, not off each recipe: every recipe of a coffee pours into the same
+   * open bag, so opening a new bag moves them all, and a bag marked done
+   * (archived) never receives another shot.
+   *
+   * The newest open, dated bag (findCurrentBatch's rule); failing that the
+   * bean's open undated bag; failing that a new undated one. One fetch either
+   * way — the same list answers both questions.
+   */
+  async function resolveBrewBatch(beanId) {
+    const { fetchBatches, createBatch } = window.NSXApi || {};
+    if (typeof fetchBatches !== "function" || typeof createBatch !== "function") {
+      throw new Error("NSXApi.fetchBatches/createBatch not available");
+    }
+    if (!beanId) throw new Error("resolveBrewBatch needs a beanId");
+
+    const res = await fetchBatches(beanId, false);
+    const list = Array.isArray(res) ? res : (res?.items ?? []);
+    const open = findCurrentBatch(list) ?? findBatchForRoastDate(list, null);
+    if (open) return open;
+    return createBatch(beanId, {});
+  }
+
   NSXCore.register({
     getBeans,
     setBeansCache,
@@ -234,5 +258,6 @@
     fetchCurrentBatch,
     resolveBean,
     resolveBatch,
+    resolveBrewBatch,
   });
 })();

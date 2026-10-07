@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, formatGrinderLabel, profiles, profilesAll, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
 import { showToast } from '../composables/useToast.js';
+import { offerFinishOtherBags } from '../composables/useBeanActions.js';
 import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile, beanForRecipe } from '../composables/useRecipe.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
@@ -149,6 +150,8 @@ function openBatchPicker() {
 async function onBatchPicked(batch) {
   await setRoastDate(batch.roastDate);
   showBatchPicker.value = false;
+  // The open bag belongs to the bean: offer to finish the one this replaced.
+  await offerFinishOtherBags(recipe.beanId, recipe.beanBatchId);
 }
 </script>
 
