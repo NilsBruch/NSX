@@ -1,28 +1,28 @@
 <script setup>
 /**
- * Phone "Diary" — the same roaster -> bean -> profile -> shot drill-down as
- * DiaryView.vue (same composable, same state), plus its flat full-history
- * toggle, reflowed into a single scrolling column instead of the tablet's
- * fixed page chrome. Recipe library management now has its own phone tab
- * (RecipesTab.vue); this one keeps the tablet's browse/full split.
+ * Phone "Diary" — the same bag -> profile -> shot drill-down as DiaryView.vue
+ * (same composable, same state), plus its flat full-history toggle, reflowed
+ * into a single scrolling column instead of the tablet's fixed page chrome.
+ * Recipe library management has its own phone tab (RecipesTab.vue).
  *
  * MobileShell.vue keeps diaryState.view off 'recipes' while this tab is
- * active (see the comment there) — this file only ever toggles between
- * 'browse' and 'full'.
+ * active (see the comment there) — this file toggles between 'batches' and
+ * 'full'.
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
-  diaryState, roasterGroups, beansInRoaster, fullHistoryShots,
-  enterRoaster, enterBean, goBack, cycleSort, setView, toggleArchived, ensureDiaryLoaded,
-  profileGroupsInBean, toggleProfileExpanded, openRecipeForBeanProfile,
+  diaryState, fullHistoryShots,
+  goBack, cycleSort, setView, ensureDiaryLoaded,
+  toggleProfileExpanded, openRecipeForBeanProfile,
   shotMetrics, ensureShotMetrics, hasMoreHistory, loadMoreHistory,
+  batchRows, batchProfileGroups, enterBatch, loadBatchMap,
 } from '../../../composables/useDiary.js';
 import { findRecipeForBeanProfile, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
-import { toggleArchiveBean, confirmAndDeleteBean } from '../../../composables/useBeanActions.js';
+import { toggleArchiveBean, confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBatch } from '../../../composables/useBeanActions.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { openHistoryAt } from '../../../composables/useLiveShot.js';
-import { singleGrinder, formatShortDate, recipeCoffeeName, recipeRoasterName } from '../../../composables/useCore.js';
+import { singleGrinder, formatShortDate, formatLongDate, recipeCoffeeName, recipeRoasterName } from '../../../composables/useCore.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
 import { goPhoneTab } from '../../../composables/usePhoneNav.js';
 import RecipePicker from '../../RecipePicker.vue';
@@ -36,20 +36,22 @@ onMounted(ensureDiaryLoaded);
 /**
  * The header keeps a SHORT, fixed title; where you are in the drill-down goes
  * on its own line below (see `path`). The header shares its row with up to
- * four icon buttons, which leaves a roaster name — let alone "roaster ›
- * bean" — a few characters before it ellipsises into nothing.
+ * four icon buttons, which leaves "bean › roast date" a few characters
+ * before it ellipsises into nothing.
  */
-const crumb = computed(() =>
-  (diaryState.view === 'full' ? t('diary.fullHistory') : t('diary.roasters')));
+const crumb = computed(() => (diaryState.view === 'full' ? t('diary.fullHistory') : t('diary.batches')));
 
 const path = computed(() => {
-  if (diaryState.view === 'full' || diaryState.level === 0) return '';
-  if (diaryState.level === 1) return diaryState.roasterName;
-  return `${diaryState.roasterName} › ${diaryState.bean?.name ?? ''}`;
+  const open = diaryState.view === 'batches' ? diaryState.batch : null;
+  if (!open) return '';
+  const date = !open.batch ? t('diary.noBag')
+    : open.batch.roastDate ? formatLongDate(open.batch.roastDate) : t('diary.noRoastDate');
+  return `${open.bean.name} › ${date}`;
 });
+const showBack = computed(() => diaryState.view === 'batches' && !!diaryState.batch);
 const searchPlaceholder = computed(() => {
   if (diaryState.view === 'full') return t('diary.searchProfile');
-  return [t('diary.searchRoaster'), t('diary.searchBean'), t('diary.searchProfile')][diaryState.level];
+  return diaryState.batch ? t('diary.searchProfile') : t('diary.searchRoaster');
 });
 const sortLabel = computed(() => t(`diary.sort${diaryState.sort[0].toUpperCase()}${diaryState.sort.slice(1)}`));
 
@@ -63,13 +65,7 @@ const factsFor = (shot) => window.NSXCore.mapShotToWorkflow(shot);
 const actualDose = (shot) => window.NSXCore.resolveActualDose(shot);
 const metricsFor = (shot) => shotMetrics.get(shot.id) || null;
 
-
-function onEnterBean(bean) {
-  enterBean(bean);
-}
-
-// Bean row: tap opens it (unchanged), hold offers what used to need a pencil
-// button — same menu and same three actions as the tablet's openBeanMenu.
+// "Edit bean" from a bag row's menu.
 const showBeanEditor = ref(false);
 const editingBean = ref(null);
 function openEditBean(bean) {
@@ -88,35 +84,25 @@ function openBags(bean) {
 }
 function closeBags() { showBags.value = false; }
 
-async function openBeanMenu(bean) {
-  const choice = await openChooser({
-    title: bean.name || '—',
-    options: [
-      ['edit', t('diary.editBean')],
-      ['bags', t('beanManager.batches')],
-      ['archive', bean.archived ? t('diary.unarchive') : t('diary.archive')],
-      ['delete', t('common.delete')],
-    ],
-  });
-  if (choice === 'edit') openEditBean(bean);
-  else if (choice === 'bags') openBags(bean);
-  else if (choice === 'archive') await toggleArchiveBean(bean);
-  else if (choice === 'delete') await confirmAndDeleteBean(bean);
-}
-const beanPress = useLongPress({ tap: onEnterBean, hold: openBeanMenu });
-
-// Profile-group row: tap keeps expanding the shot history below it (unchanged
-// — that's already this row's job here, unlike the tablet's browse row, which
-// taps straight to loading the recipe since RecipesTab didn't exist there).
+// Profile-group row: tap expands the shot history below it — unlike the
+// tablet's profile row, which taps straight to loading the recipe.
 // Hold adds the same Load / Pin / Delete the tablet's openGroupMenu offers.
 // Load routes to the phone's Recipes tab rather than router.push({name:
 // 'espresso'}) — the phone has no router navigation of its own (usePhoneNav.js).
+// Profile rows belong to the opened bag's coffee — the same rule as the
+// tablet's groupBean/groupBatch (DiaryView.vue): from an OPEN bag the recipe
+// brews from that bag, otherwise from the coffee's open bag.
+const groupBean = () => diaryState.batch?.bean;
+const groupBatch = () => {
+  const bag = diaryState.batch?.batch;
+  return bag && !bag.archived ? bag : null;
+};
 function savedRecipeForGroup(group) {
-  return findRecipeForBeanProfile(diaryState.bean, group.title);
+  return findRecipeForBeanProfile(groupBean(), group.title);
 }
 async function loadGroupRecipe(group) {
   try {
-    await openRecipeForBeanProfile(diaryState.bean, group.title, group.profile, group.context);
+    await openRecipeForBeanProfile(groupBean(), group.title, group.profile, group.context, groupBatch());
     goPhoneTab('recipes');
   } catch (err) {
     window.NSXCore.emit('toast', t('diary.recipeCreateFailed') + ': ' + err.message);
@@ -148,14 +134,63 @@ async function openGroupMenu(group) {
 }
 const groupPress = useLongPress({ tap: (group) => toggleProfileExpanded(group.title), hold: openGroupMenu });
 
+// Bag rows: tap opens the bag, hold offers the coffee's menu plus Done/Reopen.
+// The tablet also has Done as a button on the row; a phone row is one button
+// already, so here it lives in the menu only.
+function bagFacts(row) {
+  const { batch, bean } = row;
+  const roast = !batch ? t('diary.noBag')
+    : batch.roastDate ? t('diary.roastedOn', { date: formatShortDate(batch.roastDate) }) : t('diary.noRoastDate');
+  return [bean.roaster, roast].filter(Boolean).join(' · ');
+}
+function bagLabel(batch) {
+  return batch?.roastDate ? t('diary.roastedOn', { date: formatLongDate(batch.roastDate) }) : t('diary.noRoastDate');
+}
+async function toggleBagDone(row) {
+  try {
+    await toggleArchiveBatch(row.batch);
+    row.batch.archived = !row.batch.archived;
+    await loadBatchMap();
+  } catch (err) {
+    window.NSXCore.emit('toast', err?.message || String(err));
+  }
+}
+async function openBagMenu(row) {
+  const { bean, batch } = row;
+  const options = [
+    ['edit', t('diary.editBean')],
+    ['bags', t('beanManager.batches')],
+  ];
+  // The bag's own actions, then the coffee's — each named for what it acts
+  // on: a bare "Delete" on a bag row read as "delete this bag" and deleted
+  // the whole bean, every bag of it included.
+  if (batch) {
+    options.push(['done', batch.archived ? t('diary.batchReopen') : t('diary.batchDone')]);
+    options.push(['deleteBag', t('diary.deleteBag')]);
+  }
+  options.push(
+    ['archive', bean.archived ? t('diary.unarchive') : t('diary.archiveCoffee')],
+    ['delete', t('diary.deleteCoffee')],
+  );
+  const choice = await openChooser({ title: bean.name || '—', options });
+  if (choice === 'edit') openEditBean(bean);
+  else if (choice === 'bags') openBags(bean);
+  else if (choice === 'done') await toggleBagDone(row);
+  else if (choice === 'deleteBag') { if (await confirmAndDeleteBatch(batch)) await loadBatchMap(); }
+  else if (choice === 'archive') await toggleArchiveBean(bean);
+  else if (choice === 'delete') await confirmAndDeleteBean(bean);
+}
+const bagPress = useLongPress({ tap: enterBatch, hold: openBagMenu });
+
 // Metrics for whatever's expanded once a bean is drilled into, or for the
 // flat full-history list once that's the active view.
 watch(
   () => diaryState.expandedProfile,
   (title) => {
     if (!title) return;
-    const group = profileGroupsInBean.value.find((g) => g.title === title);
-    if (group) ensureShotMetrics(group.shots);
+    const { current, earlier } = batchProfileGroups.value;
+    const group = [...current, ...earlier].find((g) => g.title === title);
+    if (group) ensureShotMetrics(group.ordered);
   }
 );
 watch(
@@ -182,17 +217,11 @@ async function onRecipeCreated() {
 <template>
   <section class="phone-page">
     <div class="phone-head">
-      <button v-if="diaryState.view === 'browse' && diaryState.level > 0" class="phone-back" :aria-label="t('diary.back')" @click="goBack">
+      <button v-if="showBack" class="phone-back" :aria-label="t('diary.back')" @click="goBack">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       </button>
       <span class="phone-crumb">{{ crumb }}</span>
-      <!-- Same archive-box glyph as DiaryView.vue's toggle (see its comment) —
-           it matters more here: with no room in the header for the tablet's
-           text label, an icon-only trash can would have read as "delete". -->
-      <button v-if="diaryState.view === 'browse' && diaryState.level < 2" class="sort-btn icon-only" :class="{ accent: diaryState.showArchived }" :aria-label="diaryState.showArchived ? t('diary.hideArchived') : t('diary.showAll')" @click="toggleArchived">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v4H3z" /><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>
-      </button>
-      <button class="sort-btn icon-only" :aria-label="sortLabel" @click="cycleSort">
+      <button v-if="diaryState.view !== 'batches'" class="sort-btn icon-only" :aria-label="sortLabel" @click="cycleSort">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>
       </button>
       <button class="phone-icon-btn" :aria-label="t('diary.search')" @click="openSearch">
@@ -206,14 +235,14 @@ async function onRecipeCreated() {
     <!-- Where you are, with a full line to say it in. -->
     <span v-if="path" class="phone-path">{{ path }}</span>
 
-    <!-- Browse/History toggle sits right under the header, not at the foot of
+    <!-- Batches/History toggle sits right under the header, not at the foot of
          a scrolling list (the tablet can pin it to the page bottom because
          .page has a fixed height; the phone's whole tab is one scroll column,
-         and a control buried below a long roaster list would rarely be
+         and a control buried below a long bag list would rarely be
          reachable without scrolling all the way down first). -->
     <div class="seg" :data-pos="diaryState.view === 'full' ? 1 : 0">
       <span class="seg-thumb"></span>
-      <button :class="{ on: diaryState.view === 'browse' }" @click="setView('browse')">{{ t('diary.browse') }}</button>
+      <button :class="{ on: diaryState.view === 'batches' }" @click="setView('batches')">{{ t('diary.batches') }}</button>
       <button :class="{ on: diaryState.view === 'full' }" @click="setView('full')">{{ t('diary.fullHistory') }}</button>
     </div>
 
@@ -250,73 +279,71 @@ async function onRecipeCreated() {
       </button>
     </div>
 
-    <!-- Roasters -->
-    <div v-else-if="diaryState.level === 0" class="phone-list">
-      <button v-for="g in roasterGroups" :key="g.name" class="phone-list-row" @click="enterRoaster(g.name)">
-        <span class="rmeta">{{ g.name }}<span class="rsub">{{ g.beans.length }} bean{{ g.beans.length !== 1 ? 's' : '' }}</span></span>
-        <span class="chev">›</span>
-      </button>
-      <div v-if="!roasterGroups.length" class="phone-empty">{{ t('diary.noResults') }}</div>
-    </div>
-
-    <!-- Beans in a roaster -->
-    <div v-else-if="diaryState.level === 1" class="phone-list">
+    <!-- Batches: one row per bag, then an opened bag's recipes — the same
+         lists as the tablet (batchRows / batchProfileGroups in useDiary.js). -->
+    <div v-else-if="!diaryState.batch" class="phone-list">
       <button
-        v-for="bean in beansInRoaster" :key="bean.id"
+        v-for="row in batchRows" :key="row.key"
         class="phone-list-row"
-        @pointerdown="beanPress.down($event, bean)"
-        @pointermove="beanPress.move"
-        @pointerup="beanPress.up(bean)"
-        @pointercancel="beanPress.cancel"
-        @pointerleave="beanPress.cancel"
+        :class="{ archived: row.batch?.archived }"
+        @pointerdown="bagPress.down($event, row)"
+        @pointermove="bagPress.move"
+        @pointerup="bagPress.up(row)"
+        @pointercancel="bagPress.cancel"
+        @pointerleave="bagPress.cancel"
       >
-        <span class="rmeta">{{ bean.name }}</span>
+        <span class="rmeta">{{ row.bean.name }}<span class="rsub">{{ bagFacts(row) }}</span></span>
         <span class="chev">›</span>
       </button>
-      <div v-if="!beansInRoaster.length" class="phone-empty">{{ t('diary.noResults') }}</div>
+      <div v-if="!batchRows.length" class="phone-empty">{{ t('diary.noResults') }}</div>
     </div>
 
-    <!-- Profiles used with this bean -->
     <div v-else class="phone-list">
-      <template v-for="group in profileGroupsInBean" :key="group.title">
-        <button
-          class="phone-list-row"
-          @pointerdown="groupPress.down($event, group)"
-          @pointermove="groupPress.move"
-          @pointerup="groupPress.up(group)"
-          @pointercancel="groupPress.cancel"
-          @pointerleave="groupPress.cancel"
-        >
-          <span class="rmeta">{{ group.title }}</span>
-          <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
-        </button>
-        <div v-if="diaryState.expandedProfile === group.title" class="phone-sublist">
+      <template v-for="(list, half) in [batchProfileGroups.current, batchProfileGroups.earlier]" :key="half">
+        <div v-if="half === 1 && list.length" class="diary-divider">{{ t('diary.earlierBags') }}</div>
+        <template v-for="group in list" :key="group.title">
           <button
-            v-for="shot in group.shots"
-            :key="shot.id"
-            class="phone-shot-row"
-            @click="openHistoryAt(group.shots, shot)"
+            class="phone-list-row"
+            @pointerdown="groupPress.down($event, group)"
+            @pointermove="groupPress.move"
+            @pointerup="groupPress.up(group)"
+            @pointercancel="groupPress.cancel"
+            @pointerleave="groupPress.cancel"
           >
-            <span class="shot-facts">
-              <span class="fact"><b>{{ formatShortDate(shot.timestamp) }}</b></span>
-              <span class="fact"><b>{{ actualDose(shot)?.toFixed(1) ?? '—' }}</b>g<template v-if="metricsFor(shot)"> → <b>{{ metricsFor(shot).yield?.toFixed(1) ?? '—' }}</b>{{ metricsFor(shot).yieldUnit }}</template></span>
-            </span>
-            <span class="stars">
-              <svg v-for="n in 5" :key="n" viewBox="0 0 24 24" :class="{ on: n <= starLevel(shot) }" aria-hidden="true">
-                <path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z" />
-              </svg>
-            </span>
+            <span class="rmeta">{{ group.title }}</span>
+            <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
           </button>
-        </div>
+          <div v-if="diaryState.expandedProfile === group.title" class="phone-sublist">
+            <template v-for="section in group.sections" :key="section.id ?? 'none'">
+              <div v-if="!section.current" class="diary-divider">{{ bagLabel(section.batch) }}</div>
+              <button
+                v-for="shot in section.shots"
+                :key="shot.id"
+                class="phone-shot-row"
+                @click="openHistoryAt(group.ordered, shot)"
+              >
+                <span class="shot-facts">
+                  <span class="fact"><b>{{ formatShortDate(shot.timestamp) }}</b></span>
+                  <span class="fact"><b>{{ actualDose(shot)?.toFixed(1) ?? '—' }}</b>g<template v-if="metricsFor(shot)"> → <b>{{ metricsFor(shot).yield?.toFixed(1) ?? '—' }}</b>{{ metricsFor(shot).yieldUnit }}</template></span>
+                </span>
+                <span class="stars">
+                  <svg v-for="n in 5" :key="n" viewBox="0 0 24 24" :class="{ on: n <= starLevel(shot) }" aria-hidden="true">
+                    <path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z" />
+                  </svg>
+                </span>
+              </button>
+            </template>
+          </div>
+        </template>
       </template>
-      <div v-if="!profileGroupsInBean.length" class="phone-empty">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</div>
+      <div v-if="!batchProfileGroups.current.length && !batchProfileGroups.earlier.length" class="phone-empty">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</div>
     </div>
 
     <PageTransition>
       <RecipePicker
         v-if="showRecipeCreator"
-        :preset-bean="diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
-        :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
+        :preset-bean="diaryState.view === 'batches' && diaryState.batch ? diaryState.batch.bean : null"
+        :preset-batch="diaryState.view === 'batches' && diaryState.batch?.batch && !diaryState.batch.batch.archived ? diaryState.batch.batch : null"
         @back="closeRecipeCreator"
         @created="onRecipeCreated"
       />
@@ -325,7 +352,6 @@ async function onRecipeCreated() {
       <BeanEditor
         v-if="showBeanEditor"
         :bean="editingBean"
-        :preset-roaster="diaryState.level === 1 ? diaryState.roasterName : ''"
         @close="closeBeanEditor"
         @saved="closeBeanEditor"
         @deleted="closeBeanEditor"

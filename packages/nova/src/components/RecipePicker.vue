@@ -3,27 +3,28 @@
  * The "new recipe" wizard: choose/add a bean, choose a bag (batch) — only when
  * the bean has none open — choose a grinder, choose a profile, compose and
  * persist. Callers: the Diary's "+ New recipe" / "+ New bag" (`mode`) and the
- * Espresso page's empty state.
+ * Espresso page's empty state. "+ New bag" stops after the roast date: it
+ * hands the new bag back (`bag-opened`) and the Diary opens it, where its
+ * coffee's recipes are listed and "+ New recipe" starts from that bag.
  *
  * Browsing the existing library is NOT this component's job: that's
  * RecipeOverlay (quick switch, from the Coffee page's title) and the Diary's
  * Recipes view (organise/manage). This used to carry a third "list" mode for
  * it, which both of those replaced.
  */
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, composeNewRecipe, createRecipeFromCurrent, recipesUsingBean, selectRecipe } from '../composables/useRecipe.js';
+import { recipe, composeNewRecipe, createRecipeFromCurrent } from '../composables/useRecipe.js';
 import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
 import { openChooser } from '../composables/useModals.js';
 import { offerFinishOtherBags } from '../composables/useBeanActions.js';
 import BeanChooser from './BeanChooser.vue';
 import BatchPicker from './BatchPicker.vue';
 import RoastDatePicker from './RoastDatePicker.vue';
-import BeanRecipesPage from './BeanRecipesPage.vue';
 import ProfilePicker from './ProfilePicker.vue';
 import RecipeCrumbs from './RecipeCrumbs.vue';
 
-const emit = defineEmits(['back', 'created']);
+const emit = defineEmits(['back', 'created', 'bag-opened']);
 const { t } = useI18n();
 
 /**
@@ -34,19 +35,24 @@ const { t } = useI18n();
 const props = defineProps({
   presetBean: { type: Object, default: null },
   presetRoaster: { type: String, default: '' },
+  /** The bag the new recipe brews from (an open bag the Diary has opened):
+   *  with it, the bag step is answered too and the wizard starts at the
+   *  grinder/profile. Only alongside presetBean. */
+  presetBatch: { type: Object, default: null },
   /**
    * 'recipe' — a new recipe on a coffee (trying another profile). The bag is
    *            the bean's open one; only a bean with none asks for a bag.
-   * 'bag'    — a new bag was opened: coffee -> roast date -> which recipe
-   *            (an existing one of this coffee, or a new profile). Ignores
-   *            the presets: it always starts at the coffee.
+   * 'bag'    — a new bag: coffee -> roast date, then `bag-opened` with
+   *            { bean, batch } and close. Ignores the presets: it always
+   *            starts at the coffee.
    */
   mode: { type: String, default: 'recipe' },
 });
 const { NSXCore, NSXApi } = window;
 const bagMode = props.mode === 'bag';
 
-const step = ref(props.presetBean && !bagMode ? 'batch' : 'bean'); // 'bean' | 'batch' | 'recipe' | 'profile'
+const fromBag = !bagMode && !!props.presetBean && !!props.presetBatch;
+const step = ref(fromBag ? 'profile' : props.presetBean && !bagMode ? 'batch' : 'bean'); // 'bean' | 'batch' | 'profile'
 const chosenBean = ref(bagMode ? null : props.presetBean);
 const chosenBatch = ref(null); // { id, roastDate } | null
 const chosenGrinder = ref(null);
@@ -54,6 +60,13 @@ const createdRecipe = ref(null);
 const showRoastPicker = ref(false);
 // Where the profile step's Back goes: the bag step only if it was shown.
 const profileBack = ref('batch');
+
+// Started from a bag: only the grinder can still need asking (onBatchPicked).
+onMounted(() => {
+  if (!fromBag) return;
+  profileBack.value = 'bean';
+  onBatchPicked({ id: props.presetBatch.id, roastDate: props.presetBatch.roastDate ?? null });
+});
 
 async function onBeanPicked(bean) {
   chosenBean.value = bean;
@@ -77,32 +90,17 @@ async function onBeanPicked(bean) {
 
 /**
  * Bag mode, roast date confirmed: open the bag, offer to finish the old one,
- * then settle the recipe. A coffee that already has recipes shows them
- * (the 'recipe' step, BeanRecipesPage) — carrying on with the last one is one
- * tap. "Other profile" and a coffee with none go on to
- * the grinder/profile steps.
+ * and hand the bag back. Which recipe to brew from it is chosen in the Diary's
+ * view of that bag, not here — that view lists every recipe of the coffee and
+ * has "+ New recipe" for another profile.
  */
 async function onRoastConfirm(iso) {
   showRoastPicker.value = false;
   const bean = chosenBean.value;
   const batch = await NSXCore.resolveBatch(bean.id, iso);
-  chosenBatch.value = { id: batch?.id ?? null, roastDate: batch?.roastDate ?? iso };
-  await offerFinishOtherBags(bean.id, chosenBatch.value.id);
-
-  if (recipesUsingBean(bean).length) { step.value = 'recipe'; return; } // BeanRecipesPage
-  profileBack.value = 'bean';
-  await onBatchPicked(chosenBatch.value);
-}
-
-async function pickBagRecipe(entry) {
-  await selectRecipe(entry); // brews from the bean's open bag — the new one
-  createdRecipe.value = entry;
-  finish();
-}
-
-async function chooseOtherProfile() {
-  profileBack.value = 'recipe';
-  await onBatchPicked(chosenBatch.value);
+  await offerFinishOtherBags(bean.id, batch?.id);
+  emit('bag-opened', { bean, batch });
+  emit('back');
 }
 
 /**
@@ -155,7 +153,10 @@ function finish() {
        moves, they are positioned against it, so it has to be the screen. -->
   <div class="page-host">
     <BeanChooser v-if="step === 'bean'" :preset-roaster="presetRoaster" @pick="onBeanPicked" @back="emit('back')">
-      <template #crumbs>
+      <!-- Not for a new bag: it ends at the roast date, so a trail promising
+           grinder and profile steps would describe a wizard it isn't. Without
+           the slot, the chooser shows its own "Choose bean" title. -->
+      <template v-if="!bagMode" #crumbs>
         <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
       </template>
     </BeanChooser>
@@ -169,18 +170,6 @@ function finish() {
         <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
       </template>
     </BatchPicker>
-    <BeanRecipesPage
-      v-else-if="step === 'recipe'"
-      :bean="chosenBean"
-      :other-label="t('diary.otherProfile')"
-      @pick="pickBagRecipe"
-      @other="chooseOtherProfile"
-      @back="step = 'bean'"
-    >
-      <template #crumbs>
-        <RecipeCrumbs :bean="chosenBean" :batch="chosenBatch" :grinder="chosenGrinder" />
-      </template>
-    </BeanRecipesPage>
     <!-- No current-title: that is the profile of the recipe LOADED on the
          machine, which has nothing to do with the one being created here. It
          seeded the picker's selection, so this step opened with an answer

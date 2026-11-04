@@ -686,7 +686,7 @@ export async function applyEditedLibraryProfile(savedRecord) {
  *  doesn't fire a gateway round-trip (plus ensureRecipeBatch()) per tap; it
  *  calls schedulePushForRecipe(entry) right after instead, which debounces
  *  that push exactly the way NSX's own recipe list does. */
-export async function selectRecipe(entry, { push = true } = {}) {
+export async function selectRecipe(entry, { push = true, batch = null } = {}) {
   // Loading anything else ends the just-created recipe's turn at the top of
   // the list (see justCreatedRecipeId); re-selecting it keeps it there.
   if (justCreatedRecipeId.value !== (entry.id ?? null)) justCreatedRecipeId.value = null;
@@ -721,7 +721,15 @@ export async function selectRecipe(entry, { push = true } = {}) {
       : { factor: 1.0, samples: [] },
     rating: Number(entry.rating) || 0,
   });
-  await adoptBrewBatch(recipe.beanBatchId);
+  // `batch` = the caller named the bag to brew from (the Diary's opened bag);
+  // otherwise the recipe joins its bean's open bag, as always.
+  if (batch?.id && !recipe.beanUnlinked) {
+    recipe.beanBatchId = batch.id;
+    recipe.roastDate = batch.roastDate ?? null;
+    recipe.beanId = batch.beanId ?? recipe.beanId;
+  } else {
+    await adoptBrewBatch(recipe.beanBatchId);
+  }
   if (push) await pushRecipe(); // ensureRecipeBatch heals an older, batch-less recipe here
 }
 
@@ -860,8 +868,11 @@ export function findRecipeForBeanProfile(bean, profileTitle) {
  * whatever happened to be dialed in on the Espresso screen from an unrelated
  * recipe (composeNewRecipe's default, correct for its OTHER caller — a fresh
  * bean+profile pick, which has nothing else to seed from).
+ *
+ * `batch`, when given, is the bag to brew from (an open bag the Diary has
+ * opened); without it the recipe brews from the bean's open bag.
  */
-export async function loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallbackProfile = null, fallbackContext = null) {
+export async function loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallbackProfile = null, fallbackContext = null, batch = null) {
   const log = (...args) => console.log('[Nova/recipe]', ...args);
   log(`tapped profile "${profileTitle}" for bean "${bean?.roaster} – ${bean?.name}"`);
   log('  shot-derived profile:', fallbackProfile
@@ -875,7 +886,7 @@ export async function loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallb
   const existing = findRecipeForBeanProfile(bean, profileTitle);
   if (existing) {
     log(`  -> existing recipe found (id=${existing.id}, profileTitle="${existing.profileTitle}") — loading it`);
-    await selectRecipe(existing);
+    await selectRecipe(existing, { batch });
     return existing;
   }
   log('  -> no existing recipe for this bean+profile; creating one from the shot snapshot');
@@ -894,6 +905,7 @@ export async function loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallb
     bean,
     profile: snapshotRecord,
     seedContext: fallbackContext,
+    batch,
   });
   const entry = await createRecipeFromCurrent();
   log(`  -> recipe created from snapshot: id=${entry.id}, profileTitle="${entry.profileTitle}", `

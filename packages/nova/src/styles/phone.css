@@ -146,6 +146,8 @@ body[data-phone="true"] {
 .phone-tile-icon svg { width: 22px; height: 22px; stroke: var(--accent); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 .phone-sublist { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; }
+/* A done bag in the Batches list, greyed like the tablet's. */
+.phone-list-row.archived { opacity: 0.45; }
 .phone-shot-row, .phone-list-item {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   background: var(--card-bg); border-radius: var(--r-md); padding: 10px 14px;

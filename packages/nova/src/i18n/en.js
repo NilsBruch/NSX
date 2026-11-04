@@ -349,24 +349,29 @@ export default {
     generic: 'Shot ended',
   },
   diary: {
-    roasters: 'Roasters',
     beans: 'Beans',
     sortOldest: 'oldest first',
     sortNewest: 'newest first',
-    sortAlpha: 'A–Z',
     // Recipes view only — see RECIPE_SORTS in useDiary.js.
     sortUse: 'by use',
     sortRating: 'by rating',
     back: 'Back',
-    browse: 'Browse',
     fullHistory: 'History',
     recipes: 'Recipes',
-    // Batches view — one row per bag; "Done" archives the bag.
-    batches: 'Batches',
-    coffees: 'Coffees', // the tablet's label for the Browse view
+    // Batches view — one row per bag; "Done" archives the bag. Labelled
+    // "Coffees": through its bags it is where every coffee's recipes live.
+    batches: 'Coffees',
     batchDone: 'Done',
     batchReopen: 'Reopen',
     noRoastDate: 'No roast date',
+    noBag: 'No bag yet', // a bean the Batches view lists although it has no bag
+    // Divider in an opened bag: below it, the coffee's recipes that only
+    // older bags were brewed with.
+    earlierBags: 'Earlier bags',
+    // A bag row's hold menu acts on two things, so each entry names which.
+    deleteBag: 'Delete bag',
+    deleteCoffee: 'Delete coffee',
+    archiveCoffee: 'Archive coffee',
     roastedOn: 'Roasted {date}',
     lastBrewed: 'last brewed {date}',
     // Asked after a new bag of a coffee is opened (offerFinishOtherBags).
@@ -374,11 +379,6 @@ export default {
     finishOldBag: 'Mark the previous bag done? | Mark the previous bags done?',
     finishOldBagMsg: 'Roasted {dates}. Recipes of this coffee now brew from the new bag.',
     newBag: 'New bag',
-    // Title of the full-screen recipe list opened from a bag (BeanRecipesPage):
-    // recipes belong to the coffee, not to the bag.
-    recipesForCoffee: 'Recipes for this coffee',
-    otherProfile: 'Other profile',
-    recipeForBag: 'Continue with',
     // vue-i18n plural forms (zero | one | other) — selected by the third
     // argument at the call site: t('diary.shotCount', { n }, n).
     shotCount: 'no shots | 1 shot | {n} shots',
@@ -395,12 +395,10 @@ export default {
     add: 'Add',
     addRecipe: 'New recipe',
     search: 'Search',
-    // Each level says what it actually searches: the roaster list matches
-    // roaster AND bean names (so a bean whose roaster you forgot is still
-    // findable), the bean list matches bean names, and inside a bean the
-    // query goes to the server across that bean's whole shot history.
+    // Each level says what it actually searches: the bag list matches
+    // roaster AND bean names, and inside a bag the query goes to the
+    // server across that coffee's whole shot history.
     searchRoaster: 'Search roaster or bean…',
-    searchBean: 'Search bean…',
     searchProfile: 'Search profile, grinder, or notes…',
     filteredBy: 'Filtered by {q}',
     clearFilter: 'Clear filter',
@@ -420,8 +418,6 @@ export default {
     fewerFields: 'Fewer fields',
     archive: 'Archive',
     unarchive: 'Unarchive',
-    showAll: 'Show all',
-    hideArchived: 'Hide archived',
     empty: '—',
     roaster: 'Roaster',
     name: 'Name',

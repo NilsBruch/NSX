@@ -22,23 +22,22 @@ import { diaryState, setView } from '../../composables/useDiary.js';
 const TAB_COMPONENTS = { recipes: RecipesTab, machine: MachineTab, diary: DiaryTab, settings: SettingsTab };
 
 // Recipes and Diary are two separate phone tabs built on the SAME tablet
-// state (diaryState.view: 'recipes' | 'browse' | 'full') — the tablet has
+// state (diaryState.view: 'recipes' | 'batches' | 'full') — the tablet has
 // them as one page's segmented control, the phone splits them by tab
 // instead. Whichever one is the active phone tab has to own that value, so
 // switching tabs keeps recipeRows/cycleSort resolving against the right
-// vocabulary (RECIPE_SORTS vs the browse/full sort set — see useDiary.js).
+// vocabulary (RECIPE_SORTS vs the full history's sort set — see useDiary.js).
 // Lives here rather than in either tab so it applies whether or not
 // <KeepAlive> has already mounted the target tab.
 // Trade-off accepted: leaving Diary's 'full' history for Recipes and back
-// resets Diary to 'browse' rather than restoring 'full' — remembering the
+// resets Diary to 'batches' rather than restoring 'full' — remembering the
 // diary sub-view across a trip through another tab is more state than this
 // is worth.
 watch(
   phoneTab,
   (tab) => {
     if (tab === 'recipes') { if (diaryState.view !== 'recipes') setView('recipes'); }
-    // 'batches' is tablet-only for now — the phone's Diary has no pane for it.
-    else if (tab === 'diary' && (diaryState.view === 'recipes' || diaryState.view === 'batches')) setView('browse');
+    else if (tab === 'diary' && diaryState.view === 'recipes') setView('batches');
   },
   { immediate: true }
 );

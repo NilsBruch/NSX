@@ -1,12 +1,7 @@
 /**
- * Roaster -> bean -> shots drill-down. Beans/shots come from useCore.js's
- * reactive mirrors of the real bean cache and shot list — no mock data here.
- *
- * Sorting: beans have no created-at field in the real API (only the store's
- * own array order, which is insertion order) — "oldest first" is therefore the
- * list as the API returns it, "newest first" is that reversed, and "A-Z" sorts
- * by name. This is honest to what data actually exists, rather than inventing
- * a fake timestamp. Shots DO have a real `timestamp`, sorted by that instead.
+ * The Diary: bags -> a coffee's recipes -> shots, plus the flat history and
+ * the recipe library. Beans/shots come from useCore.js's reactive mirrors of
+ * the real bean cache and shot list — no mock data here.
  */
 import { computed, reactive, ref, watch } from 'vue';
 import { beans, shots, loadShots, shotsFromResponse } from './useCore.js';
@@ -15,34 +10,22 @@ import { recipes, refreshRecipes, loadOrCreateRecipeForBeanProfile } from './use
 const { NSXApi, NSXCore } = window;
 
 export const diaryState = reactive({
-  level: 0, // 0 = roasters, 1 = beans, 2 = shots
-  roasterName: null,
-  bean: null,
-  sort: 'newest', // 'oldest' | 'newest' | 'alpha' (shots: no 'alpha')
-  // The tablet Diary opens on Batches (what is open right now). The phone has
-  // no Batches pane yet — MobileShell.vue moves it to 'browse'.
-  view: 'batches', // 'batches' | 'browse' | 'full' (flat, all shots) | 'recipes' (the library)
+  sort: 'newest', // 'oldest' | 'newest' (full history) | 'use' | 'rating' (recipes)
+  // The Diary opens on Batches (what is open right now).
+  view: 'batches', // 'batches' | 'full' (flat, all shots) | 'recipes' (the library)
   query: '',
-  expandedProfile: null, // which profile group (by title) is expanded, at level 2
+  expandedProfile: null, // which profile group (by title) is expanded, in an opened bag
   expandedRecipe: null, // which recipe (by id) is expanded, in the recipes view
   editingRecipes: false, // recipes view: reveal the per-row delete
-  showArchived: false, // include archived beans in the browse view
   batch: null, // batches view: the bag drilled into ({ batch, bean }), or null = the list
 });
-
-function sortByNameOrder(items, sort, nameKey = 'name') {
-  const arr = items.slice();
-  if (sort === 'alpha') arr.sort((a, b) => (a[nameKey] || '').localeCompare(b[nameKey] || ''));
-  else if (sort === 'newest') arr.reverse();
-  return arr; // 'oldest' = API array order, unchanged
-}
 
 const matches = (text, q) => (text || '').toLowerCase().includes(q.trim().toLowerCase());
 
 // bean.js's cache always includes archived beans (it also serves autocomplete) —
-// browsing/picking is the skin's concern, so archived beans are hidden by
-// default; the Diary's "Show all" toggle (diaryState.showArchived) reveals them.
-const activeBeans = computed(() => beans.value.filter((b) => diaryState.showArchived || !b.archived));
+// browsing is the skin's concern, so the Diary leaves archived beans out; they
+// stay reachable in the bean manager.
+const activeBeans = computed(() => beans.value.filter((b) => !b.archived));
 
 /**
  * batchId -> beanId, built from every active bean's real batches (a batch
@@ -57,6 +40,8 @@ export const batchToBean = ref(new Map());
 /** The same fetch, kept whole: every bag of every active bean, archived bags
  *  included, as { batch, bean } — what the Batches view lists. */
 export const allBatches = ref([]);
+/** False until the first loadBatchMap finishes — see batchRows. */
+const batchMapLoaded = ref(false);
 
 export async function loadBatchMap() {
   const map = new Map();
@@ -73,37 +58,9 @@ export async function loadBatchMap() {
   }));
   batchToBean.value = map;
   allBatches.value = pairs;
+  batchMapLoaded.value = true;
 }
 watch(beans, loadBatchMap, { immediate: true });
-
-export const roasterGroups = computed(() => {
-  const byRoaster = new Map();
-  for (const bean of activeBeans.value) {
-    const key = bean.roaster || '—';
-    if (!byRoaster.has(key)) byRoaster.set(key, []);
-    byRoaster.get(key).push(bean);
-  }
-  let groups = [...byRoaster.entries()].map(([name, list]) => ({ name, beans: list }));
-  if (diaryState.query) {
-    // A roaster surfaces if ITS OWN name matches, or if any bean under it
-    // does — so a bean whose roaster you have forgotten is still reachable
-    // from here. Deliberately name-only: profile lives on the SHOT, and the
-    // shot list this page has loaded is only the newest 200 across the whole
-    // account, so a profile match here could never be more than "whatever
-    // happens to be in the window". Profile search belongs where the server
-    // can answer it completely — inside a bean, see loadBeanShots.
-    const q = diaryState.query;
-    groups = groups.filter((g) => matches(g.name, q) || g.beans.some((b) => matches(b.name, q)));
-  }
-  return sortByNameOrder(groups, diaryState.sort);
-});
-
-export const beansInRoaster = computed(() => {
-  if (!diaryState.roasterName) return [];
-  let list = activeBeans.value.filter((b) => (b.roaster || '—') === diaryState.roasterName);
-  if (diaryState.query) list = list.filter((b) => matches(b.name, diaryState.query));
-  return sortByNameOrder(list, diaryState.sort);
-});
 
 /** Does this shot come from that bean? Exported because the recipe wizard's
  *  bean step asks the same question to work out which beans were brewed most
@@ -123,7 +80,7 @@ const shotProfile = (shot) => shot?.workflow?.profile?.title || shot?.workflow?.
 const byTimestampDesc = (a, b) => (Date.parse(b?.timestamp || 0) || 0) - (Date.parse(a?.timestamp || 0) || 0);
 
 /**
- * Shots for the bean currently drilled INTO — fetched from the server scoped
+ * Shots for the coffee of the bag opened — fetched from the server scoped
  * to that bean, so ALL of its shots show, not just the ones that happened to
  * be in the global newest-200. Kept separate from the global `shots` list so
  * the flat full-history view is untouched.
@@ -141,11 +98,9 @@ const byTimestampDesc = (a, b) => (Date.parse(b?.timestamp || 0) || 0) - (Date.p
  * also a supported filter, but it matches exactly — no use for typed input.)
  */
 export const beanShots = ref([]);
-export const beanShotsLoading = ref(false);
 
 export async function loadBeanShots(bean, query = '') {
   if (!bean) { beanShots.value = []; return; }
-  beanShotsLoading.value = true;
   try {
     const res = await NSXApi.fetchShots({
       limit: 500,
@@ -157,39 +112,23 @@ export async function loadBeanShots(bean, query = '') {
     console.error('[Nova] Diary could not load bean shots', err);
     NSXCore.emit('toast', `Could not load shots: ${err?.message || err}`);
     beanShots.value = [];
-  } finally {
-    beanShotsLoading.value = false;
   }
 }
 
-export const shotsInBean = computed(() => {
-  if (!diaryState.bean) return [];
-  // Already server-scoped to this bean and server-searched — just apply the sort.
-  const list = beanShots.value.slice().sort(byTimestampDesc);
-  if (diaryState.sort === 'oldest') list.reverse();
-  return list;
-});
-
-/** How many shots each bean has, for the bean-list rows — the row can't use
- *  shotsInBean (that's only the bean you've actually drilled INTO, so every
- *  row rendered "0" while still on the list). */
-export const shotCountForBean = (bean) => shots.value.filter((s) => shotMatchesBean(s, bean)).length;
-
 /**
- * One entry per profile used with this bean — groups shotsInBean (already
- * sorted) rather than re-deriving from the raw shot list, so diaryState.sort
- * applies here too. Map preserves insertion order, so groups naturally come
- * out "most/least recently used profile first" with no extra ordering logic.
+ * One entry per profile in `shotList` (newest first), in the order the
+ * profiles were last used — Map preserves insertion order, so that needs no
+ * extra ordering logic.
  *
- * Searching at this level is NOT filtered here — the query goes back to the
- * server (loadBeanShots, via the diaryState.query watcher below), which
- * matches profile title among other fields across this bean's whole history.
+ * Searching is NOT filtered here — the query goes back to the server
+ * (loadBeanShots, via the diaryState.query watcher below), which matches
+ * profile title among other fields across the coffee's whole history.
  * Filtering client-side instead would only ever see the shots already
- * fetched, which is exactly the window problem this level avoids.
+ * fetched.
  */
-export const profileGroupsInBean = computed(() => {
+function groupShotsByProfile(shotList) {
   const byProfile = new Map();
-  for (const shot of shotsInBean.value) {
+  for (const shot of shotList) {
     const title = shotProfile(shot);
     if (!byProfile.has(title)) byProfile.set(title, []);
     byProfile.get(title).push(shot);
@@ -199,9 +138,8 @@ export const profileGroupsInBean = computed(() => {
   // the real dose/grind/yield) — see loadOrCreateRecipeForBeanProfile.
   //
   // The source is the MOST RECENT such shot, picked by timestamp explicitly:
-  //  - not list[0] — `list` follows diaryState.sort, so with "oldest first" the
-  //    recipe would silently be rebuilt from the oldest shot. Which shot seeds a
-  //    recipe must not depend on a UI sort toggle.
+  //  - not list[0] — that only holds while every caller passes newest-first
+  //    shots, and which shot seeds a recipe must not depend on a caller's order.
   //  - not any shot in the group — shotProfile() groups a shot under EITHER its
   //    own profile.title OR the workflow.profileTitle fallback, so a shot can
   //    land here while its .profile object is something else entirely. Only a
@@ -218,7 +156,7 @@ export const profileGroupsInBean = computed(() => {
       context: source?.workflow?.context ?? null,
     };
   });
-});
+}
 
 /**
  * The Batches view: one row per bag, because a bag (one bean, one roast date)
@@ -233,6 +171,11 @@ export const profileGroupsInBean = computed(() => {
  *
  * The search box filters by bean or roaster name, client-side: the bag list is
  * complete in memory.
+ *
+ * A bean with no bag at all gets a row of its own (`batch: null`), placed with
+ * the open bags — otherwise a coffee that was never given a bag would have no
+ * way into the Diary at all.
+ * Only once the bag map has loaded: before that EVERY bean reads as bagless.
  */
 export const batchRows = computed(() => {
   const lastShot = new Map();
@@ -241,45 +184,79 @@ export const batchRows = computed(() => {
     const ts = Date.parse(s?.timestamp || 0) || 0;
     if (id && ts > (lastShot.get(id) || 0)) lastShot.set(id, ts);
   }
-  let rows = allBatches.value.map(({ batch, bean }) => ({ batch, bean, lastShot: lastShot.get(batch.id) || 0 }));
+  let rows = allBatches.value.map(({ batch, bean }) => ({ key: batch.id, batch, bean, lastShot: lastShot.get(batch.id) || 0 }));
+  if (batchMapLoaded.value) {
+    const bagged = new Set(allBatches.value.map((p) => p.bean.id));
+    for (const bean of activeBeans.value) {
+      if (bagged.has(bean.id)) continue;
+      const last = shots.value
+        .filter((s) => shotMatchesBean(s, bean))
+        .reduce((max, s) => Math.max(max, Date.parse(s?.timestamp || 0) || 0), 0);
+      rows.push({ key: `bean-${bean.id}`, batch: null, bean, lastShot: last });
+    }
+  }
   if (diaryState.query) {
     const q = diaryState.query;
     rows = rows.filter((r) => matches(r.bean.name, q) || matches(r.bean.roaster, q));
   }
-  const roast = (r) => NSXCore.normalizeRoastDate(r.batch.roastDate) || '';
+  const roast = (r) => NSXCore.normalizeRoastDate(r.batch?.roastDate) || '';
   return rows.sort((a, b) =>
-    (Number(!!a.batch.archived) - Number(!!b.batch.archived))
+    (Number(!!a.batch?.archived) - Number(!!b.batch?.archived))
     || (b.lastShot - a.lastShot)
     || roast(b).localeCompare(roast(a))
     // Last resort, so ties (e.g. undated, never-brewed bags) keep one order:
     // allBatches is filled in whatever order the per-bean fetches finish, and
     // the row animation would otherwise shuffle them on every reload.
-    || String(a.batch.id).localeCompare(String(b.batch.id))
+    || String(a.key).localeCompare(String(b.key))
   );
 });
 
-/** Every shot pulled from the bag drilled into — server-scoped by
- *  beanBatchId, so the whole bag shows, not just what is in the recent-200
- *  window. `search` ANDs with it, like loadBeanShots. */
-export const batchShots = ref([]);
-
-export async function loadBatchShots(batch, query = '') {
-  if (!batch) { batchShots.value = []; return; }
-  try {
-    const res = await NSXApi.fetchShots({ limit: 500, beanBatchId: batch.id, search: query || '' });
-    batchShots.value = (Array.isArray(res) ? res : (res?.items ?? [])).slice().sort(byTimestampDesc);
-  } catch (err) {
-    console.error('[Nova] Diary could not load batch shots', err);
-    NSXCore.emit('toast', `Could not load shots: ${err?.message || err}`);
-    batchShots.value = [];
-  }
-}
+/**
+ * A bag opened: the recipes of its COFFEE, not just of this bag — every
+ * profile ever brewed with this bean, so all of a coffee's recipes are in one
+ * place. Built from beanShots (server-scoped by beanId, the whole history).
+ *
+ * Split in two so the bag on the counter still leads:
+ *   current — profiles brewed with THIS bag, most recently used first
+ *   earlier — profiles only ever brewed with older bags of the coffee
+ * A bean with no bag has nothing to split by, so everything is `current`.
+ *
+ * Each group's shots come in `sections`, one per bag: this bag's first, then
+ * the older bags in the order they were last brewed. The view draws a divider
+ * with the roast date above every section that is not this bag. `ordered` is
+ * the same shots flattened in display order — what the shot review pages
+ * through, so swiping follows the list on screen.
+ */
+export const batchProfileGroups = computed(() => {
+  const open = diaryState.batch;
+  if (!open) return { current: [], earlier: [] };
+  const batchId = open.batch?.id ?? null;
+  const bagOf = new Map(allBatches.value.map((p) => [p.batch.id, p.batch]));
+  const groups = groupShotsByProfile(beanShots.value.slice().sort(byTimestampDesc)).map((group) => {
+    const byBag = new Map();
+    for (const s of group.shots) {
+      const id = s?.workflow?.context?.beanBatchId ?? null;
+      if (!byBag.has(id)) byBag.set(id, []);
+      byBag.get(id).push(s);
+    }
+    const sections = [...byBag.entries()]
+      .map(([id, list]) => ({ id, current: !!batchId && id === batchId, batch: bagOf.get(id) ?? null, shots: list }))
+      // Array sort is stable: past the current bag, the most-recent-first
+      // order the Map was filled in stays.
+      .sort((a, b) => Number(b.current) - Number(a.current));
+    return { ...group, sections, ordered: sections.flatMap((s) => s.shots) };
+  });
+  if (!batchId) return { current: groups, earlier: [] };
+  const inBag = (g) => g.sections.some((s) => s.current);
+  return { current: groups.filter(inBag), earlier: groups.filter((g) => !inBag(g)) };
+});
 
 export function enterBatch(row) {
   diaryState.batch = row;
   diaryState.query = ''; // the list searched bean names; inside, the query searches shots
-  batchShots.value = [];
-  loadBatchShots(row.batch);
+  diaryState.expandedProfile = null;
+  beanShots.value = [];
+  loadBeanShots(row.bean);
 }
 
 export function toggleProfileExpanded(title) {
@@ -395,8 +372,8 @@ export function ensureShotMetrics(list) {
  * (not through Nova's recipe picker, so no persisted entity exists yet).
  * Navigation itself stays in DiaryView.vue; this only loads/creates+loads.
  */
-export async function openRecipeForBeanProfile(bean, profileTitle, fallbackProfile = null, fallbackContext = null) {
-  await loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallbackProfile, fallbackContext);
+export async function openRecipeForBeanProfile(bean, profileTitle, fallbackProfile = null, fallbackContext = null, batch = null) {
+  await loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallbackProfile, fallbackContext, batch);
 }
 
 /**
@@ -468,9 +445,9 @@ export const hasMoreHistory = computed(() => historyPage.value.length < historyT
 /**
  * Route the search box to the server where the data isn't fully in memory:
  *  - full history view: re-query all shots with the search term
- *  - inside a bean (level 2): re-query that bean's shots with the term
- * The roaster/bean-name levels stay client-side — bean names come from the
- * complete bean cache, so there's nothing more to fetch there.
+ *  - inside a bag: re-query its coffee's shots with the term
+ * The bag list stays client-side — bean names come from the complete bean
+ * cache, so there's nothing more to fetch there.
  */
 let _queryTimer = null;
 watch(
@@ -479,12 +456,9 @@ watch(
     clearTimeout(_queryTimer);
     _queryTimer = setTimeout(() => {
       // The recipes view filters the in-memory library client-side, so it
-      // deliberately falls through both branches. The `view === 'browse'`
-      // guard matters: level/bean survive a view switch, so without it typing
-      // here would re-query the last-browsed bean's shots.
+      // deliberately falls through both branches.
       if (diaryState.view === 'full') loadHistory(q || '');
-      else if (diaryState.view === 'batches' && diaryState.batch) loadBatchShots(diaryState.batch.batch, q || '');
-      else if (diaryState.view === 'browse' && diaryState.level === 2 && diaryState.bean) loadBeanShots(diaryState.bean, q || '');
+      else if (diaryState.view === 'batches' && diaryState.batch) loadBeanShots(diaryState.batch.bean, q || '');
     }, 250);
   }
 );
@@ -492,8 +466,8 @@ watch(
 /**
  * The full history's sort is a SERVER query, so flipping it has to re-fetch —
  * every other list in the Diary holds all its rows and can just re-order in
- * place. Only that view: the browse levels and the recipes list sort what they
- * already have, and a fetch there would be pure waste.
+ * place. Only that view: the recipes list sorts what it already has, and a
+ * fetch there would be pure waste.
  *
  * The reload also drops back to page 0, which is the honest thing to do: the
  * pages loaded so far were the newest N, and "oldest first" is a different set
@@ -504,42 +478,13 @@ watch(
   () => { if (diaryState.view === 'full') loadHistory(diaryState.query || ''); }
 );
 
-export function enterRoaster(name) {
-  diaryState.roasterName = name;
-  diaryState.bean = null;
-  diaryState.level = 1;
-  // Query deliberately NOT cleared here (unlike enterBean below): a roaster
-  // can surface at level 0 because one of its BEANS matched, not its own
-  // name — that is how you find a bean whose roaster you have forgotten.
-  // Clearing on the way in would drop that filter exactly when it is about to
-  // do its job, leaving you to spot the bean by eye. Both levels search names,
-  // so the term stays meaningful; level 2 is a different domain and does clear.
-}
-export function enterBean(bean) {
-  diaryState.bean = bean;
-  diaryState.level = 2;
-  // Cleared on the way in: the roaster/bean list searches NAMES, this level
-  // searches SHOTS (server-side, see loadBeanShots) — two different question
-  // domains, so carrying the name you typed upstairs into a shot query would
-  // usually just empty the list. Type again here to search this bean's shots.
-  diaryState.query = '';
-  diaryState.expandedProfile = null;
-  if (diaryState.sort === 'alpha') diaryState.sort = 'newest'; // alpha has no meaning for shots
-  loadBeanShots(bean); // fetch ALL of this bean's shots from the server
-}
 export function goBack() {
-  if (diaryState.view === 'batches') diaryState.batch = null;
-  else if (diaryState.level === 2) { diaryState.level = 1; diaryState.bean = null; diaryState.expandedProfile = null; }
-  else if (diaryState.level === 1) { diaryState.level = 0; diaryState.roasterName = null; }
+  diaryState.batch = null;
+  diaryState.expandedProfile = null;
   diaryState.query = '';
 }
 export function cycleSort() {
-  // `level` survives a view switch, so it only means anything while browsing —
-  // without that guard the recipes view would inherit a stale level 2.
-  const shotLevel = diaryState.view === 'full' || (diaryState.view === 'browse' && diaryState.level === 2);
-  const opts = diaryState.view === 'recipes' ? RECIPE_SORTS
-    : shotLevel ? ['oldest', 'newest']
-    : ['oldest', 'newest', 'alpha'];
+  const opts = diaryState.view === 'recipes' ? RECIPE_SORTS : ['oldest', 'newest'];
   const i = opts.indexOf(diaryState.sort);
   diaryState.sort = opts[(i + 1) % opts.length];
 }
@@ -561,10 +506,6 @@ export function setView(view) {
   } else if (RECIPE_SORTS.includes(diaryState.sort)) {
     diaryState.sort = 'newest';
   }
-  if (view === 'full' && diaryState.sort === 'alpha') diaryState.sort = 'newest';
-}
-export function toggleArchived() {
-  diaryState.showArchived = !diaryState.showArchived;
 }
 
 /**

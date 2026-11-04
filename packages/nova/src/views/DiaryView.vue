@@ -3,19 +3,19 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import {
-  diaryState, roasterGroups, beansInRoaster, fullHistoryShots,
-  enterRoaster, enterBean, goBack, cycleSort, setView, toggleArchived, ensureDiaryLoaded,
-  profileGroupsInBean, toggleProfileExpanded, openRecipeForBeanProfile,
+  diaryState, fullHistoryShots,
+  goBack, cycleSort, setView, ensureDiaryLoaded,
+  toggleProfileExpanded, openRecipeForBeanProfile,
   ensureShotMetrics, hasMoreHistory, loadMoreHistory,
   recipeRows, toggleRecipeExpanded, toggleEditingRecipes,
-  batchRows, batchShots, enterBatch, loadBatchMap,
+  batchRows, batchProfileGroups, enterBatch, loadBatchMap,
 } from '../composables/useDiary.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { openTextField, openConfirm, openChooser } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
 // A `vFoo` binding in <script setup> registers as the v-foo directive.
 import { vScrollEdges } from '../composables/useScrollEdges.js';
-import { confirmAndDeleteBean, toggleArchiveBean, toggleArchiveBatch } from '../composables/useBeanActions.js';
+import { confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBean, toggleArchiveBatch } from '../composables/useBeanActions.js';
 import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName, formatLongDate } from '../composables/useCore.js';
 import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
@@ -28,13 +28,24 @@ import { fmtTemp } from '../composables/useUnits.js';
 const { t } = useI18n();
 const router = useRouter();
 
+/**
+ * The coffee and bag the profile rows of an opened bag belong to. From an OPEN
+ * bag the recipe brews from that very bag; from a done one (or a bean with no
+ * bag) it joins the coffee's open bag, the way it always has.
+ */
+const groupBean = () => diaryState.batch?.bean;
+const groupBatch = () => {
+  const bag = diaryState.batch?.batch;
+  return bag && !bag.archived ? bag : null;
+};
+
 async function goToRecipe(group) {
   try {
     // group.profile/context are the shot's own workflow data (real frames +
     // real dose/grind/temp, not just a title) — used both to recreate the
     // profile if it's since been deleted AND to seed the recipe with what was
     // actually brewed instead of stale leftover dial values. See useDiary.js.
-    await openRecipeForBeanProfile(diaryState.bean, group.title, group.profile, group.context);
+    await openRecipeForBeanProfile(groupBean(), group.title, group.profile, group.context, groupBatch());
     router.push({ name: 'espresso' });
   } catch (err) {
     window.NSXCore.emit('toast', t('diary.recipeCreateFailed') + ': ' + err.message);
@@ -45,7 +56,7 @@ async function goToRecipe(group) {
 // a bean on its own can't be brewed, so the recipe flow is the useful thing to
 // start from here. Adding a bean is still reachable: it's step 1 of that flow.
 // The Recipes view is hidden for now: in practice it shows much the same thing
-// as Browse, only grouped by recipe instead of by roaster. Everything behind it
+// as an opened bag, only grouped by recipe instead of by coffee. Everything behind it
 // stays — the view, its rows, the delete mode, the recipeRows computed — so
 // bringing it back is flipping this one flag, not rebuilding it. Kept as a
 // const rather than deleted-and-in-git because the segmented control's geometry
@@ -62,11 +73,19 @@ async function onRecipeCreated() {
   await ensureDiaryLoaded(); // the new bean/bag should show up in the Diary immediately
   router.push({ name: 'espresso' }); // the new recipe is now loaded — go brew it
 }
+// "+ New bag" ends here: the new bag opens, showing its coffee's recipes —
+// pick one, or "+ New recipe", which then starts from this bag.
+async function onBagOpened({ bean, batch }) {
+  if (!batch?.id) return;
+  await loadBatchMap(); // so the list has the bag on the way back out
+  if (diaryState.view !== 'batches') setView('batches');
+  enterBatch({ key: batch.id, batch, bean, lastShot: 0 });
+}
 
 onMounted(ensureDiaryLoaded);
 
-// Recipes view: load it and go brew — same destination as the Browse view's
-// own load button, but straight from the library entry rather than rebuilding
+// Recipes view: load it and go brew — same destination as an opened bag's
+// profile rows, but straight from the library entry rather than rebuilding
 // a recipe out of a shot's workflow.
 async function loadRecipeRow(recipe) {
   await selectRecipe(recipe);
@@ -86,24 +105,6 @@ function recipeFacts(r) {
 }
 
 /**
- * Origin, variety and process as one dot-separated line under a bean's name.
- * All three are optional and a bean with none of them is common, so empties are
- * dropped rather than printed as "—" — the same rule recipeIdentityParts
- * follows for the Coffee page's title. A bean with nothing to add keeps just
- * its name instead of gaining an empty second line.
- *
- * `variety` is an array in the bean record while the other two are plain
- * strings, so it is joined before the shared filter sees it.
- */
-function beanFacts(bean) {
-  const variety = Array.isArray(bean?.variety) ? bean.variety.join(', ') : bean?.variety;
-  return [bean?.country, variety, bean?.processing]
-    .map((v) => String(v ?? '').trim())
-    .filter((v) => v && v !== '—')
-    .join(' · ');
-}
-
-/**
  * The saved recipe behind a profile group, if there is one. These rows are
  * derived from SHOTS, not from the library — a bean brewed on a profile always
  * has a row, whether or not a recipe was ever saved for that pairing (Load
@@ -111,7 +112,7 @@ function beanFacts(bean) {
  * there is actually something to delete.
  */
 function savedRecipeForGroup(group) {
-  return findRecipeForBeanProfile(diaryState.bean, group.title);
+  return findRecipeForBeanProfile(groupBean(), group.title);
 }
 
 /**
@@ -122,40 +123,43 @@ function savedRecipeForGroup(group) {
 const groupPress = useLongPress({ tap: goToRecipe, hold: openGroupMenu });
 
 /**
- * Bean rows behave like the profile rows below them: tap opens the bean, hold
- * offers what used to be a pencil button. Dropping that button is the point —
- * a row with a permanent affordance on the right invites aiming at it, while
- * the row itself (the far bigger target) did the more common thing.
+ * A bag row: tap opens it, hold offers the coffee's menu — edit, bags,
+ * archive, delete — plus Done/Reopen for the bag itself (also the row's
+ * button; the menu just keeps every action in one list).
  */
-async function openBeanMenu(bean) {
-  const choice = await openChooser({
-    title: bean.name || '—',
-    options: [
-      ['edit', t('diary.editBean')],
-      ['bags', t('beanManager.batches')],
-      ['archive', bean.archived ? t('diary.unarchive') : t('diary.archive')],
-      ['delete', t('common.delete')],
-    ],
-  });
+async function openBagMenu(row) {
+  const { bean, batch } = row;
+  const options = [
+    ['edit', t('diary.editBean')],
+    ['bags', t('beanManager.batches')],
+  ];
+  // The bag's own actions, then the coffee's — each named for what it acts
+  // on: a bare "Delete" on a bag row read as "delete this bag" and deleted
+  // the whole bean, every bag of it included.
+  if (batch) {
+    options.push(['done', batch.archived ? t('diary.batchReopen') : t('diary.batchDone')]);
+    options.push(['deleteBag', t('diary.deleteBag')]);
+  }
+  options.push(
+    ['archive', bean.archived ? t('diary.unarchive') : t('diary.archiveCoffee')],
+    ['delete', t('diary.deleteCoffee')],
+  );
+  const choice = await openChooser({ title: bean.name || '—', options });
   if (choice === 'edit') openEditBean(bean);
   else if (choice === 'bags') openBags(bean);
+  else if (choice === 'done') await toggleBatchDone(row);
+  else if (choice === 'deleteBag') { if (await confirmAndDeleteBatch(batch)) await loadBatchMap(); }
   else if (choice === 'archive') await toggleArchiveBean(bean);
   else if (choice === 'delete') await confirmAndDeleteBean(bean);
 }
-const beanPress = useLongPress({ tap: enterBean, hold: openBeanMenu });
+const bagPress = useLongPress({ tap: enterBatch, hold: openBagMenu });
 
 /**
- * Which way the browse levels slide. Derived from the level itself rather than
- * set by each caller: enterRoaster/enterBean/goBack all just change the level,
- * and a direction that is computed from it cannot fall out of step with a new
- * caller someone adds later.
+ * Which way the Batches levels slide (the list, and one bag opened). Derived
+ * from the state rather than set by each caller, so a new caller cannot leave
+ * it out of step.
  */
 const drill = ref('drill-fwd');
-watch(
-  () => diaryState.level,
-  (level, prev) => { drill.value = level >= prev ? 'drill-fwd' : 'drill-back'; }
-);
-// The Batches view has two levels of its own: the list, and one bag opened.
 watch(
   () => !!diaryState.batch,
   (open) => { drill.value = open ? 'drill-fwd' : 'drill-back'; }
@@ -186,6 +190,11 @@ async function removeRecipe(recipe) {
   if (ok) await deleteRecipe(recipe.id);
 }
 
+/** The divider above an older bag's shots inside an opened bag's profile. */
+function bagLabel(batch) {
+  return batch?.roastDate ? t('diary.roastedOn', { date: formatLongDate(batch.roastDate) }) : t('diary.noRoastDate');
+}
+
 /**
  * Batches view: a bag's second line — roaster, then when it was roasted and
  * how long ago, then when it was last brewed (only if that is in the recent
@@ -193,9 +202,10 @@ async function removeRecipe(recipe) {
  */
 function batchFacts(row) {
   const { batch, bean } = row;
-  const roast = batch.roastDate
-    ? `${t('diary.roastedOn', { date: formatLongDate(batch.roastDate) })} (${window.NSXCore.getBatchAge(batch.roastDate)})`
-    : t('diary.noRoastDate');
+  const roast = !batch ? t('diary.noBag')
+    : batch.roastDate
+      ? `${t('diary.roastedOn', { date: formatLongDate(batch.roastDate) })} (${window.NSXCore.getBatchAge(batch.roastDate)})`
+      : t('diary.noRoastDate');
   const parts = [bean.roaster, roast];
   if (row.lastShot) parts.push(t('diary.lastBrewed', { date: formatLongDate(new Date(row.lastShot).toISOString()) }));
   return parts.filter(Boolean).join(' · ');
@@ -214,16 +224,13 @@ async function toggleBatchDone(row) {
 }
 
 
-const showBack = computed(() =>
-  (diaryState.view === 'browse' && diaryState.level > 0)
-  || (diaryState.view === 'batches' && !!diaryState.batch)
-);
+const showBack = computed(() => diaryState.view === 'batches' && !!diaryState.batch);
 
 const sortLabel = computed(() => t(`diary.sort${diaryState.sort[0].toUpperCase()}${diaryState.sort.slice(1)}`));
 const searchPlaceholder = computed(() => {
   if (diaryState.view === 'full') return t('diary.searchProfile');
   if (diaryState.view === 'batches') return diaryState.batch ? t('diary.searchProfile') : t('diary.searchRoaster');
-  return [t('diary.searchRoaster'), t('diary.searchBean'), t('diary.searchProfile')][diaryState.level];
+  return t('diary.search');
 });
 
 // The shared text-field modal already carries the on-screen keyboard and the
@@ -246,21 +253,18 @@ async function onLoadMore() {
   try { await loadMoreHistory(20); } finally { loadingMore.value = false; }
 }
 
+// Only an opened bag says where you are — the top level of each view is
+// already named by the segmented control at the bottom, so repeating it here
+// was a second label for the same thing.
 const crumb = computed(() => {
-  if (diaryState.view === 'full') return t('diary.fullHistory');
-  if (diaryState.view === 'recipes') return t('diary.recipes');
-  if (diaryState.view === 'batches') {
-    const open = diaryState.batch;
-    if (!open) return t('diary.batches');
-    const date = open.batch.roastDate ? formatLongDate(open.batch.roastDate) : t('diary.noRoastDate');
-    return `${open.bean.name} › ${date}`;
-  }
-  if (diaryState.level === 0) return t('diary.roasters');
-  if (diaryState.level === 1) return diaryState.roasterName;
-  return `${diaryState.roasterName} › ${diaryState.bean?.name ?? ''}`;
+  const open = diaryState.view === 'batches' ? diaryState.batch : null;
+  if (!open) return '';
+  const date = !open.batch ? t('diary.noBag')
+    : open.batch.roastDate ? formatLongDate(open.batch.roastDate) : t('diary.noRoastDate');
+  return `${open.bean.name} › ${date}`;
 });
 
-// The pencil on a bean row still edits that bean in place — only the "+" changed.
+// "Edit bean" from a bag row's menu edits that bean in place.
 const editingBean = ref(null);
 const showEditor = ref(false);
 function openEditBean(bean) {
@@ -282,8 +286,8 @@ function closeBags() { showBags.value = false; }
 // Rendering one shot (facts, measured metrics, stars) lives in DiaryShotRow —
 // all three lists here show the same row, so it has one implementation.
 // Fetch metrics for whatever shots are actually on screen: the flat full
-// history, the shots under the one expanded profile group, or those under the
-// one expanded recipe.
+// history, the shots under the one expanded profile group of an opened bag, or
+// those under the one expanded recipe.
 watch(
   () => (diaryState.view === 'full' ? fullHistoryShots.value : null),
   (list) => { if (list) ensureShotMetrics(list); },
@@ -293,11 +297,11 @@ watch(
   () => diaryState.expandedProfile,
   (title) => {
     if (!title) return;
-    const group = profileGroupsInBean.value.find((g) => g.title === title);
-    if (group) ensureShotMetrics(group.shots);
+    const { current, earlier } = batchProfileGroups.value;
+    const group = [...current, ...earlier].find((g) => g.title === title);
+    if (group) ensureShotMetrics(group.ordered);
   }
 );
-watch(batchShots, (list) => ensureShotMetrics(list));
 watch(
   () => diaryState.expandedRecipe,
   (id) => {
@@ -316,8 +320,7 @@ watch(
            not display) — the crumb sits directly after this in normal flow
            (see .diary-crumb), so the back button must always reserve its
            layout space, or the crumb's position would shift left whenever
-           the button disappears (browsing at the top level, or in Full
-           history). v-show wouldn't do it either: it toggles display:none,
+           the button disappears (on the bag list, or in Full history). v-show wouldn't do it either: it toggles display:none,
            which removes the box from flow exactly like v-if would. -->
       <button
         class="ov-back"
@@ -332,16 +335,6 @@ watch(
            button is present (a bare :first-of-type on .sort-btn broke as soon as
            the .ov-back <button> became the header's first button). -->
       <div class="diary-head-actions">
-        <!-- Archived is a bean concept, so the toggle only applies while browsing
-             roasters/beans (not the flat shot history or a bean's shot list).
-             The glyph is a box with a horizontal handle — an archive box, not
-             a trash can (two vertical shred-lines) — a distinction that only
-             matters once the phone shows this icon with no label next to it
-             (DiaryTab.vue): here the text carries the meaning regardless, but
-             the two components share one icon rather than drifting. -->
-        <button v-if="diaryState.view === 'browse' && diaryState.level < 2" class="sort-btn" :class="{ accent: diaryState.showArchived }" @click="toggleArchived">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v4H3z" /><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>{{ diaryState.showArchived ? t('diary.hideArchived') : t('diary.showAll') }}
-        </button>
         <!-- Deleting a recipe is behind an explicit mode, like the profile
              library's: these rows are tapped constantly to expand/load, so a
              permanently visible trash icon would be one mis-tap from data loss. -->
@@ -377,7 +370,7 @@ watch(
       </div>
     </div>
 
-    <!-- Recipes: the library itself, flat. Unlike Browse (which derives its
+    <!-- Recipes: the library itself, flat. Unlike a bag (which derives its
          rows from shots), these come from the saved recipes — so one that has
          never been brewed still appears, and the recipe's own rating shows. -->
     <div v-else-if="diaryState.view === 'recipes'" class="list">
@@ -425,11 +418,16 @@ watch(
       <div v-if="!recipeRows.length" class="list-row"><span class="rsub">{{ t('diary.noRecipesYet') }}</span></div>
     </div>
 
-    <!-- Batches: same sliding stage as Browse below. Pane one is one row per
-         bag — tap opens its shots, Done archives the bag, which sends it
-         greyed to the end of the list (Reopen undoes that). Pane two is that
-         bag's own shots, newest first. A coffee's recipes live in Coffees. Labels sit here, not inside <Transition>,
-         which rejects a comment as an extra child. -->
+    <!-- Batches: a sliding stage, so going deeper reads as going deeper.
+         Each pane fills the stage absolutely, which is what lets the outgoing
+         and incoming lists overlap during the slide. Pane one is one row per
+         bag (plus one per bean that has none) — tap opens it, hold offers the
+         coffee's menu, Done archives the bag, which sends it greyed to the end
+         of the list (Reopen undoes that). Pane two is every recipe of that
+         COFFEE as profile rows, the ones brewed with this bag first, then the
+         ones only older bags had, under a divider; an expanded row lists its
+         shots bag by bag (see batchProfileGroups). Labels sit here, not inside
+         <Transition>, which rejects a comment as an extra child. -->
     <div v-if="diaryState.view === 'batches'" class="drill-stage">
       <Transition :name="drill">
         <div v-if="!diaryState.batch" key="batches" v-scroll-edges class="list list-cards">
@@ -438,15 +436,22 @@ watch(
           <TransitionGroup tag="div" name="diary-batch-row" class="lc-inner">
             <div
               v-for="row in batchRows"
-              :key="row.batch.id"
+              :key="row.key"
               class="list-row bean-row diary-batch-row"
-              :class="{ archived: row.batch.archived }"
+              :class="{ archived: row.batch?.archived }"
             >
-              <button class="row-main" @click="enterBatch(row)">
+              <button
+                class="row-main"
+                @pointerdown="bagPress.down($event, row)"
+                @pointermove="bagPress.move"
+                @pointerup="bagPress.up(row)"
+                @pointercancel="bagPress.cancel"
+                @pointerleave="bagPress.cancel"
+              >
                 <span class="rmeta">{{ row.bean.name }}<span class="rsub">{{ batchFacts(row) }}</span></span>
                 <span class="chev">›</span>
               </button>
-              <button class="load-recipe-btn" @click="toggleBatchDone(row)">
+              <button v-if="row.batch" class="load-recipe-btn" @click="toggleBatchDone(row)">
                 {{ row.batch.archived ? t('diary.batchReopen') : t('diary.batchDone') }}
               </button>
             </div>
@@ -454,132 +459,75 @@ watch(
           </TransitionGroup>
         </div>
 
-        <div v-else key="batch-shots" v-scroll-edges class="list list-cards">
+        <div v-else key="batch-recipes" v-scroll-edges class="list list-cards">
           <div class="lc-inner">
-            <button
-              v-for="shot in batchShots"
-              :key="shot.id"
-              class="list-row shot-row as-btn"
-              @click="openHistoryAt(batchShots, shot)"
-            >
-              <DiaryShotRow :shot="shot" scope="batch" />
-            </button>
-            <div v-if="!batchShots.length" class="list-row"><span class="rsub">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</span></div>
-          </div>
-        </div>
-      </Transition>
-    </div>
-
-    <!-- One stage, three panes: the levels slide instead of cutting, so
-         going deeper reads as going deeper. Each pane fills the stage
-         absolutely, which is what lets the outgoing and incoming lists
-         overlap during the slide instead of stacking vertically.
-         The three panes are roasters (0) -> beans in a roaster (1) -> profiles
-         used with a bean (2). Their labels live here rather than above each
-         branch because <Transition> counts a comment as a child and rejects
-         anything but exactly one. -->
-    <div v-if="diaryState.view === 'browse'" class="drill-stage">
-      <Transition :name="drill">
-        <div v-if="diaryState.level === 0" key="roasters" v-scroll-edges class="list list-cards">
-          <div class="lc-inner">
-            <button v-for="g in roasterGroups" :key="g.name" class="list-row" @click="enterRoaster(g.name)">
-              <span class="rmeta">{{ g.name }}<span class="rsub">{{ g.beans.length }} bean{{ g.beans.length !== 1 ? 's' : '' }}</span></span>
-              <span class="chev">›</span>
-            </button>
-            <div v-if="!roasterGroups.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
-          </div>
-        </div>
-
-        <div v-else-if="diaryState.level === 1" key="beans" v-scroll-edges class="list list-cards">
-          <div class="lc-inner">
-            <div v-for="bean in beansInRoaster" :key="bean.id" class="list-row bean-row">
-              <button
-                class="row-main"
-                @pointerdown="beanPress.down($event, bean)"
-                @pointermove="beanPress.move"
-                @pointerup="beanPress.up(bean)"
-                @pointercancel="beanPress.cancel"
-                @pointerleave="beanPress.cancel"
-              >
-                <span class="rmeta rmeta-inline">
-                  <span class="bean-name">{{ bean.name }}</span>
-                  <span v-if="beanFacts(bean)" class="rsub">{{ beanFacts(bean) }}</span>
-                </span>
-                <span class="chev">›</span>
-              </button>
-            </div>
-            <div v-if="!beansInRoaster.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
-          </div>
-        </div>
-
-        <div v-else key="profiles" v-scroll-edges class="list list-cards">
-          <div class="lc-inner">
-            <template v-for="group in profileGroupsInBean" :key="group.title">
-              <div class="list-row bean-row">
-                <button
-                  class="row-main"
-                  @pointerdown="groupPress.down($event, group)"
-                  @pointermove="groupPress.move"
-                  @pointerup="groupPress.up(group)"
-                  @pointercancel="groupPress.cancel"
-                  @pointerleave="groupPress.cancel"
-                >
-                  <span class="rmeta">
-                    <span class="row-title">
-                      <svg v-if="savedRecipeForGroup(group)?.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
-                      </svg>
-                      {{ group.title }}
+            <template v-for="(list, half) in [batchProfileGroups.current, batchProfileGroups.earlier]" :key="half">
+              <div v-if="half === 1 && list.length" class="diary-divider">{{ t('diary.earlierBags') }}</div>
+              <template v-for="group in list" :key="group.title">
+                <div class="list-row bean-row">
+                  <button
+                    class="row-main"
+                    @pointerdown="groupPress.down($event, group)"
+                    @pointermove="groupPress.move"
+                    @pointerup="groupPress.up(group)"
+                    @pointercancel="groupPress.cancel"
+                    @pointerleave="groupPress.cancel"
+                  >
+                    <span class="rmeta">
+                      <span class="row-title">
+                        <svg v-if="savedRecipeForGroup(group)?.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
+                        </svg>
+                        {{ group.title }}
+                      </span>
                     </span>
-                  </span>
-                  <!-- The recipe's own rating, which until now only the Recipes
-                       view showed — and that view is hidden, so it had nowhere
-                       left to appear. Only for a pairing that HAS a saved
-                       recipe, and only once it is actually rated: an empty row
-                       of outlines on every line would read as "rated zero". -->
-                  <StarRating
-                    v-if="Number(savedRecipeForGroup(group)?.rating) > 0"
-                    class="row-stars"
-                    :model-value="Number(savedRecipeForGroup(group).rating)"
-                    readonly
-                    :size="15"
-                  />
-                </button>
-                <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleProfileExpanded(group.title)">
-                  <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
-                </button>
-              </div>
-              <div v-if="diaryState.expandedProfile === group.title" class="sublist">
-                <button
-                  v-for="shot in group.shots"
-                  :key="shot.id"
-                  class="list-row shot-row as-btn"
-                  @click="openHistoryAt(group.shots, shot)"
-                >
-                  <DiaryShotRow :shot="shot" scope="profile" />
-                </button>
-              </div>
+                    <StarRating
+                      v-if="Number(savedRecipeForGroup(group)?.rating) > 0"
+                      class="row-stars"
+                      :model-value="Number(savedRecipeForGroup(group).rating)"
+                      readonly
+                      :size="15"
+                    />
+                  </button>
+                  <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleProfileExpanded(group.title)">
+                    <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
+                  </button>
+                </div>
+                <div v-if="diaryState.expandedProfile === group.title" class="sublist">
+                  <template v-for="section in group.sections" :key="section.id ?? 'none'">
+                    <div v-if="!section.current" class="sublist-divider">{{ bagLabel(section.batch) }}</div>
+                    <button
+                      v-for="shot in section.shots"
+                      :key="shot.id"
+                      class="list-row shot-row as-btn"
+                      @click="openHistoryAt(group.ordered, shot)"
+                    >
+                      <DiaryShotRow :shot="shot" scope="profile" />
+                    </button>
+                  </template>
+                </div>
+              </template>
             </template>
-            <div v-if="!profileGroupsInBean.length" class="list-row"><span class="rsub">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</span></div>
+            <div
+              v-if="!batchProfileGroups.current.length && !batchProfileGroups.earlier.length"
+              class="list-row"
+            ><span class="rsub">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</span></div>
           </div>
         </div>
-
       </Transition>
     </div>
 
     <div class="diary-bottom">
-      <!-- seg-3: Batches (what is open), Coffees (the Browse drill-down:
-           roaster -> bean -> profiles, plus bean/bag management on long-press),
+      <!-- Batches (what is open, and through it every coffee's recipes) and
            History. The thumb's width and travel are derived from the count,
-           so turning SHOW_RECIPES_VIEW back on needs a four-segment variant
-           first. The phone's Diary still labels Browse "Browse". -->
+           so SHOW_RECIPES_VIEW switches to the three-segment variant. -->
       <div
-        class="seg seg-3"
-        :data-pos="diaryState.view === 'browse' ? 1 : diaryState.view === 'full' ? 2 : 0"
+        class="seg"
+        :class="{ 'seg-3': SHOW_RECIPES_VIEW }"
+        :data-pos="diaryState.view === 'full' ? 1 : diaryState.view === 'recipes' ? 2 : 0"
       >
         <span class="seg-thumb"></span>
         <button :class="{ on: diaryState.view === 'batches' }" @click="setView('batches')">{{ t('diary.batches') }}</button>
-        <button :class="{ on: diaryState.view === 'browse' }" @click="setView('browse')">{{ t('diary.coffees') }}</button>
         <button :class="{ on: diaryState.view === 'full' }" @click="setView('full')">{{ t('diary.fullHistory') }}</button>
         <button v-if="SHOW_RECIPES_VIEW" :class="{ on: diaryState.view === 'recipes' }" @click="setView('recipes')">{{ t('diary.recipes') }}</button>
       </div>
@@ -605,7 +553,6 @@ watch(
       <BeanEditor
         v-if="showEditor"
         :bean="editingBean"
-        :preset-roaster="diaryState.level === 1 ? diaryState.roasterName : ''"
         @close="closeEditor"
         @saved="closeEditor"
         @deleted="closeEditor"
@@ -615,18 +562,16 @@ watch(
       <BagsPanel v-if="showBags" :bean="bagsBean" @close="closeBags" />
     </PageTransition>
 
-    <!-- Seeded from the current browse position: inside a roaster it opens
-         there, and on a bean's own page the bean step is already answered. -->
+    <!-- Seeded from the opened bag: its coffee's bean step is already answered. -->
     <PageTransition>
       <RecipePicker
         v-if="showRecipeCreator"
         :mode="creatorMode"
-        :preset-bean="diaryState.view === 'batches' && diaryState.batch ? diaryState.batch.bean
-          : diaryState.view === 'browse' && diaryState.level === 2 ? diaryState.bean : null"
-        :preset-roaster="diaryState.view === 'browse' && diaryState.level >= 1 ? (diaryState.roasterName || '') : ''"
-
+        :preset-bean="diaryState.view === 'batches' && diaryState.batch ? diaryState.batch.bean : null"
+        :preset-batch="diaryState.view === 'batches' && diaryState.batch?.batch && !diaryState.batch.batch.archived ? diaryState.batch.batch : null"
         @back="closeRecipeCreator"
         @created="onRecipeCreated"
+        @bag-opened="onBagOpened"
       />
     </PageTransition>
   </section>

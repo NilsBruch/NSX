@@ -2887,9 +2887,17 @@ a.sw-update { text-decoration: none; }
 .diary-batch-row.archived .load-recipe-btn {
   background: none; color: var(--muted); border: 1px solid var(--line);
 }
-/* BeanRecipesPage (new-bag wizard + a Diary bag): the Coffee page's
-   horizontal card strip. */
-.bean-recipe-strip .rp-card { cursor: pointer; }
+/* An opened bag: "Earlier bags" between the card groups, and a roast date
+   above each older bag's shots inside an expanded profile. A rule with the
+   label on it, quiet like .rsub, so it separates without reading as a row. */
+.diary-divider, .sublist-divider {
+  display: flex; align-items: center; gap: 10px;
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+.diary-divider { padding: 6px 4px 0; }
+.sublist-divider { padding: 10px 16px 4px 34px; }
+.diary-divider::after, .sublist-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
 /* Title line of a Browse profile row, so a pin marker can sit inline with the
    name instead of stacking above it in .rmeta's column. */
