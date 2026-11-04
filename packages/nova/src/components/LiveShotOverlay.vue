@@ -115,7 +115,7 @@ const ratioLabel = computed(() => {
   const yieldW = actualYield.value.value;
   return dose && yieldW ? NSXCore.calcRatio(dose, yieldW) : '—';
 });
-// 0-100 enjoyment -> the 0-5 stars this screen renders (see mapping.js).
+// 0-10 enjoyment -> the 0-5 stars this screen renders (see mapping.js).
 const rating = computed(() => NSXCore.enjoymentToStars(currentShot.value?.annotations?.enjoyment));
 
 // Tapping the currently-set star again clears the rating back to 0 (unrated)

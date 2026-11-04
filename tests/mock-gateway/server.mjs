@@ -232,6 +232,16 @@ function filterShots(list, q) {
     eq("profileTitle", titleOf),
   ].filter(Boolean);
 
+  // minEnjoyment: inclusive, on the same 0-10 scale PUT accepts; unrated shots
+  // never match. Validated by the route below (a bad value is a 400).
+  if (q.has("minEnjoyment")) {
+    const min = Number(q.get("minEnjoyment"));
+    tests.push((s) => {
+      const e = s?.annotations?.enjoyment;
+      return e != null && Number(e) >= min;
+    });
+  }
+
   const search = (q.get("search") || "").trim().toLowerCase();
   if (search) {
     tests.push((s) => [
@@ -413,6 +423,20 @@ function routeApi(req, res, url, body) {
 
   // ── shots ──
   if (path === "/api/v1/shots" && method === "GET") {
+    // Rejected exactly as the real gateway rejects them (decaid 283563c):
+    // minEnjoyment outside 0-10 or non-numeric, and `ids` combined with any
+    // other filter.
+    if (q.has("minEnjoyment")) {
+      const min = Number(q.get("minEnjoyment"));
+      if (q.get("minEnjoyment") === "" || !Number.isFinite(min) || min < 0 || min > 10) {
+        return json({ message: "minEnjoyment must be a number between 0 and 10" }, 400);
+      }
+    }
+    const FILTERS = ["grinderId", "grinderModel", "beanId", "beanBatchId", "coffeeName",
+      "coffeeRoaster", "profileTitle", "search", "minEnjoyment"];
+    if (q.has("ids") && FILTERS.some((f) => q.has(f))) {
+      return json({ message: "ids cannot be combined with other filters" }, 400);
+    }
     const limit = Number(q.get("limit") ?? 20);
     const offset = Number(q.get("offset") ?? 0);
     const filtered = sortShots(filterShots(state.shots, q), q);
@@ -431,6 +455,13 @@ function routeApi(req, res, url, body) {
     const id = decodeURIComponent(path.split("/")[4]);
     const s = state.shots.find((x) => x.id === id);
     if (!s) return json({ message: "not found" }, 404);
+    // The real API rejects a rating off its 0-10 scale (decaid PR #887). The
+    // mock accepting 0-100 is how two skins went on writing ratings the real
+    // gateway refused with a 400.
+    const e = body?.annotations?.enjoyment;
+    if (e != null && !(Number.isFinite(Number(e)) && Number(e) >= 0 && Number(e) <= 10)) {
+      return json({ message: "annotations.enjoyment must be between 0 and 10" }, 400);
+    }
     // The real API merges `extras` at field level.
     const merge = (target) => {
       if (!target?.annotations && !body?.annotations) return;

@@ -4591,7 +4591,8 @@ function _filterShotsByFavAndRating(shotList) {
       if (!isFav) return false;
     }
     if (minRating > 0) {
-      const rating = ann.enjoyment ?? shot.metadata?.rating ?? null;
+      // NSX's ratings are 0-100 percentages; the API's enjoyment is 0-10.
+      const rating = NSXCore.enjoymentToPercent(ann.enjoyment) ?? shot.metadata?.rating ?? null;
       if (rating === null || rating < minRating) return false;
     }
     return true;
@@ -5332,7 +5333,7 @@ function openShotReview(shotId, navList = null) {
   _renderShotReviewFields();
   _renderReviewMeta();
 
-  const initRating = ann.enjoyment ?? shot.metadata?.rating ?? null;
+  const initRating = NSXCore.enjoymentToPercent(ann.enjoyment) ?? shot.metadata?.rating ?? null;
   const initFav    = ann.extras?.favorite ?? shot.metadata?.favorite === true;
   _reviewTags = [..._getShotTags(shot)];
   _setShotReviewRating(initRating);
@@ -5565,7 +5566,9 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
     const eyVal  = d.drinkEy;
     const patch = {
       annotations: {
-        enjoyment: _reviewRating,
+        // The review slider is 0-100; the gateway takes 0-10 and answers
+        // anything above with a 400.
+        enjoyment: NSXCore.percentToEnjoyment(_reviewRating),
         espressoNotes: notes ?? null,
         actualDoseWeight: Number.isFinite(doseVal) ? doseVal : null,
         drinkTds: Number.isFinite(tdsVal) ? tdsVal : null,
@@ -5579,7 +5582,7 @@ document.getElementById('btn-shot-review-save')?.addEventListener('click', async
     if (shot) {
       shot.annotations = {
         ...(shot.annotations || {}),
-        enjoyment: _reviewRating,
+        enjoyment: NSXCore.percentToEnjoyment(_reviewRating),
         espressoNotes: notes,
         actualDoseWeight: Number.isFinite(doseVal) ? doseVal : (shot.annotations?.actualDoseWeight ?? null),
         drinkTds: Number.isFinite(tdsVal) ? tdsVal : (shot.annotations?.drinkTds ?? null),

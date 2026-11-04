@@ -155,13 +155,16 @@
     };
   }
 
-  // A shot's `annotations.enjoyment` is 0-100 in the real API, NOT 1-5 — NSX
-  // renders it as five stars at 20 points each (see ui.js's _starRatingHtml).
-  // A skin that treats it as a 1-5 value both renders garbage AND writes back a
-  // rating other skins read as near-zero, so the conversion lives here rather
-  // than being re-derived (or re-forgotten) per skin.
-  const ENJOYMENT_PER_STAR = 20;
+  // A shot's `annotations.enjoyment` is on Decaid's 0-10 scale — NOT de1app's
+  // or Visualizer's 0-100, and not 0-5 stars. PUT /api/v1/shots/{id} rejects
+  // anything outside 0-10 with a 400 (since decaid PR #887, Sept 2026, which
+  // also divided every stored value above 10 by 10), and GET /shots'
+  // minEnjoyment filter takes the same scale. Five stars at 2 points each.
+  // The conversion lives here rather than being re-derived (or re-forgotten)
+  // per skin: a skin on the wrong scale renders garbage AND cannot save.
+  const ENJOYMENT_MAX = 10;
   const MAX_STARS = 5;
+  const ENJOYMENT_PER_STAR = ENJOYMENT_MAX / MAX_STARS;
 
   /** 0-100 enjoyment -> a whole number of stars (0-5), clamped. */
   function enjoymentToStars(enjoyment) {
@@ -171,11 +174,29 @@
     return Math.max(0, Math.min(MAX_STARS, stars));
   }
 
-  /** Stars (0-5) -> the 0-100 enjoyment value the API actually stores. */
+  /** Stars (0-5) -> the 0-10 enjoyment value the API actually stores. */
   function starsToEnjoyment(stars) {
     const value = Number(stars);
     if (!Number.isFinite(value)) return 0;
     return Math.max(0, Math.min(MAX_STARS, Math.round(value))) * ENJOYMENT_PER_STAR;
+  }
+
+  /**
+   * Enjoyment (0-10) <-> a 0-100 percentage, for a skin that draws ratings as
+   * a partial fill (NSX's half-star bars) rather than whole stars. Both keep
+   * "no rating" as null instead of turning it into a zero rating, and clamp.
+   */
+  function enjoymentToPercent(enjoyment) {
+    if (enjoyment == null) return null;
+    const value = Number(enjoyment);
+    if (!Number.isFinite(value)) return null;
+    return Math.max(0, Math.min(100, value * (100 / ENJOYMENT_MAX)));
+  }
+  function percentToEnjoyment(percent) {
+    if (percent == null) return null;
+    const value = Number(percent);
+    if (!Number.isFinite(value)) return null;
+    return Math.max(0, Math.min(ENJOYMENT_MAX, value * (ENJOYMENT_MAX / 100)));
   }
 
   function resolveProfileTemp(prof) {
@@ -904,6 +925,8 @@
     analyzeShot,
     enjoymentToStars,
     starsToEnjoyment,
+    enjoymentToPercent,
+    percentToEnjoyment,
     resolveProfileTemp,
     mapApiWorkflowToDisplay,
     mapShotToWorkflow,

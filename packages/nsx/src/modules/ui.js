@@ -1621,8 +1621,9 @@ function _renderRecipeRating(key, max, count) {
   if (!Number.isFinite(max) || !count) {
     return `<span class="recipe-rating is-empty" data-recipe-key="${_esc(key)}"></span>`;
   }
-  const fill = Math.round(max / 10) * 10; // nearest half-star (10% per half)
-  return `<span class="recipe-rating" data-recipe-key="${_esc(key)}" aria-label="${t('recipe.bestRating')}: ${(max/20).toFixed(1)}/5 (${count})">
+  // max is the best shot's enjoyment, on the API's 0-10 scale.
+  const fill = Math.round(NSXCore.enjoymentToPercent(max) / 10) * 10; // nearest half-star (10% per half)
+  return `<span class="recipe-rating" data-recipe-key="${_esc(key)}" aria-label="${t('recipe.bestRating')}: ${(max/2).toFixed(1)}/5 (${count})">
     <span class="rating-stars" style="--fill:${fill}%"><span class="rating-stars-bg">★★★★★</span><span class="rating-stars-fg">★★★★★</span></span>
     <span class="rating-count">(${count})</span>
   </span>`;
@@ -1682,7 +1683,7 @@ function _renderShotRows(shots, { showRecipe = false } = {}) {
       : '—';
     const temp   = _shotTemp(shot);
     const tempStr = Number.isFinite(temp) ? `${temp.toFixed(1)} °C` : '—';
-    const rating = ann.enjoyment ?? shot.metadata?.rating ?? (shot.rating != null ? shot.rating : null);
+    const rating = NSXCore.enjoymentToPercent(ann.enjoyment) ?? shot.metadata?.rating ?? (shot.rating != null ? shot.rating : null);
     const ratingDisplay = rating != null ? _starRatingHtml(rating) : '<span class="history-shot-value">—</span>';
     const isFav  = ann.extras?.favorite ?? shot.metadata?.favorite === true;
     const date   = _historyFormatDate(shot.timestamp);

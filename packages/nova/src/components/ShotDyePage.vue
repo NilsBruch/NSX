@@ -380,9 +380,9 @@ async function editNotes() {
  * The heart stays its own answer rather than a synonym for five stars: it
  * marks the shot you want to find again.
  *
- * Stored as the API really stores them: `annotations.enjoyment` is 0–100, not
- * 0–5 (core's starsToEnjoyment — writing the raw star count would read as a
- * ~1% rating in every other skin), and the favourite flag rides in
+ * Stored as the API really stores them: `annotations.enjoyment` is 0–10, not
+ * 0–5 (core's starsToEnjoyment — writing the raw star count would read as
+ * half the rating in every other skin), and the favourite flag rides in
  * `annotations.extras`. Both in ONE patch, so a rating and a heart set in the
  * same visit cost one request rather than two.
  */

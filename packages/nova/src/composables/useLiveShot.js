@@ -476,8 +476,8 @@ export async function skipStep() {
   // toast in its own locale (same split as CleaningAssistant's skip).
 }
 
-/** `stars` is 0-5 (what the UI shows); the API stores enjoyment as 0-100 —
- *  writing the raw star count would land as a ~1% rating in every other skin. */
+/** `stars` is 0-5 (what the UI shows); the API stores enjoyment as 0-10 —
+ *  writing the raw star count would land as half the rating in every other skin. */
 export function rateShot(shot, stars) {
   cancelReviewAutoClose();
   const enjoyment = NSXCore.starsToEnjoyment(stars);
