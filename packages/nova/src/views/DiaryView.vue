@@ -550,13 +550,15 @@ watch(
         <span class="x" :aria-label="t('diary.clearFilter')">×</span>
       </button>
       <span class="spacer" style="flex: 1"></span>
-      <!-- Present in every view: a button that comes and goes with the
-           segment is one the hand can't learn. A new bag is the usual way in
-           (it ends on a recipe, ready to brew); a new recipe is for trying
+      <!-- Not in History: that list is for finding shots already pulled, and
+           neither flow starts from one. A new bag is the usual way in (it
+           opens the bag, ready to pick a recipe); a new recipe is for trying
            another profile on a coffee. No separate "+ New bean": both flows
            add one inline in their coffee step. -->
-      <button class="btn" @click="openCreator('bag')">+ {{ t('diary.newBag') }}</button>
-      <button class="btn" @click="openCreator('recipe')">+ {{ t('diary.addRecipe') }}</button>
+      <template v-if="diaryState.view !== 'full'">
+        <button class="btn" @click="openCreator('bag')">+ {{ t('diary.newBag') }}</button>
+        <button class="btn" @click="openCreator('recipe')">+ {{ t('diary.addRecipe') }}</button>
+      </template>
       <button class="rbtn" :aria-label="t('diary.search')" @click="openSearch">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
       </button>
