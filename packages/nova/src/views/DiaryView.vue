@@ -233,6 +233,16 @@ const searchPlaceholder = computed(() => {
   return t('diary.search');
 });
 
+// History's rating filter: at least N stars, or every shot. The label says
+// what is set, so the button doubles as the filter's state.
+const ratingLabel = computed(() =>
+  (diaryState.minStars ? t('diary.minStars', { n: diaryState.minStars }) : t('diary.allRatings')));
+async function openRatingFilter() {
+  const options = [[0, t('diary.allRatings')], ...[1, 2, 3, 4, 5].map((n) => [n, t('diary.minStars', { n })])];
+  const choice = await openChooser({ title: t('diary.ratingFilter'), options, current: diaryState.minStars });
+  if (choice != null) diaryState.minStars = Number(choice);
+}
+
 // The shared text-field modal already carries the on-screen keyboard and the
 // cancel/confirm pair — cancel (null) keeps whatever filter was active, an
 // empty confirmed string clears it.
@@ -343,6 +353,9 @@ watch(
         </button>
         <!-- The Batches view has one fixed order (open bags by last use, done
              bags at the end), so there is nothing for the sort to cycle. -->
+        <button v-if="diaryState.view === 'full'" class="sort-btn" :class="{ accent: diaryState.minStars > 0 }" @click="openRatingFilter">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z" /></svg>{{ ratingLabel }}
+        </button>
         <button v-if="diaryState.view !== 'batches'" class="sort-btn" @click="cycleSort">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>{{ sortLabel }}
         </button>

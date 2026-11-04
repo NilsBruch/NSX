@@ -614,6 +614,9 @@ async function fetchShots(limit = 20, offset = 0, search = '') {
     // one bag. The gateway resolves it through each shot's beanBatchId, so it
     // is the right key for "this bean's whole history" (Nova's Diary drill-in).
     if (filters.beanId) queryParams.append('beanId', filters.beanId);
+    // Inclusive, on the 0-10 enjoyment scale (NSXCore.starsToEnjoyment);
+    // unrated shots never match. The gateway 400s a value outside 0-10.
+    if (filters.minEnjoyment > 0) queryParams.append('minEnjoyment', filters.minEnjoyment);
     // Lowercase 'asc' or nothing. The gateway defaults to newest-first and
     // silently falls back to it for ANY value it doesn't recognise — 'ASC' and
     // 'oldest' both come back newest-first with a 200 — so a typo here is a

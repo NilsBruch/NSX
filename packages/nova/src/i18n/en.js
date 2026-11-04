@@ -368,6 +368,10 @@ export default {
     // Divider in an opened bag: below it, the coffee's recipes that only
     // older bags were brewed with.
     earlierBags: 'Earlier bags',
+    // History's rating filter (at least N stars, filtered by the server).
+    ratingFilter: 'Rating',
+    allRatings: 'All ratings',
+    minStars: '{n}+ stars',
     // A bag row's hold menu acts on two things, so each entry names which.
     deleteBag: 'Delete bag',
     deleteCoffee: 'Delete coffee',

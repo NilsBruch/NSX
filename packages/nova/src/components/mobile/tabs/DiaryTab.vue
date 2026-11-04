@@ -55,6 +55,13 @@ const searchPlaceholder = computed(() => {
 });
 const sortLabel = computed(() => t(`diary.sort${diaryState.sort[0].toUpperCase()}${diaryState.sort.slice(1)}`));
 
+// History's rating filter — the same choices as the tablet's (DiaryView.vue).
+async function openRatingFilter() {
+  const options = [[0, t('diary.allRatings')], ...[1, 2, 3, 4, 5].map((n) => [n, t('diary.minStars', { n })])];
+  const choice = await openChooser({ title: t('diary.ratingFilter'), options, current: diaryState.minStars });
+  if (choice != null) diaryState.minStars = Number(choice);
+}
+
 async function openSearch() {
   const value = await openTextField({ title: t('diary.search'), value: diaryState.query, placeholder: searchPlaceholder.value });
   if (value !== null) diaryState.query = value;
@@ -221,6 +228,15 @@ async function onRecipeCreated() {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
       </button>
       <span class="phone-crumb">{{ crumb }}</span>
+      <button
+        v-if="diaryState.view === 'full'"
+        class="sort-btn icon-only"
+        :class="{ accent: diaryState.minStars > 0 }"
+        :aria-label="t('diary.ratingFilter')"
+        @click="openRatingFilter"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.3 6.4-.6z" /></svg>
+      </button>
       <button v-if="diaryState.view !== 'batches'" class="sort-btn icon-only" :aria-label="sortLabel" @click="cycleSort">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>
       </button>

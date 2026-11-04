@@ -17,6 +17,7 @@ export const diaryState = reactive({
   expandedProfile: null, // which profile group (by title) is expanded, in an opened bag
   expandedRecipe: null, // which recipe (by id) is expanded, in the recipes view
   editingRecipes: false, // recipes view: reveal the per-row delete
+  minStars: 0, // full history: only shots rated at least this many stars (0 = all)
   batch: null, // batches view: the bag drilled into ({ batch, bean }), or null = the list
 });
 
@@ -395,13 +396,19 @@ const historyTotal = ref(0);
  *  browser instead showed the oldest of the newest 200 — the true oldest shot
  *  was never fetched at all. */
 const historyOrder = () => (diaryState.sort === 'oldest' ? 'asc' : 'desc');
+/** The rating filter, also applied by the SERVER (GET /shots' minEnjoyment),
+ *  for the same reason as the sort: filtering a page in the browser would only
+ *  ever find the good shots among the 200 already loaded. */
+const historyMinEnjoyment = () => NSXCore.starsToEnjoyment(diaryState.minStars);
 
 /** Replace the history with a fresh page 0, optionally server-side searched.
  *  The gateway's free-text covers coffee name, roaster, profile title, grinder
  *  model and notes, so this searches the WHOLE history, not the loaded page. */
 export async function loadHistory(query = '') {
   const { items, total } = shotsFromResponse(
-    await NSXApi.fetchShots({ limit: 200, offset: 0, search: query, order: historyOrder() })
+    await NSXApi.fetchShots({
+      limit: 200, offset: 0, search: query, order: historyOrder(), minEnjoyment: historyMinEnjoyment(),
+    })
   );
   historyPage.value = items;
   historyTotal.value = total;
@@ -414,7 +421,7 @@ export async function loadMoreHistory(pageSize = 20) {
   const { items, total } = shotsFromResponse(
     await NSXApi.fetchShots({
       limit: pageSize, offset: historyPage.value.length,
-      search: diaryState.query || '', order: historyOrder(),
+      search: diaryState.query || '', order: historyOrder(), minEnjoyment: historyMinEnjoyment(),
     })
   );
   const seen = new Set(historyPage.value.map((s) => s.id));
@@ -475,6 +482,11 @@ watch(
  */
 watch(
   () => diaryState.sort,
+  () => { if (diaryState.view === 'full') loadHistory(diaryState.query || ''); }
+);
+// The rating filter is a server query too, so it reloads the same way.
+watch(
+  () => diaryState.minStars,
   () => { if (diaryState.view === 'full') loadHistory(diaryState.query || ''); }
 );
 
