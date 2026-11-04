@@ -443,7 +443,20 @@ export async function refreshHistoryIfActive() {
 // order. Re-sorting locally is what made "Load more" append at the TOP — the
 // next page is older, and a client-side ascending sort floated it above
 // everything already on screen, away from the button that asked for it.
-export const fullHistoryShots = computed(() => historyPage.value);
+//
+// The rating filter is the exception, applied here AS WELL as on the server: a
+// gateway from before minEnjoyment (decaid < Oct 30 2026) accepts the
+// parameter and ignores it, so without this the list reloads unchanged. On a
+// current gateway every row already passes. historyPage stays unfiltered, so
+// "Load more" keeps paging by what the server returned.
+export const fullHistoryShots = computed(() => {
+  const min = historyMinEnjoyment();
+  if (!(min > 0)) return historyPage.value;
+  return historyPage.value.filter((s) => {
+    const e = s?.annotations?.enjoyment;
+    return e != null && Number(e) >= min;
+  });
+});
 
 /** True when the server reports more shots than are currently loaded — drives
  *  the full-history "Load more" button. */
