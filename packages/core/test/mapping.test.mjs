@@ -162,29 +162,81 @@ test("resolveShotVolumeAndWeight falls back to the volume snapshot with no per-s
   );
 });
 
-test("updateVolumeCalibration learns a new sample and averages a rolling 4-sample window", () => {
-  const fullShot = { measurements: [{ scale: { weight: 18 }, machine: { volume: 18 } }] }; // ratio 1.0
-  const cal = NSXCore.updateVolumeCalibration({ factor: 1.0, samples: [0.9, 0.95] }, fullShot);
-  assert.deepEqual(cal.samples, [0.9, 0.95, 1.0]);
-  assert.ok(Math.abs(cal.factor - (0.9 + 0.95 + 1.0) / 3) < 1e-9);
+// A shot as the gateway records it: per-sample counted volume (top-level
+// `volume`, 0 until the profile's count-start step) and scale weight.
+const volumeShot = (pairs) => ({ measurements: pairs.map(([volume, weight]) => ({ volume, scale: { weight } })) });
+
+// Counting starts in the infusion: 12 ml are counted before the first drops,
+// then volume and weight rise 1:1 — the shape that made the old single ratio
+// (48/36 = 1.33, and 2+ on finer grinds) useless at any other target weight.
+const EARLY_COUNT = volumeShot([[0, 0], [5, 0], [12, 0], [13, 1], [25, 13], [48, 36]]);
+// Counting starts after the first drops: 6 g are already in the cup.
+const LATE_COUNT = volumeShot([[0, 0], [0, 2], [0, 6], [1, 6.9], [15, 21], [30, 36]]);
+
+test("updateVolumeCalibration learns factor and offset apart", () => {
+  const cal = NSXCore.updateVolumeCalibration(null, EARLY_COUNT);
+  assert.ok(Math.abs(cal.factor - 1.0) < 1e-9, "35 ml over 35 g after the first drops");
+  assert.ok(Math.abs(cal.offset - 12) < 1e-9, "the 12 ml counted before the cup");
+  assert.deepEqual(cal.samples.length, 1);
+  assert.deepEqual(cal.offsets.length, 1);
 });
 
-test("updateVolumeCalibration keeps only the last 4 samples", () => {
-  const fullShot = { measurements: [{ scale: { weight: 20 }, machine: { volume: 20 } }] }; // ratio 1.0
-  const cal = NSXCore.updateVolumeCalibration({ factor: 1.0, samples: [0.6, 0.7, 0.8, 0.9] }, fullShot);
-  assert.deepEqual(cal.samples, [0.7, 0.8, 0.9, 1.0]);
+test("updateVolumeCalibration: a late count start is a negative offset", () => {
+  const cal = NSXCore.updateVolumeCalibration(null, LATE_COUNT);
+  assert.ok(cal.offset < -5 && cal.offset > -8, `offset ${cal.offset}`);
+  assert.ok(Math.abs(NSXCore.volumeForYield(36, cal) - 30) <= 1, "stops where this shot stopped");
 });
 
-test("updateVolumeCalibration rejects an implausible sample (ratio out of 0.5-1.5) and returns cal unchanged", () => {
-  const fullShot = { measurements: [{ scale: { weight: 10 }, machine: { volume: 90 } }] }; // ratio 9.0
-  const cal = { factor: 1.0, samples: [1.0] };
-  assert.strictEqual(NSXCore.updateVolumeCalibration(cal, fullShot), cal);
+test("updateVolumeCalibration averages a rolling 4-shot window of both numbers", () => {
+  let cal = null;
+  for (let i = 0; i < 5; i++) cal = NSXCore.updateVolumeCalibration(cal, EARLY_COUNT);
+  assert.equal(cal.samples.length, 4);
+  assert.equal(cal.offsets.length, 4);
 });
 
-test("updateVolumeCalibration rejects too little volume even with a plausible ratio", () => {
-  const fullShot = { measurements: [{ scale: { weight: 3 }, machine: { volume: 3 } }] }; // ratio 1.0, but volume < 5
-  const cal = { factor: 1.0, samples: [] };
-  assert.strictEqual(NSXCore.updateVolumeCalibration(cal, fullShot), cal);
+test("updateVolumeCalibration replaces an old ratio-only calibration instead of averaging into it", () => {
+  const cal = NSXCore.updateVolumeCalibration({ factor: 1.33, samples: [1.3, 1.36] }, EARLY_COUNT);
+  assert.equal(cal.samples.length, 1, "old ratio samples include the offset — not comparable");
+  assert.ok(Math.abs(cal.factor - 1.0) < 1e-9);
+});
+
+test("updateVolumeCalibration rejects an implausible shot and returns cal unchanged", () => {
+  const cal = { factor: 1.0, offset: 0, samples: [1.0], offsets: [0] };
+  // 90 ml for 10 g after the drops: a factor of 9, not a coffee
+  assert.strictEqual(NSXCore.updateVolumeCalibration(cal, volumeShot([[1, 1], [90, 11]])), cal);
+  // too little volume
+  assert.strictEqual(NSXCore.updateVolumeCalibration(cal, volumeShot([[1, 1], [3, 3]])), cal);
+  // weight barely moved after the reference point — no usable slope
+  assert.strictEqual(NSXCore.updateVolumeCalibration(cal, volumeShot([[10, 1], [20, 4]])), cal);
+});
+
+test("volumeForYield / yieldForVolume are inverse, offset included", () => {
+  const cal = { factor: 1.05, offset: 9 };
+  assert.equal(NSXCore.volumeForYield(36, cal), 47, "round(9 + 36 * 1.05)");
+  assert.ok(Math.abs(NSXCore.yieldForVolume(9 + 36 * 1.05, cal) - 36) < 1e-9);
+  assert.equal(NSXCore.yieldForVolume(5, cal), 0, "nothing in the cup before the offset is counted");
+  assert.equal(NSXCore.volumeForYield(0, cal), 0);
+  assert.equal(NSXCore.volumeForYield(36, null), 36, "uncalibrated: 1 ml per g");
+});
+
+test("resolveVolumeCalibration: own, then legacy, then the profile's mean, then 1:1", () => {
+  const learned = (factor, offset) => ({ factor, offset, samples: [factor], offsets: [offset] });
+  const a = { id: "a", profileTitle: "Londonium", volumeCalibration: learned(1.0, 2) };
+  const b = { id: "b", profileTitle: "londonium ", volumeCalibration: learned(1.1, -6) };
+  const other = { id: "c", profileTitle: "Adaptive", volumeCalibration: learned(1.4, 30) };
+  const fresh = { id: "n", profileTitle: "Londonium", volumeCalibration: { factor: 1.0, samples: [] } };
+  const all = [a, b, other, fresh];
+
+  assert.deepEqual(NSXCore.resolveVolumeCalibration(a, all), { factor: 1.0, offset: 2, source: "recipe", count: 1 });
+  const pooled = NSXCore.resolveVolumeCalibration(fresh, all);
+  assert.equal(pooled.source, "profile");
+  assert.equal(pooled.count, 2, "only the same profile, case-insensitively");
+  assert.ok(Math.abs(pooled.factor - 1.05) < 1e-9);
+  assert.ok(Math.abs(pooled.offset - -2) < 1e-9);
+
+  const legacy = { id: "l", profileTitle: "Londonium", volumeCalibration: { factor: 1.3, samples: [1.3] } };
+  assert.equal(NSXCore.resolveVolumeCalibration(legacy, all).source, "legacy");
+  assert.deepEqual(NSXCore.resolveVolumeCalibration(fresh, [fresh]), { factor: 1.0, offset: 0, source: "default", count: 0 });
 });
 
 test("updateVolumeCalibration is a no-op without both a real weight and volume sample", () => {

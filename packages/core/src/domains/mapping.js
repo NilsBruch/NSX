@@ -447,33 +447,151 @@
     return { volume, weight };
   }
 
+  // ── Virtual scale: machine-counted volume -> weight in the cup ─────────────
+  //
+  // With no scale the machine stops on the volume IT counts, from the profile
+  // step `target_volume_count_start` on. That volume is not the cup: when the
+  // count starts before the first drops (in the infusion, or at a fine grind
+  // that keeps the puck soaking), it includes water the puck holds and the
+  // headspace; when it starts after them, the cup already holds some coffee.
+  // So the model is a line, not a ratio:
+  //
+  //     counted volume = offset + factor * weight in the cup
+  //
+  // `factor` (ml per g) comes out near 1.0 for every profile; `offset` (ml,
+  // negative when the count starts late) carries the profile/coffee-specific
+  // part. Learning the two apart is what lets a recipe change its target
+  // weight and still stop where it should: a ratio learned at 36 g bakes the
+  // offset in, and scales it along with the target.
+  //
+  // Verified on 100+ real shots (Nov 2026): after the offset the factor sits
+  // at 0.89-1.19 across profiles, and offsets run -14 to +45 ml. The old
+  // single ratio (counted / weight) reached 2.08 on an early-counting profile
+  // and the 0.5-1.5 bound threw those shots away, so such recipes never
+  // learned at all.
   const VOLUME_SAMPLE_MIN_VOLUME = 5;
-  const VOLUME_SAMPLE_RATIO_MIN = 0.5;
-  const VOLUME_SAMPLE_RATIO_MAX = 1.5;
+  const VOLUME_FACTOR_MIN = 0.5;
+  // Generous on purpose: real factors stay near 1.0, and the bound is only
+  // there to drop a broken reading (a scale knocked mid-shot), not to judge
+  // a profile — 1.5 is what kept early-counting profiles from ever learning.
+  const VOLUME_FACTOR_MAX = 3.0;
+  const VOLUME_OFFSET_MIN = -40;
+  const VOLUME_OFFSET_MAX = 80;
   const VOLUME_SAMPLE_WINDOW = 4;
+  // Weight (g) that counts as "coffee has reached the cup".
+  const VOLUME_DRIP_WEIGHT = 1.0;
+  // Weight gained after the reference point needed for a usable slope.
+  const VOLUME_MIN_SPAN = 5;
+
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
 
   /**
-   * Learns (or refines) the ml-per-gram factor a recipe uses to estimate
-   * weight from the machine's own volume tracking when no physical scale is
-   * connected. Runs after EVERY shot, not just scale-less ones — it needs a
-   * real scale-weight sample to learn from, so a shot brewed WITH a scale is
-   * exactly what teaches the factor that later gets used WITHOUT one.
-   * Rejects an implausible sample (too little volume, or a ratio outside
-   * 0.5-1.5 ml/g) rather than letting one bad reading corrupt the average —
-   * same bounds and 4-sample rolling window as NSX's real calibration.
+   * One shot's (factor, offset), or null when the shot cannot teach either.
+   * The reference point is the first sample where the machine is counting
+   * (volume > 0) AND coffee is on the scale (>= 1 g) — whichever of the two
+   * came second. From there to the end, volume and weight grow together, so
+   * the slope is the factor; the offset is where that line puts 0 g.
+   */
+  function volumeCalibrationSample(fullShot) {
+    const measurements = Array.isArray(fullShot?.measurements) ? fullShot.measurements : [];
+    const { volume, weight } = resolveShotVolumeAndWeight(fullShot);
+    if (!Number.isFinite(volume) || !Number.isFinite(weight) || volume < VOLUME_SAMPLE_MIN_VOLUME) return null;
+    const ref = measurements.find((m) => {
+      const v = Number(m?.machine?.volume ?? m?.volume);
+      const w = Number(m?.scale?.weight ?? m?.scale?.weight_grams);
+      return v > 0 && w >= VOLUME_DRIP_WEIGHT;
+    });
+    if (!ref) return null;
+    const v0 = Number(ref?.machine?.volume ?? ref?.volume);
+    const w0 = Number(ref?.scale?.weight ?? ref?.scale?.weight_grams);
+    if (weight - w0 < VOLUME_MIN_SPAN) return null;
+    const factor = (volume - v0) / (weight - w0);
+    const offset = v0 - factor * w0;
+    if (!(factor >= VOLUME_FACTOR_MIN && factor <= VOLUME_FACTOR_MAX)) return null;
+    if (!(offset >= VOLUME_OFFSET_MIN && offset <= VOLUME_OFFSET_MAX)) return null;
+    return { factor, offset };
+  }
+
+  /** True for a calibration in the (factor, offset) form, with something learned. */
+  function hasLearnedOffset(cal) {
+    return !!cal && Array.isArray(cal.offsets) && Array.isArray(cal.samples) && cal.samples.length > 0;
+  }
+
+  /**
+   * Learns (or refines) a recipe's calibration from a shot brewed WITH a
+   * scale — that is what later lets a shot WITHOUT one estimate its weight.
+   * Runs after every shot; one that cannot teach (no scale, implausible
+   * reading) returns `existingCal` unchanged, by identity. 4-shot rolling
+   * window for both numbers.
+   *
+   * Shape: { factor, offset, samples: [factor…], offsets: [offset…] }. A
+   * calibration from before the offset existed ({ factor, samples } with
+   * ratio samples that include it) is not averaged with the new samples — it
+   * is replaced by the first one.
    */
   function updateVolumeCalibration(existingCal, fullShot) {
-    const cal = existingCal && typeof existingCal === "object" ? existingCal : { factor: 1.0, samples: [] };
-    const { volume, weight } = resolveShotVolumeAndWeight(fullShot);
-    if (!Number.isFinite(volume) || !Number.isFinite(weight) || weight <= 0) return cal;
+    const cal = existingCal && typeof existingCal === "object" ? existingCal : { factor: 1.0, offset: 0, samples: [], offsets: [] };
+    const sample = volumeCalibrationSample(fullShot);
+    if (!sample) return cal;
+    const fresh = !Array.isArray(cal.offsets);
+    const samples = [...(fresh ? [] : cal.samples || []), sample.factor].slice(-VOLUME_SAMPLE_WINDOW);
+    const offsets = [...(fresh ? [] : cal.offsets), sample.offset].slice(-VOLUME_SAMPLE_WINDOW);
+    return { factor: mean(samples), offset: mean(offsets), samples, offsets };
+  }
 
-    const sample = volume / weight;
-    const valid = volume >= VOLUME_SAMPLE_MIN_VOLUME && sample >= VOLUME_SAMPLE_RATIO_MIN && sample <= VOLUME_SAMPLE_RATIO_MAX;
-    if (!valid) return cal;
+  /**
+   * The calibration a recipe should brew with, and where it came from:
+   *   'recipe'  — its own (factor, offset), learned from its own shots
+   *   'legacy'  — its own ratio from before the offset existed (still right at
+   *               the target weight it was learned at)
+   *   'profile' — nothing of its own yet: the mean of the other recipes on the
+   *               same profile, so a new coffee starts close instead of at 1:1.
+   *               The factor is the machine's; the offset differs by coffee by
+   *               a few ml, which is why a recipe's own shots take over
+   *   'default' — nothing anywhere: 1 ml per g, no offset
+   * `recipes` is the skin's recipe list (any objects with profileTitle and
+   * volumeCalibration); the recipe itself is skipped by identity and by id.
+   * @returns {{ factor:number, offset:number, source:string, count:number }}
+   */
+  function resolveVolumeCalibration(recipe, recipes = []) {
+    const own = recipe?.volumeCalibration;
+    if (hasLearnedOffset(own)) {
+      return { factor: own.factor, offset: own.offset, source: "recipe", count: own.samples.length };
+    }
+    if (own && !Array.isArray(own.offsets) && Array.isArray(own.samples) && own.samples.length && Number(own.factor) > 0) {
+      return { factor: Number(own.factor), offset: 0, source: "legacy", count: own.samples.length };
+    }
+    const title = String(recipe?.profileTitle || "").trim().toLowerCase();
+    const peers = title ? (recipes || []).filter((r) =>
+      r && r !== recipe && (recipe?.id == null || r.id !== recipe.id)
+      && String(r.profileTitle || "").trim().toLowerCase() === title
+      && hasLearnedOffset(r.volumeCalibration)
+    ) : [];
+    if (peers.length) {
+      return {
+        factor: mean(peers.map((r) => r.volumeCalibration.factor)),
+        offset: mean(peers.map((r) => r.volumeCalibration.offset)),
+        source: "profile",
+        count: peers.length,
+      };
+    }
+    return { factor: 1.0, offset: 0, source: "default", count: 0 };
+  }
 
-    const samples = [...(cal.samples || []), sample].slice(-VOLUME_SAMPLE_WINDOW);
-    const factor = samples.reduce((a, b) => a + b, 0) / samples.length;
-    return { factor, samples };
+  /** The machine volume (ml, whole) to stop at for `yieldGrams` in the cup. */
+  function volumeForYield(yieldGrams, cal) {
+    const y = Number(yieldGrams);
+    const factor = Number(cal?.factor) || 1.0;
+    if (!(y > 0) || !(factor > 0)) return 0;
+    return Math.max(0, Math.round((Number(cal?.offset) || 0) + y * factor));
+  }
+
+  /** The weight in the cup (g) that a machine-counted `volume` corresponds to. */
+  function yieldForVolume(volume, cal) {
+    const v = Number(volume);
+    const factor = Number(cal?.factor) || 1.0;
+    if (!Number.isFinite(v) || !(factor > 0)) return 0;
+    return Math.max(0, (v - (Number(cal?.offset) || 0)) / factor);
   }
 
   /**
@@ -946,6 +1064,9 @@
     getShotStopReason,
     isKnownStopReason,
     updateVolumeCalibration,
+    resolveVolumeCalibration,
+    volumeForYield,
+    yieldForVolume,
     getBatchAge,
   });
 })();

@@ -241,7 +241,8 @@
     //   stopAtWeight ON  + no scale  -> no way to weigh, so stop on VOLUME
     //                                   instead: the dialed yield converted to
     //                                   ml via the recipe's learned calibration
-    //                                   factor (targetYield * factor); never a
+    //                                   (offset + targetYield * factor, see
+    //                                   NSXCore.volumeForYield); never a
     //                                   weight stop.
     //   stopAtWeight OFF             -> neither: target_weight zeroed, the volume
     //                                   stop disabled, and context.targetYield
@@ -261,17 +262,14 @@
       } else if (scaleConnected) {
         targetWaterVolume = 0;
       } else {
-        const factor = workflow.volumeCalibration?.factor ?? 1.0;
-        const yield_ = Number(workflow.targetYield || 0);
         resolvedProfile = { ...resolvedProfile, target_weight: 0 };
-        targetWaterVolume = yield_ > 0 && factor > 0 ? Math.round(yield_ * factor) : 0;
+        targetWaterVolume = NSXCore.volumeForYield(workflow.targetYield, workflow.volumeCalibration);
       }
     } else if (!scaleConnected) {
       // Legacy virtual-scale path (NSX): estimate a volume target from yield*factor.
       if (workflow.useVolumeStopWhenNoScale) {
-        const factor = workflow.volumeCalibration?.factor ?? 1.0;
-        const yield_ = Number(workflow.targetYield || 0);
-        if (yield_ > 0 && factor > 0) targetWaterVolume = Math.round(yield_ * factor);
+        const ml = NSXCore.volumeForYield(workflow.targetYield, workflow.volumeCalibration);
+        if (ml > 0) targetWaterVolume = ml;
       } else {
         targetWaterVolume = 0;
       }

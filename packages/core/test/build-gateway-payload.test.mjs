@@ -12,8 +12,10 @@ import { setupWindow, loadCoreFile } from "./harness.mjs";
 setupWindow();
 loadCoreFile("core.js");
 loadCoreFile("domains/workflow.js");
-// The DYE mapping the payload builder defers to lives in the equipment domain.
+// The DYE mapping the payload builder defers to lives in the equipment domain,
+// and the volume-stop conversion (volumeForYield) in the mapping domain.
 loadCoreFile("domains/equipment.js");
+loadCoreFile("domains/mapping.js");
 const NSXCore = window.NSXCore;
 
 const VISIBLE = { id: "p-visible", profile: { title: "Visible", steps: [{ temperature: 90 }] } };
@@ -141,6 +143,15 @@ test("stopAtWeight ON + no scale: factor defaults to 1.0 when uncalibrated", asy
     { scaleConnected: false },
   );
   assert.equal(p.context.targetWaterVolume, 36, "no calibration yet -> 1:1 ml per gram");
+});
+
+test("stopAtWeight ON + no scale: the learned offset is added before the target weight", async () => {
+  stubCore({ visible: [VOL_PROFILE], withHidden: [VOL_PROFILE] });
+  const p = await NSXCore.buildGatewayPayload(
+    { selectedProfileId: "p-vol", targetYield: 36, stopAtWeight: true, volumeCalibration: { factor: 1.0, offset: 9 } },
+    { scaleConnected: false },
+  );
+  assert.equal(p.context.targetWaterVolume, 45, "9 ml counted before the cup + 36 g * 1.0");
 });
 
 test("stopAtWeight OFF: manual stop — no weight, no volume, targetYield zeroed", async () => {

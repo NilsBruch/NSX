@@ -95,10 +95,12 @@ export const recipe = reactive({
   },
   roastDate: null,   // ISO date string, or null = "not set". Derived from the batch,
                      // which is the source of truth; deliberately NOT persisted on the recipe.
-  // ml-per-gram factor this recipe has learned for estimating weight from the
-  // DE1's own volume tracking when no physical scale is connected — see
-  // NSXCore.updateVolumeCalibration (mapping.js) and useLiveShot.js's
-  // post-shot hook, which is what actually refines this after each brew.
+  // What this recipe has learned for estimating weight from the DE1's own
+  // volume tracking when no physical scale is connected: counted volume =
+  // offset + factor * weight. See NSXCore.updateVolumeCalibration (mapping.js)
+  // and useLiveShot.js's post-shot hook, which refines it after each brew with
+  // a scale. Brew with effectiveVolumeCalibration, not this: until the recipe
+  // has learned anything, that borrows from the other recipes on its profile.
   volumeCalibration: { factor: 1.0, samples: [] },
   // The user's own 0–5 star rating of THIS recipe (half steps allowed), set via
   // the "Rate" button on the Espresso screen. 0 = unrated.
@@ -109,6 +111,15 @@ export const recipe = reactive({
  *  history-derived one. Lazily loaded (RecipePicker.vue calls this on open),
  *  matching every other lazily-loaded panel's own load-on-open convention. */
 export const recipes = ref([]);
+
+/**
+ * The calibration the loaded recipe actually brews with: its own once it has
+ * learned one, otherwise the mean of the other recipes on the same profile
+ * (a new coffee starts close rather than at 1 ml per g), otherwise 1:1.
+ * { factor, offset, source, count } — see NSXCore.resolveVolumeCalibration.
+ */
+export const effectiveVolumeCalibration = computed(() =>
+  NSXCore.resolveVolumeCalibration(recipe, recipes.value));
 export async function refreshRecipes(force = false) {
   recipes.value = await NSXCore.loadRecipes(force);
   return recipes.value;
@@ -581,8 +592,9 @@ export async function pushRecipe({ silent = false } = {}) {
     // basket/equipment ids, which is what stamps them onto every shot pulled
     // on this workflow (see the `dye` note on `recipe`).
     dye: recipe.dye,
-    // Needed for the no-scale volume stop: targetWaterVolume = targetYield * factor.
-    volumeCalibration: recipe.volumeCalibration,
+    // Needed for the no-scale volume stop: targetWaterVolume = offset +
+    // targetYield * factor (NSXCore.volumeForYield).
+    volumeCalibration: effectiveVolumeCalibration.value,
     grinderId: recipe.grinderId,
     beanBatchId: recipe.beanBatchId,
   };

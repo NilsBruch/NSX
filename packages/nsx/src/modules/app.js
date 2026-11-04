@@ -630,7 +630,15 @@ function _getLiveProfileFrames() {
 // core/domains/workflow.js (NSXCore.buildGatewayPayload) — this delegate
 // passes the current live scale-connection state as an explicit param so
 // core doesn't need to read the app.js `scaleConnected` global directly.
-const _buildRecipeGatewayPayload = (workflow) => NSXCore.buildGatewayPayload(workflow, { scaleConnected });
+// The calibration a recipe brews with: its own once learned, otherwise the
+// mean of the other recipes on the same profile, otherwise 1 ml per g. The
+// volume stop, the live estimate and the post-shot yield all use this, not
+// just what the recipe itself has learned.
+const _effectiveVolumeCalibration = (wf) => NSXCore.resolveVolumeCalibration(wf, workflowItems);
+const _buildRecipeGatewayPayload = (workflow) => NSXCore.buildGatewayPayload(
+  workflow ? { ...workflow, volumeCalibration: _effectiveVolumeCalibration(workflow) } : workflow,
+  { scaleConnected },
+);
 
 async function pushSelectedWorkflowToMachine(workflow) {
   if (!workflow) return;
@@ -1046,8 +1054,7 @@ function _getLiveDisplayWeight() {
   if (scaleConnected) return liveWeight;
   const wf = _getActiveWorkflow();
   if (wf?.useVolumeStopWhenNoScale && _liveVolumeCountingActive) {
-    const factor = wf.volumeCalibration?.factor ?? 1.0;
-    return factor > 0 ? liveVolumeIntegrated / factor : 0;
+    return NSXCore.yieldForVolume(liveVolumeIntegrated, _effectiveVolumeCalibration(wf));
   }
   return liveWeight;
 }
@@ -1263,47 +1270,22 @@ async function endLiveShotSession() {
     const recipeIdx = workflowItems.indexOf(_capturedWorkflow);
     if (newShot.id && recipeIdx !== -1) {
       getShotDetailsCached(newShot.id).then(fullShot => {
-        let shotVolume = null;
-        let shotWeight = null;
-        const meas = fullShot?.measurements;
-        if (Array.isArray(meas)) {
-          for (let i = meas.length - 1; i >= 0; i--) {
-            const w = meas[i]?.scale?.weight ?? meas[i]?.scale?.weight_grams ?? null;
-            if (Number.isFinite(w) && w > 0 && shotWeight === null) { shotWeight = w; }
-            const v = meas[i]?.machine?.volume ?? meas[i]?.volume ?? null;
-            if (Number.isFinite(v) && v > 0 && shotVolume === null) { shotVolume = v; }
-            if (shotWeight !== null && shotVolume !== null) break;
-          }
-        }
-        if (shotVolume === null) {
-          const snapVol = Number(fullShot?.snapshot?.volume);
-          if (Number.isFinite(snapVol) && snapVol > 0) shotVolume = snapVol;
-        }
-        const newSample = Number.isFinite(shotVolume) && Number.isFinite(shotWeight) && shotWeight > 0
-          ? shotVolume / shotWeight : null;
-        const SAMPLE_MIN_VOLUME = 5;
-        const SAMPLE_RATIO_MIN = 0.5;
-        const SAMPLE_RATIO_MAX = 1.5;
-        const sampleValid = newSample !== null
-          && shotVolume >= SAMPLE_MIN_VOLUME
-          && newSample >= SAMPLE_RATIO_MIN
-          && newSample <= SAMPLE_RATIO_MAX;
-        if (!sampleValid) return;
+        // Shared with Nova: learns offset + factor (counted volume = offset +
+        // factor * weight) and returns the calibration unchanged, by identity,
+        // when this shot cannot teach it (no scale, implausible reading).
         const currentIdx = workflowItems.indexOf(_capturedWorkflow);
         if (currentIdx === -1) return;
         const recipe = workflowItems[currentIdx];
-        const cal = recipe.volumeCalibration ?? { factor: 1.0, samples: [] };
-        const samples = [...(cal.samples || []), newSample].slice(-4);
-        const factor = samples.reduce((a, b) => a + b, 0) / samples.length;
-        workflowItems[currentIdx] = { ...recipe, volumeCalibration: { factor, samples } };
+        const cal = NSXCore.updateVolumeCalibration(recipe.volumeCalibration, fullShot);
+        if (cal === recipe.volumeCalibration) return;
+        workflowItems[currentIdx] = { ...recipe, volumeCalibration: cal };
         _saveRecipesToStore(workflowItems);
       }).catch(() => {});
     }
 
     // 2. Volume-stop estimated yield annotation
     if (_capturedWeight < 1 && _capturedWorkflow.useVolumeStopWhenNoScale && _capturedVolume > 0 && newShot.id) {
-      const factor = _capturedWorkflow.volumeCalibration?.factor ?? 1.0;
-      const estimatedYield = factor > 0 ? _capturedVolume / factor : 0;
+      const estimatedYield = NSXCore.yieldForVolume(_capturedVolume, _effectiveVolumeCalibration(_capturedWorkflow));
       if (estimatedYield > 0) {
         const roundedYield = Math.round(estimatedYield * 10) / 10;
         const existingAnn = newShot.annotations ?? {};
@@ -9215,14 +9197,18 @@ function _renderVsInfoBody() {
   const body = document.getElementById('virtual-scale-info-body');
   if (!body) return;
   const workflow = workflowItems[workflowEditModalEl?._editIndex ?? -1];
-  const samples = workflow?.volumeCalibration?.samples ?? [];
+  const cal = workflow ? _effectiveVolumeCalibration(workflow) : { source: 'default', count: 0 };
   let html = `<p style="margin:0 0 10px">${t('virtualScale.infoDesc')}</p>`;
-  if (samples.length === 0) {
+  if (cal.source === 'default') {
     html += `<p style="margin:0;opacity:.7">${t('virtualScale.infoNotCalibrated')}</p>`;
   } else {
-    const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
-    html += `<p style="margin:0"><strong>${t('virtualScale.infoFactor')}:</strong> ${avg.toFixed(3)} ml/g</p>`;
-    html += `<p style="margin:4px 0 0;opacity:.7">${t('virtualScale.infoSamples').replace('{n}', String(samples.length))}</p>`;
+    const offset = Math.round(cal.offset || 0);
+    html += `<p style="margin:0"><strong>${t('virtualScale.infoFactor')}:</strong> ${cal.factor.toFixed(3)} ml/g</p>`;
+    html += `<p style="margin:4px 0 0"><strong>${t('virtualScale.infoOffset')}:</strong> ${offset >= 0 ? '+' : '−'}${Math.abs(offset)} ml</p>`;
+    const note = cal.source === 'profile'
+      ? t('virtualScale.infoFromProfile').replace('{n}', String(cal.count))
+      : t('virtualScale.infoSamples').replace('{n}', String(cal.count));
+    html += `<p style="margin:4px 0 0;opacity:.7">${note}</p>`;
   }
   body.innerHTML = html;
 }

@@ -2,7 +2,8 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipeIdentityParts, formatMediumDate } from '../composables/useCore.js';
-import { recipe, roastAge, hasProfile } from '../composables/useRecipe.js';
+import { recipe, roastAge, hasProfile, effectiveVolumeCalibration } from '../composables/useRecipe.js';
+import { openAlert } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { useRecipeKit, recipeBasketName, recipeEquipmentNames } from '../composables/useRecipeKit.js';
@@ -35,6 +36,25 @@ const {
 // trade: it's the same gesture the recipe cards already use for their own
 // menus, so it's the skin's established "more, on this thing" gesture rather
 // than a new one invented here.
+/**
+ * The ⓘ beside the stop toggle: what the virtual scale would stop at. With no
+ * scale the machine stops on the volume it counts, so this says which volume
+ * the current target weight turns into, with the numbers behind it and where
+ * they came from (this recipe's own shots, the profile's other recipes, an
+ * old calibration, or nothing yet).
+ */
+function showVolumeInfo() {
+  const cal = effectiveVolumeCalibration.value;
+  const grams = Number(recipe.targetYield) || 0;
+  const offset = Math.round(cal.offset || 0);
+  const parts = [
+    t('virtualScale.corresponds', { ml: window.NSXCore.volumeForYield(grams, cal), g: grams.toFixed(1) }),
+    t('virtualScale.numbers', { factor: (cal.factor || 1).toFixed(2), offset: `${offset >= 0 ? '+' : '−'}${Math.abs(offset)}` }),
+    t(`virtualScale.source.${cal.source}`, { n: cal.count }, cal.count),
+  ];
+  openAlert({ title: t('virtualScale.title'), message: parts.join(' ') });
+}
+
 const titlePress = useLongPress({
   tap: () => emit('open-recipes'),
   hold: () => { if (hasProfile.value) emit('edit-profile'); },
@@ -200,6 +220,7 @@ const roastLabel = computed(() =>
             :aria-label="t('espresso.stopAtWeight')"
             @click="toggleStopAtWeight"
           ></button>
+          <button type="button" class="sr-info-btn stop-info" :aria-label="t('virtualScale.title')" @click="showVolumeInfo">ⓘ</button>
         </div>
         <!-- The same outlined pills the recipe cards wear, so a basket reads
              as a basket wherever you meet it — and each pill IS its picker.

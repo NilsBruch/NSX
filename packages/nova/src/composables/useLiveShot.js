@@ -9,7 +9,7 @@
  */
 import { computed, reactive, ref, watch } from 'vue';
 import { machine, shots, loadShots, currentWorkflow } from './useCore.js';
-import { recipe, bumpRecipeLastUsed, saveVolumeCalibration, currentRecipeShots, loadRecipeShots } from './useRecipe.js';
+import { recipe, bumpRecipeLastUsed, saveVolumeCalibration, currentRecipeShots, loadRecipeShots, effectiveVolumeCalibration } from './useRecipe.js';
 import { skinSettings } from './useSettings.js';
 import { flushSession } from './useCleaningSession.js';
 import { refreshHistoryIfActive } from './useDiary.js';
@@ -263,7 +263,8 @@ NSXCore.on('liveShot', (snap) => {
   // matching when the machine itself begins integrating toward its volume stop.
   let wflow = machine.weightFlow ?? 0;
   if (virtualScaleActive.value) {
-    const factor = recipe.volumeCalibration?.factor || 1;
+    const cal = effectiveVolumeCalibration.value;
+    const factor = cal.factor || 1;
     const frame = Number(snap?.profileFrame);
     if (Number.isFinite(frame) && frame >= _volumeCountStart()) {
       const now = Date.now();
@@ -271,8 +272,10 @@ NSXCore.on('liveShot', (snap) => {
       const dt = (now - _lastSnapMs) / 1000;
       if (dt > 0 && dt < 2) _liveVolume += (snap?.flow ?? 0) * dt; // guard against gaps/pauses
       _lastSnapMs = now;
-      liveVirtualWeight.value = factor > 0 ? _liveVolume / factor : 0;
-      wflow = factor > 0 ? (snap?.flow ?? 0) / factor : 0;         // brown "coffee out" estimate
+      liveVirtualWeight.value = NSXCore.yieldForVolume(_liveVolume, cal);
+      // Brown "coffee out" estimate — only once the counted volume is past
+      // the offset, i.e. once the model says coffee reaches the cup.
+      wflow = liveVirtualWeight.value > 0 && factor > 0 ? (snap?.flow ?? 0) / factor : 0;
     } else {
       wflow = 0;                                                   // pre-count frames: nothing out yet
     }
@@ -391,9 +394,9 @@ async function applyPostShotVirtualScale(newShot, prefetchedFull = null) {
     // '*'); matches NSX's _runPostShotActions exactly.
     if (!machine.scaleConnected && recipe.stopAtWeight) {
       const { volume } = NSXCore.resolveShotVolumeAndWeight(fullShot);
-      const factor = updatedCal?.factor || 1;
-      if (Number.isFinite(volume) && volume > 0 && factor > 0) {
-        const estimatedYield = Math.round((volume / factor) * 10) / 10;
+      const estimate = NSXCore.yieldForVolume(volume, effectiveVolumeCalibration.value);
+      if (Number.isFinite(volume) && volume > 0 && estimate > 0) {
+        const estimatedYield = Math.round(estimate * 10) / 10;
         // extras merges at field level on the gateway (see CLAUDE.md) — this
         // doesn't clobber any rating/notes/tags already on the shot.
         await NSXCore.updateShot(newShot.id, { annotations: { extras: { actualYield: estimatedYield, virtualScale: true } } });

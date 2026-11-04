@@ -80,6 +80,19 @@ export default {
     tapHint: 'Tap to wake',
     noMachine: 'No machine',
   },
+  // The ⓘ beside the stop-at-weight toggle (RecipeBody.vue).
+  virtualScale: {
+    title: 'Virtual scale',
+    corresponds: 'Without a scale, the current {g} g target weight corresponds to {ml} ml counted by the machine.',
+    numbers: '(factor {factor} ml/g, offset {offset} ml)',
+    // vue-i18n plural forms, selected by the count argument at the call site.
+    source: {
+      recipe: 'Learned from this recipe\'s last shot with a scale. | Learned from this recipe\'s last {n} shots with a scale.',
+      legacy: 'An older calibration without an offset — the next shot with a scale replaces it.',
+      profile: 'Not learned for this coffee yet: taken from the other recipe on this profile. | Not learned for this coffee yet: taken from the {n} other recipes on this profile.',
+      default: 'Not calibrated yet — 1 ml per gram until the first shot with a scale.',
+    },
+  },
   espresso: {
     pageTitle: 'Coffee',
     bean: 'Bean',
