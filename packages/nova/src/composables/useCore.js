@@ -438,9 +438,10 @@ NSXCore.on('liveShot', (snap) => {
 export async function bootCore({ onStoreLoaded } = {}) {
   try {
     // An NSX user's first Nova start: bring their recipes and presets across
-    // (NSX's own data stays untouched) and start in the settings closest to
-    // NSX. The schedule is not copied — it lives in the gateway schedule API,
-    // and the lookup below picks it up. Must run before loadStore/loadRecipes.
+    // (NSX's own data stays untouched). Skin settings are not: they start on
+    // Nova's own defaults, like anyone else's. The schedule is not copied — it
+    // lives in the gateway schedule API, and the lookup below picks it up. Must
+    // run before loadStore/loadRecipes.
     await NSXCore.importFromNamespace('NSX', {
       markerKey: 'nova_nsx_import',
       keys: [
@@ -451,7 +452,6 @@ export async function bootCore({ onStoreLoaded } = {}) {
         'nsx_hotwater_presets', 'nsx_hotwater_active_preset',
         'nsx_flush_presets', 'nsx_flush_active_preset', 'nsx_flush_timer_enabled',
       ],
-      defaults: { nova_theme: 'midnight', nova_graph_mode: 'expert', nova_coffee_graph: true },
     });
     await NSXCore.migrateLegacyStore();
     await NSXCore.loadStore();
