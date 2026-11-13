@@ -5,12 +5,13 @@
  * trigger, not an optimistic local flip; machine.state itself is set only by the
  * gateway's own machineState stream (see useCore.js).
  */
-import { lock } from '../composables/useScreensaver.js';
+import { lock, markOwnSleepRequest } from '../composables/useScreensaver.js';
 
 const { NSXApi } = window;
 
 async function sleep() {
   try {
+    markOwnSleepRequest(); // locks right below; the transition needn't do it again
     await NSXApi.setMachineState('sleeping');
     lock();
   } catch (err) {

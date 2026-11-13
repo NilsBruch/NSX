@@ -4,7 +4,7 @@
  * lazily when opened, since Settings is not on the hot path.
  */
 import { reactive, ref } from 'vue';
-import { setWakelockOverride, setBrightnessOverride } from './useScreensaver.js';
+import { applyWakelock, setBrightnessOverride } from './useScreensaver.js';
 import i18n from '../i18n/index.js';
 
 /**
@@ -548,11 +548,11 @@ export function loadSkinSettings() {
 export async function saveSkinSetting(key, value) {
   skinSettings[key] = value;
   NSXCore.patchStore({ [SKIN_KEYS[key]]: value });
-  // Routed through useScreensaver.js's setWakelockOverride, not called
-  // directly — that serializes it against lock()/unlock()/the boot sync's own
-  // wakelock calls, so this toggle can't race one of those and leave the
-  // gateway's override in the wrong state (see that function's doc comment).
-  if (key === 'wakelock') await setWakelockOverride(value);
+  // Routed through useScreensaver.js's applyWakelock, not called directly —
+  // that serializes it against lock()/unlock()/the machine-state handler's own
+  // wakelock calls, and turning the setting ON while the machine sleeps (or
+  // the screen is locked) correctly keeps the override released.
+  if (key === 'wakelock') await applyWakelock();
 }
 
 /**

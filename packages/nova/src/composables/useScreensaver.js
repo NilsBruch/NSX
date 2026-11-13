@@ -4,15 +4,22 @@
  * to wake the DE1 back up — see nova_wake_on_unlock in SkinPanel. This composable
  * owns `locked` as skin-local UI state (not core: no other skin needs it).
  *
- * `locked` is set ONLY by explicit lock()/unlock() calls (PowerButton.vue is the
- * one caller of lock()) — it does NOT watch NSXCore's 'machineState' event.
- * That event fires on every machine snapshot (~every 250ms) for as long as the
- * DE1 stays asleep, not just on the transition into sleep, and it fires
- * identically whether sleep was triggered by the power button or by the
- * Settings machine-toggle. Locking off of it caused two bugs: the Settings
- * toggle (which must NEVER lock — the whole point is browsing the skin
- * without heating the machine) locked the screen anyway, and unlocking
- * without waking (wakeOnUnlock off) got re-locked by the very next heartbeat.
+ * `locked` is NOT derived from NSXCore's 'machineState' event. That event fires
+ * on every machine snapshot (~every 250ms) for as long as the DE1 stays
+ * asleep, not just on the transition into sleep, and it fires identically
+ * whether sleep was triggered by the lock button or by the machine power
+ * button. Locking off of it caused two bugs: the power button (which must
+ * NEVER lock — the whole point is browsing the skin without heating the
+ * machine) locked the screen anyway, and unlocking without waking
+ * (wakeOnUnlock off) got re-locked by the very next heartbeat.
+ *
+ * What it does lock on is the TRANSITION into sleep that this device did not
+ * ask for: the machine's own auto-sleep, a schedule, or another device (the
+ * phone) putting it to sleep. Then nobody is standing at the tablet, so the
+ * screensaver is what should come up. This device's own sleep requests call
+ * markOwnSleepRequest() first and are left alone — the lock button locks by
+ * itself, the power button deliberately doesn't. A transition fires once, so
+ * neither of the two bugs above can come back through it.
  */
 import { ref } from 'vue';
 
@@ -20,11 +27,27 @@ const { NSXCore, NSXApi } = window;
 
 export const locked = ref(false);
 
-// "Keep screen awake" (nova_wakelock) holds a display wake-lock override during
-// normal use. On the lockscreen we RELEASE it so the tablet's own screen timeout
-// can turn the display off — otherwise the lockscreen would stay lit forever with
-// keep-awake on. It's re-acquired on unlock (below).
+// Set by every sleep request THIS device sends, so the transition it causes is
+// recognised as ours. A window rather than a flag: the gateway takes a moment
+// to report the new state, and a flag left set by a request that never took
+// effect would swallow the next genuine auto-sleep.
+const OWN_SLEEP_WINDOW_MS = 10000;
+let _ownSleepUntil = 0;
+export function markOwnSleepRequest() {
+  _ownSleepUntil = Date.now() + OWN_SLEEP_WINDOW_MS;
+}
+
+// "Keep screen awake" (nova_wakelock) holds a display wake-lock override while
+// the skin is in use AND the machine is awake. On the lockscreen, and whenever
+// the DE1 is asleep (switched off here and still browsed, too), it is RELEASED
+// so the tablet's own screen timeout can turn the display off — a sleeping
+// machine is nothing to keep a screen lit for. applyWakelock() is the one place
+// that decides; everything else just calls it.
 const wakelockOn = () => NSXCore.getStore().nova_wakelock !== false; // default true
+
+// Latest machine state, from the 'machineState' handler at the bottom.
+let _lastState = null;
+let _lastStateAt = 0;
 
 /**
  * Every request/release call funnels through here, chained onto the previous
@@ -54,6 +77,27 @@ export function setWakelockOverride(active) {
     console.error('[Nova] wakelock override failed', err);
   });
   return _wakelockChain;
+}
+
+/** Whether the override should be held right now. */
+function _wantWakelock() {
+  return wakelockOn() && !locked.value && _lastState !== 'sleeping';
+}
+
+/**
+ * Bring the gateway's override in line with _wantWakelock(). Called on every
+ * machine-state report, so it only sends when the answer CHANGES (null = never
+ * sent, so the first call always goes out). While released, the watchdog below
+ * re-checks that the release stuck.
+ */
+let _wakelockHeld = null;
+export function applyWakelock() {
+  const want = _wantWakelock();
+  if (want === _wakelockHeld) return _wakelockChain;
+  _wakelockHeld = want;
+  if (want) _stopWakelockWatchdog();
+  else _startWakelockWatchdog();
+  return setWakelockOverride(want);
 }
 
 // Shared by the interactive lock()/unlock() below AND the boot-time sync
@@ -100,8 +144,9 @@ function _restoreNormalBrightness() {
 }
 
 /**
- * The release below is issued ONCE, at the moment of locking — nothing
- * re-checks it for as long as the lockscreen is up, and setWakelockOverride
+ * The release is issued ONCE, when it becomes due (locking, or the machine
+ * falling asleep) — nothing else re-checks it while it should stay released,
+ * and setWakelockOverride
  * only console.errors a rejection. So if that one call is lost (a failed
  * request, or the gateway re-acquiring the override behind our back), the
  * lockscreen keeps the display lit indefinitely: there is no later lock() to
@@ -125,11 +170,11 @@ function _startWakelockWatchdog() {
   _stopWakelockWatchdog();
   if (!wakelockOn()) return; // nothing was held, so nothing can leak
   _watchdogTimer = setInterval(async () => {
-    if (!locked.value) { _stopWakelockWatchdog(); return; }
+    if (_wantWakelock()) { _stopWakelockWatchdog(); return; }
     try {
       const state = await NSXApi.fetchDisplayState();
       if (state?.wakeLockOverride) {
-        console.warn('[Nova] wakelock override still held on the lockscreen — releasing again');
+        console.warn('[Nova] wakelock override still held while it should be released — releasing again');
         await setWakelockOverride(false);
       } else if (state?.wakeLockEnabled) {
         // Held, but not by US: the gateway's own machine-state rule keeps the
@@ -148,19 +193,18 @@ function _startWakelockWatchdog() {
 export function lock() {
   locked.value = true;
   _dimForLock();
-  if (wakelockOn()) setWakelockOverride(false);
-  _startWakelockWatchdog();
+  applyWakelock();
 }
 
 export async function unlock() {
   locked.value = false;
-  _stopWakelockWatchdog();
   // Restore the normal brightness the slider was last set to, regardless of
   // whether the machine itself wakes up below.
   _restoreNormalBrightness();
-  // Re-acquire the keep-awake override released on lock, so the screen stays on
-  // during normal use again.
-  if (wakelockOn()) setWakelockOverride(true);
+  // Re-acquires keep-awake only if the machine is awake. Unlocked without
+  // waking it stays released; waking it below re-acquires it through the
+  // machine-state handler once the gateway reports the new state.
+  applyWakelock();
 
   const wakeOnUnlock = NSXCore.getStore().nova_wake_on_unlock !== false; // default true
   if (!wakeOnUnlock) return;
@@ -171,11 +215,11 @@ export async function unlock() {
   }
 }
 
-// Boot-only ground-truth sync: if the DE1 is already asleep when Nova loads
+// Boot-time ground-truth sync: if the DE1 is already asleep when Nova loads
 // (e.g. a page reload), the screen should start locked too — and vice versa.
-// This does NOT become a subscription that keeps firing — see the note above
-// about why watching 'machineState' continuously is exactly the bug this file
-// exists to avoid. First event only, then never touched again.
+// After that first event the handler only acts on a TRANSITION into sleep
+// (see the file header) — never on the steady stream of 'sleeping' reports,
+// which is exactly the bug this file exists to avoid.
 //
 // This is also the ONE place that decides the wakelock's INITIAL state —
 // main.js used to unconditionally request it on every boot, racing this
@@ -196,16 +240,35 @@ export async function unlock() {
 // lockscreen setting." Explicitly (re-)applying brightness in both branches
 // here, exactly like lock()/unlock() already do, fixes both at once.
 let sawFirstState = false;
+// Reports normally arrive every ~250ms. A longer gap means the stream dropped
+// and came back, and a 'sleeping' after that is a machine that was ALREADY
+// asleep (say, switched off here and still browsed), not one that just fell
+// asleep — so it must not lock.
+const STATE_GAP_MS = 5000;
 NSXCore.on('machineState', ({ state }) => {
-  if (sawFirstState) return;
+  const now = Date.now();
+  const prev = _lastState;
+  const continuous = now - _lastStateAt < STATE_GAP_MS;
+  _lastState = state;
+  _lastStateAt = now;
+  if (sawFirstState) {
+    // Into sleep, not by this device's own request, and not already locked:
+    // auto-sleep, a schedule, or the phone. Bring the screensaver up.
+    if (state === 'sleeping' && prev !== 'sleeping' && continuous
+        && !locked.value && now > _ownSleepUntil) {
+      lock();
+    }
+    // Asleep -> released, awake -> held (unless locked). A no-op on the
+    // steady stream of reports; it only sends when that answer changes.
+    applyWakelock();
+    return;
+  }
   sawFirstState = true;
   if (state === 'sleeping') {
     locked.value = true;
     _dimForLock();
-    if (wakelockOn()) setWakelockOverride(false);
-    _startWakelockWatchdog(); // a reload lands here instead of lock(), same risk
   } else {
     _restoreNormalBrightness();
-    if (wakelockOn()) setWakelockOverride(true);
   }
+  applyWakelock();
 });

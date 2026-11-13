@@ -19,6 +19,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { machine } from '../composables/useCore.js';
 import { showToast } from '../composables/useToast.js';
+import { markOwnSleepRequest } from '../composables/useScreensaver.js';
 
 const { t } = useI18n();
 const { NSXApi } = window;
@@ -33,6 +34,9 @@ async function toggle() {
   if (busy.value || disabled.value) return;
   busy.value = true;
   try {
+    // Switching the machine off from here must not bring up the screensaver —
+    // see useScreensaver.js. Off from another device, or auto-sleep, does.
+    if (on.value) markOwnSleepRequest();
     await NSXApi.setMachineState(on.value ? 'sleeping' : 'idle');
   } catch (err) {
     showToast(t('toast.controlFailed') + ': ' + err.message);

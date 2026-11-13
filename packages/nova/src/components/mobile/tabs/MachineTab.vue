@@ -31,6 +31,7 @@ import { steam, hotwater, flush } from '../../../composables/useMachineFunctions
 import { skinSettings } from '../../../composables/useSettings.js';
 import { formatWaterLevel } from '../../../utils/water.js';
 import { showToast } from '../../../composables/useToast.js';
+import { markOwnSleepRequest } from '../../../composables/useScreensaver.js';
 import { openNumberPad } from '../../../composables/useModals.js';
 import SettingSlider from '../../settings/SettingSlider.vue';
 import { dispTemp, toCelsius, tempRange, tempUnitLabel } from '../../../composables/useUnits.js';
@@ -51,6 +52,9 @@ async function toggleMachine() {
   if (machineBusy.value) return;
   machineBusy.value = true;
   try {
+    // Ours: this phone shouldn't lock itself. The TABLET sees a sleep it didn't
+    // ask for and brings up its screensaver (useScreensaver.js).
+    if (machineOn.value) markOwnSleepRequest();
     await NSXApi.setMachineState(machineOn.value ? 'sleeping' : 'idle');
   } catch (err) {
     showToast(t('toast.controlFailed') + ': ' + err.message);
