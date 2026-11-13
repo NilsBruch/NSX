@@ -5,6 +5,16 @@
  */
 import { reactive, ref } from 'vue';
 import { setWakelockOverride, setBrightnessOverride } from './useScreensaver.js';
+import i18n from '../i18n/index.js';
+
+/**
+ * From gateway 0.9.2 on, managing plugins and skins needs a token a skin never
+ * gets, so those calls come back 401/403. A bare "HTTP 401" tells the user
+ * nothing; say where the change can still be made instead.
+ */
+function explainLocked(err) {
+  return NSXApi.isAuthError?.(err) ? new Error(i18n.global.t('systemSettings.managedInApp')) : err;
+}
 
 const { NSXCore, NSXApi } = window;
 
@@ -105,7 +115,7 @@ export async function loadPlugins() {
   plugins.value = NSXCore.getPlugins();
 }
 export async function setPluginEnabled(id, enabled) {
-  await NSXCore.setPluginEnabled(id, enabled);
+  await NSXCore.setPluginEnabled(id, enabled).catch((err) => { throw explainLocked(err); });
   plugins.value = NSXCore.getPlugins();
 }
 export async function loadVisualizerSettings() {
@@ -124,8 +134,14 @@ export async function loadVisualizerSettings() {
 }
 
 export async function saveVisualizerSetting(key, value) {
+  const previous = visualizerSettings[key];
   if (key !== 'password') visualizerSettings[key] = value;
-  await NSXCore.savePluginSetting(VISUALIZER_ID, VIZ_KEYS[key], value);
+  try {
+    await NSXCore.savePluginSetting(VISUALIZER_ID, VIZ_KEYS[key], value);
+  } catch (err) {
+    if (key !== 'password') visualizerSettings[key] = previous; // the row shows what is really stored
+    throw explainLocked(err);
+  }
   if (key === 'password') visualizerPasswordSet.value = value !== '';
 }
 export const visualizerPlugin = () => plugins.value.find((p) => p.id === VISUALIZER_ID);
@@ -149,7 +165,7 @@ export async function loadPluginDetail(id) {
 }
 
 export async function savePluginDetailSetting(id, field, value) {
-  await NSXCore.savePluginSetting(id, field.key, value);
+  await NSXCore.savePluginSetting(id, field.key, value).catch((err) => { throw explainLocked(err); });
   // A secret is never held locally — all the UI may know is that one is stored.
   if (field.secure) pluginSecrets[field.key] = value !== '';
   else pluginValues.value = { ...pluginValues.value, [field.key]: value };
@@ -168,8 +184,14 @@ export async function loadAdvancedSettings() {
   Object.assign(advancedSettings, await NSXCore.loadAdvancedSettings());
 }
 export async function saveAppSetting(key, value) {
+  const previous = appSettings[key];
   appSettings[key] = value;
-  await NSXCore.saveAppSetting(key, value);
+  try {
+    await NSXCore.saveAppSetting(key, value);
+  } catch (err) {
+    appSettings[key] = previous; // e.g. automaticUpdateCheck: turning it ON is token-gated
+    throw explainLocked(err);
+  }
 }
 export async function saveMachineSetting(key, value) {
   machineSettings[key] = value;
@@ -355,7 +377,8 @@ export async function loadInstalledSkins(force = false) {
  * @returns {Promise<boolean>} whether we are navigating
  */
 export async function switchSkin(skinId) {
-  const { url } = await NSXCore.switchToSkin(skinId);
+  const { url, native } = await NSXCore.switchToSkin(skinId).catch((err) => { throw explainLocked(err); });
+  if (native) return true; // the Decent app replaces this page itself
   if (!url) return false;
   window.location.assign(url);
   return true;
@@ -388,7 +411,7 @@ export async function forgetDevice(deviceId) {
  * @returns {Promise<{updated: boolean, version: string}>}
  */
 export async function runSkinUpdate({ reload = true } = {}) {
-  const result = await NSXCore.installSkinUpdate(SKIN_ID);
+  const result = await NSXCore.installSkinUpdate(SKIN_ID).catch((err) => { throw explainLocked(err); });
   if (result.updated) {
     skinRelease.value = { ...(skinRelease.value || {}), installed: result.version, updateAvailable: false };
     // `reload: false` is for the press that also started an app install: that

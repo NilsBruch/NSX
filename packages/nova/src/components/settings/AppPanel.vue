@@ -150,6 +150,12 @@ async function pickGatewayMode() {
   const v = await openChooser({ title: t('systemSettings.gatewayMode'), options: gmOpts, current: appSettings.gatewayMode });
   if (v != null) saveAppSetting('gatewayMode', v);
 }
+// Turning this ON is token-gated from gateway 0.9.2 (it installs updates by
+// itself), so it is the one switch here that can be refused.
+function toggleAutoUpdate() {
+  saveAppSetting('automaticUpdateCheck', !appSettings.automaticUpdateCheck)
+    .catch((err) => showToast(err?.message || String(err)));
+}
 async function pickLogLevel() {
   const v = await openChooser({ title: t('systemSettings.logLevel'), options: logOpts, current: appSettings.logLevel });
   if (v != null) saveAppSetting('logLevel', v);
@@ -250,7 +256,7 @@ const pluginCount = computed(() => plugins.value.length);
       </button>
       <div class="setting-row">
         <span class="sr-name">{{ t('systemSettings.autoUpdate') }}</span>
-        <button class="switch" :class="{ on: appSettings.automaticUpdateCheck }" role="switch" :aria-checked="!!appSettings.automaticUpdateCheck" @click="saveAppSetting('automaticUpdateCheck', !appSettings.automaticUpdateCheck)"></button>
+        <button class="switch" :class="{ on: appSettings.automaticUpdateCheck }" role="switch" :aria-checked="!!appSettings.automaticUpdateCheck" @click="toggleAutoUpdate"></button>
       </div>
 
       <!-- Everything the gateway has loaded, the Visualizer included: one way

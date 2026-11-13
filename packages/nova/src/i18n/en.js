@@ -629,6 +629,7 @@ export default {
     advanced: 'Advanced', gatewayMode: 'Gateway mode',
     gmDisabled: 'Disabled', gmTracking: 'Tracking', gmFull: 'Full',
     logLevel: 'Log level', autoUpdate: 'Automatic update checks',
+    managedInApp: 'The Decent app only allows this from its own settings. Change it there.',
     integrations: 'Integrations', visualizer: 'Visualizer',
     plugins: 'Plugins', pluginsSub: 'Everything else the machine has loaded',
     pluginEnabled: 'Enabled', pluginOn: 'On', pluginOff: 'Off',

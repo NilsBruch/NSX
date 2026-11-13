@@ -258,12 +258,24 @@
    * the gateway reports `ip: "localhost"`, which is wrong for every tablet or
    * phone reaching it across the network.
    *
+   * Inside the Decent app's own WebView (gateway ≥ 0.9.2) the app switches
+   * natively via `window.decentApp.switchSkin` — the only way a skin may, since
+   * the REST route needs an extensions:manage token skins never get. That call
+   * returns false outside the embedded view, and then the REST path is tried.
+   *
    * @param {string} skinId
-   * @returns {Promise<{url: string|null, port: number|null}>} url is null when
-   *          the new port never showed up — the switch still happened, so the
-   *          caller should say so rather than navigate somewhere wrong.
+   * @returns {Promise<{url: string|null, port: number|null, native?: boolean}>}
+   *          native: the app took over and will replace this page itself.
+   *          Otherwise url is null when the new port never showed up — the
+   *          switch still happened, so the caller should say so rather than
+   *          navigate somewhere wrong.
    */
   async function switchToSkin(skinId) {
+    const nativeSwitch = window.decentApp?.switchSkin;
+    if (typeof nativeSwitch === "function" && nativeSwitch.call(window.decentApp, String(skinId)) !== false) {
+      return { url: null, port: null, native: true };
+    }
+
     const { setDefaultSkin, fetchWebuiServerStatus } = window.NSXApi || {};
     if (typeof setDefaultSkin !== "function") throw new Error("NSXApi.setDefaultSkin not available");
     await setDefaultSkin(skinId);

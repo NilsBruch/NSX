@@ -408,6 +408,11 @@ export interface NSXApi {
   setStoreValue(namespace: string, key: string, value: any): Promise<any>;
   setDisplayBrightness(level: number): Promise<any>;
   fetchSettings(): Promise<Record<string, any>>;
+  /** GET /machine/waterLevels — gateway ≥ 0.9.2 (404 before). */
+  fetchWaterLevels(): Promise<{ currentLevel: number; refillLevel: number }>;
+  pushRefillLevel(mm: number): Promise<void>;
+  /** 401/403 from a management route (gateway ≥ 0.9.2 needs an extensions:manage token). */
+  isAuthError(err: unknown): boolean;
   updateReaSettings(payload: Record<string, any>): Promise<any>;
   fetchMachineSettings(): Promise<Record<string, any>>;
   updateMachineSettings(payload: Record<string, any>): Promise<any>;

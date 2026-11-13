@@ -3,18 +3,27 @@ import { onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { openTextField, openNumberPad } from '../../composables/useModals.js';
 import {
-  visualizerSettings, visualizerPasswordSet, loadVisualizerSettings, saveVisualizerSetting,
+  visualizerSettings, visualizerPasswordSet, loadVisualizerSettings,
+  saveVisualizerSetting as persistVisualizerSetting,
   visualizerPlugin, setPluginEnabled,
 } from '../../composables/useSettings.js';
+import { showToast } from '../../composables/useToast.js';
 
 defineEmits(['close']);
 const { t } = useI18n();
 
 onMounted(loadVisualizerSettings);
 
+// Every save here is fire-and-forget from a row; a refusal (gateway ≥ 0.9.2
+// token-gates plugin settings) still has to reach the user.
+const reportError = (err) => showToast(err?.message || String(err));
+function saveVisualizerSetting(key, value) {
+  return persistVisualizerSetting(key, value).catch(reportError);
+}
+
 function toggleEnabled() {
   const plugin = visualizerPlugin();
-  if (plugin) setPluginEnabled(plugin.id, !plugin.loaded);
+  if (plugin) setPluginEnabled(plugin.id, !plugin.loaded).catch(reportError);
 }
 async function editUser() {
   const v = await openTextField({ title: t('systemSettings.vizUser'), value: visualizerSettings.username });

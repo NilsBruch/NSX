@@ -299,7 +299,17 @@ means the switch happened but the new port never appeared, which the caller
 should say rather than navigate somewhere wrong. The host comes from the
 configured gateway, never from the status response's `ip` (it reports
 `localhost`, which is wrong for every device reaching the machine over the
-network).
+network). Inside the Decent app's own WebView, `switchToSkin` first hands the
+switch to `window.decentApp.switchSkin` (gateway ≥ 0.9.2) and returns
+`{ native: true }` — the app replaces the page itself, so don't navigate.
+
+**Management needs a token (gateway ≥ 0.9.2).** Enabling/disabling plugins,
+saving plugin settings, `PUT /webui/skins/default`, `POST /webui/skins/update`
+and turning `automaticUpdateCheck` on now require an `extensions:manage` bearer
+token, which skins are never given. Those calls reject with an error whose
+`status` is 401/403 — test it with `NSXApi.isAuthError(err)` and tell the user to
+make the change in the Decent app's settings. (Every `request()` error now
+carries the HTTP `status`.)
 
 Selectors: `compareVersions(a, b)` (semver-ish, tolerates a leading `v`, a
 missing patch segment and prereleases), `parseSkinRepo(skin)` (the `owner/repo`

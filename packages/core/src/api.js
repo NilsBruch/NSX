@@ -47,11 +47,24 @@ async function request(endpoint, method = "GET", body = null, { allowNoContent =
     } catch {
       // keep HTTP fallback
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
   }
 
   if (res.status === 204 && allowNoContent) return null;
   return res.json().catch(() => null);
+}
+
+/**
+ * Did the gateway refuse this for lack of authority? From gateway 0.9.2 on,
+ * managing plugins and skins (enable/disable, plugin settings, default skin,
+ * skin update, turning automaticUpdateCheck on) needs an `extensions:manage`
+ * bearer token, which a skin is never given: 401 without one, 403 for the
+ * skin's own account-proxy token.
+ */
+function isAuthError(err) {
+  return err?.status === 401 || err?.status === 403;
 }
 
 async function requestTryMethods(endpoint, methods, body = null) {
@@ -844,9 +857,29 @@ async function updateSchedule(id, schedule) {
   await request(pathWithId("/api/v1/presence/schedules", id), "PUT", schedule);
 }
 
-/** POST /api/v1/machine/waterLevels — set refill threshold (mm) */
+/**
+ * GET /api/v1/machine/waterLevels (gateway ≥ 0.9.2) — the latest
+ * `{ currentLevel, refillLevel }` in mm, the same payload the waterLevels
+ * socket sends. 404 on older gateways; 504 if the machine hasn't reported yet.
+ */
+async function fetchWaterLevels() {
+  return request("/api/v1/machine/waterLevels");
+}
+
+/**
+ * POST /api/v1/machine/waterLevels — set refill threshold (mm).
+ * Then reads the levels back and emits them, so the UI shows the value the
+ * machine accepted now instead of on the next socket tick. The read-back is
+ * best-effort (older gateways have no GET) and never fails the write.
+ */
 async function pushRefillLevel(mm) {
   await request("/api/v1/machine/waterLevels", "POST", { refillLevel: Math.round(Number(mm)) });
+  try {
+    const d = await fetchWaterLevels();
+    if (Number.isFinite(d?.currentLevel)) emitWaterLevel(d.currentLevel, d.refillLevel);
+  } catch {
+    // pre-0.9.2 gateway or no reading yet — the socket will deliver it
+  }
 }
 
 /** DELETE /api/v1/presence/schedules/{id} */
@@ -1163,6 +1196,8 @@ window.NSXApi = {
   fetchShotDetails,
   tareScale,
   pushRefillLevel,
+  fetchWaterLevels,
+  isAuthError,
   initiateScaleConnect,
   initiateDE1Connect,
   disconnectScale,

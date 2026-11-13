@@ -302,7 +302,12 @@ function routeApi(req, res, url, body) {
     return json(state.machine);
   }
   if (path === "/api/v1/machine/info") return json(fx.machineInfo);
-  if (path === "/api/v1/machine/waterLevels") return json(fx.waterLevels);
+  if (path === "/api/v1/machine/waterLevels") {
+    if (method === "POST" && Number.isFinite(Number(body?.refillLevel))) {
+      fx.waterLevels.refillLevel = Number(body.refillLevel);
+    }
+    return json(fx.waterLevels);
+  }
   if (path === "/api/v1/machine/settings") return method === "GET" ? json({}) : noContent();
 
   // ── workflow ──
