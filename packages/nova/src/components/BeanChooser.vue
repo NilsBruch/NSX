@@ -14,6 +14,8 @@ import { beans, shots } from '../composables/useCore.js';
 import { shotMatchesBean } from '../composables/useDiary.js';
 import { vScrollEdges } from '../composables/useScrollEdges.js';
 import { openTextField } from '../composables/useModals.js';
+import { toggleArchiveBean } from '../composables/useBeanActions.js';
+import { showToast } from '../composables/useToast.js';
 import BeanEditor from './BeanEditor.vue';
 
 const emit = defineEmits(['pick', 'back']);
@@ -27,6 +29,19 @@ function onBeanSaved(bean) {
   if (bean) emit('pick', bean); // straight on to the profile step
 }
 
+/** Picking an archived coffee means it is back on the counter, so it is
+ *  unarchived first: the Diary leaves archived beans out entirely, and a new
+ *  bag or recipe on one would otherwise vanish along with it. */
+async function pick(bean) {
+  if (!bean.archived) { emit('pick', bean); return; }
+  try {
+    await toggleArchiveBean(bean);
+    emit('pick', { ...bean, archived: false });
+  } catch (err) {
+    showToast(err?.message || String(err));
+  }
+}
+
 // Same search pattern as RecipePicker/Diary — a text-field modal rather than
 // a live inline input, matching every other list-with-search screen in Nova.
 const query = ref('');
@@ -37,11 +52,16 @@ const query = ref('');
  * roaster a prefix repeated down the page; here it is the thing you pick
  * first, and the second screen is short enough to read at a glance.
  *
- * Archived beans stay out: they are bags you are done with, and starting a new
- * recipe on one is not what the button was pressed for. (The Diary is where an
- * archived bean is still reachable, via "Show all".)
+ * Archived beans are listed too, after the active ones and dimmed: this is the
+ * one place in Nova they can be reached again (the Diary hides them), and
+ * buying another bag of a coffee you once archived is exactly when you want it
+ * back. Picking one unarchives it — see pick().
  */
 const activeBeans = computed(() => beans.value.filter((b) => !b.archived));
+const libraryBeans = computed(() => [
+  ...activeBeans.value,
+  ...beans.value.filter((b) => b.archived),
+]);
 
 const matches = (bean, q) =>
   [bean.roaster, bean.name, bean.country, bean.processing]
@@ -49,7 +69,7 @@ const matches = (bean, q) =>
 
 const foundBeans = computed(() => {
   const q = query.value.trim().toLowerCase();
-  return q ? activeBeans.value.filter((b) => matches(b, q)) : activeBeans.value;
+  return q ? libraryBeans.value.filter((b) => matches(b, q)) : libraryBeans.value;
 });
 
 /**
@@ -57,8 +77,9 @@ const foundBeans = computed(() => {
  * is usually about the bag already open, and finding it meant a roaster tap
  * and then a bean tap every time. Read from the shot history (core's
  * recentFromShots), not from the recipes, so it follows what was actually
- * pulled. Archived beans are out for the same reason they are out of the list
- * below. Hidden while searching: a search is already a narrower question.
+ * pulled. Active beans only: this row is the bags in use, an archived one is
+ * found in the library below. Hidden while searching: a search is already a
+ * narrower question.
  */
 const recentBeans = computed(() => {
   if (query.value.trim()) return [];
@@ -78,7 +99,11 @@ const roasterGroups = computed(() => {
     if (!byRoaster.has(key)) byRoaster.set(key, []);
     byRoaster.get(key).push(bean);
   }
-  return [...byRoaster.entries()].map(([name, list]) => ({ name, beans: list }));
+  // foundBeans is active-first, so a roaster with an active bean is listed
+  // before one whose beans are all archived (dimmed as a whole).
+  return [...byRoaster.entries()].map(([name, list]) => ({
+    name, beans: list, archived: list.every((b) => b.archived),
+  }));
 });
 
 // Seeded from wherever the caller already was — the Diary's "+" hands over the
@@ -136,7 +161,7 @@ async function openSearch() {
                  keeps them part of the same list rather than a second one. -->
             <template v-if="recentBeans.length">
               <span class="list-label">{{ t('common.recent') }}</span>
-              <button v-for="bean in recentBeans" :key="`recent-${bean.id}`" class="list-row" @click="emit('pick', bean)">
+              <button v-for="bean in recentBeans" :key="`recent-${bean.id}`" class="list-row" @click="pick(bean)">
                 <span class="rmeta rmeta-inline">
                   <span class="bean-name">{{ bean.name }}</span>
                   <span class="rsub">{{ bean.roaster || '—' }}</span>
@@ -146,21 +171,21 @@ async function openSearch() {
               <div class="list-split"></div>
               <span class="list-label">{{ t('common.library') }}</span>
             </template>
-            <button v-for="g in roasterGroups" :key="g.name" class="list-row" @click="enterRoaster(g.name)">
-              <span class="rmeta">{{ g.name }}<span class="rsub">{{ g.beans.length }} bean{{ g.beans.length !== 1 ? 's' : '' }}</span></span>
+            <button v-for="g in roasterGroups" :key="g.name" class="list-row" :class="{ 'bc-archived': g.archived }" @click="enterRoaster(g.name)">
+              <span class="rmeta">{{ g.name }}<span class="rsub">{{ g.beans.length }} bean{{ g.beans.length !== 1 ? 's' : '' }}<template v-if="g.archived"> · {{ t('diary.archive') }}</template></span></span>
               <span class="chev">›</span>
             </button>
-            <div v-if="activeBeans.length && !roasterGroups.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
-            <div v-if="!activeBeans.length" class="list-row"><span class="rsub">{{ t('recipePicker.noBeansYet') }}</span></div>
+            <div v-if="libraryBeans.length && !roasterGroups.length" class="list-row"><span class="rsub">{{ t('diary.noResults') }}</span></div>
+            <div v-if="!libraryBeans.length" class="list-row"><span class="rsub">{{ t('recipePicker.noBeansYet') }}</span></div>
           </div>
         </div>
         <div v-else key="beans" v-scroll-edges class="list list-cards">
           <div class="lc-inner">
-            <button v-for="bean in beansInRoaster" :key="bean.id" class="list-row" @click="emit('pick', bean)">
+            <button v-for="bean in beansInRoaster" :key="bean.id" class="list-row" :class="{ 'bc-archived': bean.archived }" @click="pick(bean)">
               <span class="rmeta rmeta-inline">
                 <span class="bean-name">{{ bean.name }}</span>
-                <span v-if="[bean.country, bean.processing].filter(Boolean).length" class="rsub">
-                  {{ [bean.country, bean.processing].filter(Boolean).join(' · ') }}
+                <span v-if="[bean.country, bean.processing, bean.archived && t('diary.archive')].filter(Boolean).length" class="rsub">
+                  {{ [bean.country, bean.processing, bean.archived && t('diary.archive')].filter(Boolean).join(' · ') }}
                 </span>
               </span>
               <span class="chev">›</span>
@@ -185,3 +210,8 @@ async function openSearch() {
     </PageTransition>
   </div>
 </template>
+
+<style scoped>
+/* Same dimming as an archived ("done") bag row in the Diary. */
+.bc-archived .rmeta { opacity: 0.45; }
+</style>

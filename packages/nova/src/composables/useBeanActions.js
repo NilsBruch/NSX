@@ -36,8 +36,10 @@ const t = (...args) => i18n.global.t(...args);
  * `{archived}` patch: the gateway's PUT replaces the bean, so a partial body
  * would quietly drop its origin, variety, process and notes.
  *
- * The Diary hides archived beans unless "Show all" is on, so the row this was
- * invoked from is expected to disappear — that IS the feedback.
+ * The Diary hides archived beans, so the row this was invoked from is expected
+ * to disappear — that IS the feedback. They come back through the bean
+ * chooser ("+ New bag" / "+ New recipe"), which lists them and unarchives the
+ * one picked.
  */
 export async function toggleArchiveBean(bean) {
   if (!bean?.id) return false;
