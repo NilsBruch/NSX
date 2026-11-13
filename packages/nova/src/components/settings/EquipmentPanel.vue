@@ -16,7 +16,6 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, baskets, equipment } from '../../composables/useCore.js';
-import { skinSettings } from '../../composables/useSettings.js';
 import { reportRuntimeError } from '../../composables/useErrorReporting.js';
 import GrinderEditor from './GrinderEditor.vue';
 import BasketEditor from './BasketEditor.vue';
@@ -64,9 +63,6 @@ const openEdit = (kind, row) => { editing.value = { kind, row }; };
 const closeEditor = () => { editing.value = null; };
 
 async function refreshKv() {
-  // Nothing to fetch with the integration off — the two sections aren't
-  // rendered, and the panel is then just the grinder list it used to be.
-  if (!skinSettings.dyeButton) return;
   try {
     await NSXCore.loadEquipmentLibrary();
   } catch (err) {
@@ -108,9 +104,8 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisible));
         <span class="sr-value">+</span>
       </button>
 
-      <!-- Baskets and kit come from the DYE2 plugin's store, so they follow
-           the integration toggle: off, this panel is the grinder list alone. -->
-      <template v-if="skinSettings.dyeButton">
+      <!-- Baskets and kit live in the DYE2 plugin's KV namespace (shared with
+           it), which the gateway serves whether or not DYE2 is installed. -->
       <span class="setting-group-label">{{ t('settingsPage.baskets') }}</span>
       <button v-for="b in baskets" :key="b.id" class="setting-row as-btn" @click="openEdit('basket', b)">
         <span class="sr-main">
@@ -140,7 +135,6 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisible));
       <!-- Says where the two KV-backed sections actually live, because a
            basket added here showing up in DYE2 is the point of them. -->
       <p class="eq-hint">{{ t('settingsPage.sharedHint') }}</p>
-      </template>
     </div>
 
     <PageTransition>

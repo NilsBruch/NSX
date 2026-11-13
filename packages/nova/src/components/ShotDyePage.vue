@@ -32,7 +32,6 @@ import {
   setShotAnnotations, setShotContext, setActualDose, setActualYield, setGrindSetting,
 } from '../composables/useLiveShot.js';
 import { beans, grinders, baskets, equipment, formatGrinderLabel, formatShortDate } from '../composables/useCore.js';
-import { skinSettings } from '../composables/useSettings.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
 import { openTextField, openNumberPad, openChooser, openMultiChooser, openRating } from '../composables/useModals.js';
 // Section icons from Lucide. Named imports, so only these four end up in the
@@ -316,7 +315,6 @@ const canEditRpm = computed(() =>
 
 // Only needed to populate the two pickers; the labels above read off the shot.
 onMounted(async () => {
-  if (!skinSettings.dyeButton) return;
   try {
     await NSXCore.loadEquipmentLibrary();
   } catch (err) {
@@ -530,10 +528,7 @@ async function editEnjoyment() {
               <span class="dl">{{ t('dye.grinder') }}</span>
               <span class="dv" :class="{ muted: !grinderLabel }">{{ dash(grinderLabel) }}</span>
             </button>
-            <button
-              v-if="skinSettings.dyeButton" class="dye-tile"
-              :disabled="!canEditRpm" @click="editRpm"
-            >
+            <button class="dye-tile" :disabled="!canEditRpm" @click="editRpm">
               <span class="dl">{{ t('recipeDye.rpm') }}</span>
               <span class="dv" :class="{ muted: shotExtras.rpm == null }">{{ dash(shotExtras.rpm) }}</span>
             </button>
@@ -541,18 +536,16 @@ async function editEnjoyment() {
               <span class="dl">{{ t('dye.grind') }}</span>
               <span class="dv" :class="{ muted: grindSetting == null }">{{ dash(grindSetting) }}</span>
             </button>
-            <template v-if="skinSettings.dyeButton">
-              <button class="dye-tile" :disabled="!baskets.length" @click="editBasket">
-                <span class="dl">{{ t('recipeDye.basket') }}</span>
-                <span class="dv" :class="{ muted: !basketLabel }">{{ dash(basketLabel) }}</span>
-              </button>
-              <!-- Two columns, as on the recipe page: an equipment LIST does
-                   not fit a half tile. -->
-              <button class="dye-tile dye-span2" :disabled="!equipment.length" @click="editEquipment">
-                <span class="dl">{{ t('recipeDye.equipment') }}</span>
-                <span class="dv" :class="{ muted: !equipmentLabel }">{{ dash(equipmentLabel) }}</span>
-              </button>
-            </template>
+            <button class="dye-tile" :disabled="!baskets.length" @click="editBasket">
+              <span class="dl">{{ t('recipeDye.basket') }}</span>
+              <span class="dv" :class="{ muted: !basketLabel }">{{ dash(basketLabel) }}</span>
+            </button>
+            <!-- Two columns, as on the recipe page: an equipment LIST does
+                 not fit a half tile. -->
+            <button class="dye-tile dye-span2" :disabled="!equipment.length" @click="editEquipment">
+              <span class="dl">{{ t('recipeDye.equipment') }}</span>
+              <span class="dv" :class="{ muted: !equipmentLabel }">{{ dash(equipmentLabel) }}</span>
+            </button>
             <!-- The profile is the one thing a shot cannot be re-described into:
                  the record carries the frames that were actually run.
                  Profile and temperature share a row of their own, whatever

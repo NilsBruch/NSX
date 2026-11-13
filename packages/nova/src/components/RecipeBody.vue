@@ -5,7 +5,6 @@ import { recipeIdentityParts, formatMediumDate } from '../composables/useCore.js
 import { recipe, roastAge, hasProfile, effectiveVolumeCalibration } from '../composables/useRecipe.js';
 import { openAlert } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
-import { skinSettings } from '../composables/useSettings.js';
 import { useRecipeKit, recipeBasketName, recipeEquipmentNames } from '../composables/useRecipeKit.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
@@ -84,8 +83,7 @@ const dyeOpen = ref(false);
  *
  * Basket and equipment are separate chips because they take different
  * pickers (one answer vs a list), and because a shortcut you have to open a
- * menu to disambiguate is not a shortcut. Both follow the DYE integration
- * toggle — the rows come from DYE2's store.
+ * menu to disambiguate is not a shortcut. The rows come from DYE2's store.
  */
 const { pickBasket, pickEquipment } = useRecipeKit();
 // Through the library by id, so renaming a basket renames it here too.
@@ -230,7 +228,7 @@ const roastLabel = computed(() =>
              Equipment gets one pill per piece rather than a comma list,
              because that is what the cards show and because each is a thing,
              not a phrase. -->
-        <div v-if="skinSettings.dyeButton && (basketName || equipmentNames.length)" class="kit-row">
+        <div v-if="basketName || equipmentNames.length" class="kit-row">
           <div class="kit-chips">
             <button v-if="basketName" class="kit-chip" @click="pickBasket">{{ basketName }}</button>
             <button
@@ -252,7 +250,7 @@ const roastLabel = computed(() =>
        that moved when you switched tabs (and the gap under it grew with the
        screen). No Browse-recipes button: the identity title above is the way
        into the library now, so Edit profile takes the leftmost slot. -->
-  <div class="prep-bottom prep-bottom-even" :class="{ 'prep-bottom-nodye': !skinSettings.dyeButton }">
+  <div class="prep-bottom prep-bottom-even">
     <!-- Edit profile used to lead this row; it's a HOLD on the title now (see
          titlePress), leaving the row to the two things about the shots
          themselves. -->
@@ -261,10 +259,8 @@ const roastLabel = computed(() =>
          the display and the control. StarRating renders no nested <button>
          in readonly mode, so the tap reaches this one. -->
     <!-- Left of Rate, in History's style: the two buttons flanking it are
-         both about the record a shot leaves, while Rate is the opinion.
-         Follows the DYE integration toggle — with it off the row is the pair
-         it was before. -->
-    <button v-if="skinSettings.dyeButton" class="btn" @click="dyeOpen = true">
+         both about the record a shot leaves, while Rate is the opinion. -->
+    <button class="btn" @click="dyeOpen = true">
       <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.dye"></svg>{{ t('recipeDye.button') }}
     </button>
     <button class="rate-recipe-btn" :aria-label="t('rating.rate')" @click="rateRecipe">

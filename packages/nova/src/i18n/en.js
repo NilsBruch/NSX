@@ -574,8 +574,6 @@ export default {
     graphModeSub: 'Expert adds axes, a temperature scale and a legend that toggles each line',
     graphNormal: 'Normal',
     graphExpert: 'Expert',
-    dyeButton: 'Enable DYE plugin integration',
-    dyeButtonSub: 'Baskets and equipment shared with the DYE2 plugin, the description pages for a recipe and for a shot, and a shot’s full record — notes, TDS, people — from the history view',
     tabColors: 'Colour by tab',
     tabColorsSub: 'Each page takes its tab’s colour. Off: one blue throughout.',
     reviewAutoClose: 'Close shot review', reviewAutoCloseSub: 'Auto-close the post-shot review and return to the coffee screen',

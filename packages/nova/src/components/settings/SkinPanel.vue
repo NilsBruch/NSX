@@ -191,15 +191,6 @@ async function pickSkin(skin) {
           <button :class="{ on: skinSettings.coffeeGraph }" @click="saveSkinSetting('coffeeGraph', true)">{{ t('skinSettings.coffeeList') }}</button>
         </div>
       </div>
-      <!-- Off leaves the history view at its graph and stars. Nothing is lost:
-           notes, TDS and the rest stay on the shots that have them. -->
-      <div class="setting-row">
-        <span class="sr-main">
-          <span class="sr-name">{{ t('skinSettings.dyeButton') }}</span>
-          <span class="sr-sub">{{ t('skinSettings.dyeButtonSub') }}</span>
-        </span>
-        <button class="switch" :class="{ on: skinSettings.dyeButton }" role="switch" :aria-checked="skinSettings.dyeButton" @click="saveSkinSetting('dyeButton', !skinSettings.dyeButton)"></button>
-      </div>
       <!-- Off restores the original look: one blue everywhere, untinted greys.
            The rail's six tab colours stay either way — this is about whether
            the PAGE takes the colour of the tab you're on. -->

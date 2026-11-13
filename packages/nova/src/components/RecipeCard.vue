@@ -2,7 +2,6 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, singleGrinder, formatGrinderLabel, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from '../composables/useCore.js';
-import { skinSettings } from '../composables/useSettings.js';
 import { recipeKitNames } from '../composables/useRecipeKit.js';
 import StarRating from './StarRating.vue';
 import { fmtTemp } from '../composables/useUnits.js';
@@ -125,9 +124,7 @@ const kit = computed(() => recipeKitNames(props.entry));
          and these sit in a list whose even heights are what you scan down.
          Not ellipsised either — "Decent 18g, RD…" hides exactly the part that
          tells two recipes on the same basket apart. -->
-    <!-- Follows the DYE integration toggle, like everything else fed by
-         DYE2's store: with it off these rows are not yours to have. -->
-    <div v-if="skinSettings.dyeButton && (kit.length || reserveKit)" class="rp-kit">
+    <div v-if="kit.length || reserveKit" class="rp-kit">
       <span v-for="name in kit" :key="name" class="rp-kit-chip">{{ name }}</span>
       <!-- A real chip, just invisible: it reserves EXACTLY a chip's height,
            whatever that becomes, instead of a magic number here that has to be
