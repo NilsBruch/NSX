@@ -24,18 +24,20 @@
  *    watch the steam curve rather than just the clock. The ring alone said
  *    nothing about how the machine was doing, which is what made the steam
  *    screen feel empty.
- *  - HOT WATER: dispensed millilitres against the target volume. With a scale
- *    it's the weight delta since start (grams ≈ ml water — how NSX shows it);
- *    without a scale we integrate the live flow (ml/s) ourselves, since the
- *    live MachineSnapshot stream carries no volume (that only exists on the
- *    persisted ShotSnapshot, which the gateway never streams live). Either way
- *    the readout works scale-free instead of falling back to a bare timer.
+ *  - HOT WATER: what the machine stops on, against the target. With the
+ *    gateway's stop-at-weight in effect (setting on + scale connected) that is
+ *    the scale's weight in grams since the gateway's tare; otherwise it is the
+ *    millilitres we integrate from the live flow ourselves, since the live
+ *    MachineSnapshot stream carries no volume (that only exists on the
+ *    persisted ShotSnapshot, which the gateway never streams live). See
+ *    hwByWeight.
  */
 import { computed, onUnmounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { machine, liveShot } from '../composables/useCore.js';
 import { steam, hotwater } from '../composables/useMachineFunctions.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
+import { appSettings, loadAppSettings } from '../composables/useSettings.js';
 import LiveRing from './LiveRing.vue';
 import ShotStripChart from './ShotStripChart.vue';
 
@@ -48,23 +50,38 @@ const LIVE_STATES = ['steam', 'hotWater'];
 const isSteam = computed(() => machine.state === 'steam');
 const isHotWater = computed(() => machine.state === 'hotWater');
 
-// ── Hot water: dispensed ml. Scale weight delta since start when a scale is
-// connected (a real measurement); otherwise the machine's flow-integrated
-// volume, which already accumulates from shot start so it needs no offset. ──
+// ── Hot water: what the machine is actually stopping on. ──
+// With the gateway's stopHotWaterAtWeight on (its default) and a scale
+// connected, the gateway tares the scale and stops when the WEIGHT reaches the
+// volume target read as grams — so that is what is shown, in g. The setting is
+// ignored in `full` gateway mode. Otherwise the machine stops on its own
+// volume, so the readout is the flow-integrated millilitres, scale or not:
+// showing the scale's weight there would count towards a stop that isn't
+// coming.
+const hwByWeight = computed(() =>
+  !!machine.scaleConnected
+  && appSettings.stopHotWaterAtWeight !== false
+  && appSettings.gatewayMode !== 'full'
+);
+const hwUnit = computed(() => (hwByWeight.value ? 'g' : 'ml'));
+// The weight baseline is the LOWEST reading since the dispense began, not the
+// one at state entry: the gateway's own tare can land after that moment, and
+// a baseline taken before it (cup on the scale) held the readout at 0 for most
+// of the dispense.
 let startWeight = 0;
-const flowVolume = ref(0); // ml integrated from live flow (no-scale path)
+const flowVolume = ref(0); // ml integrated from live flow
 const hwTarget = computed(() => Math.round(hotwater.volume || 0));
 const hwDispensed = computed(() =>
-  machine.scaleConnected
+  hwByWeight.value
     ? Math.max(0, Math.round((machine.weight ?? 0) - startWeight))
     : Math.max(0, Math.round(flowVolume.value))
 );
 // The ring FILLS as water is delivered. No target set -> nothing to fill
-// towards, so it stays indeterminate and the millilitres just count up.
+// towards, so it stays indeterminate and the amount just counts up.
 const hwProgress = computed(() =>
   hwTarget.value > 0 ? Math.min(1, hwDispensed.value / hwTarget.value) : null
 );
-const hwSub = computed(() => (hwTarget.value > 0 ? `/ ${hwTarget.value} ml` : 'ml'));
+const hwSub = computed(() => (hwTarget.value > 0 ? `/ ${hwTarget.value} ${hwUnit.value}` : hwUnit.value));
 
 // ── Steam readouts: the two numbers that move while steaming ────────────────
 // steamTemperature is the machine's own boiler reading (0/absent when it
@@ -190,11 +207,15 @@ const steamProgress = computed(() => {
 
 function tick() {
   const now = Date.now();
-  // Hot water without a scale: integrate live flow (ml/s) into dispensed ml —
-  // the gateway does exactly this to build ShotSnapshot.volume, but there is no
-  // live ShotSnapshot stream, so we integrate the MachineSnapshot's flow here.
-  if (isHotWater.value && !machine.scaleConnected) {
+  // Hot water: integrate live flow (ml/s) into dispensed ml — the gateway does
+  // exactly this to build ShotSnapshot.volume, but there is no live
+  // ShotSnapshot stream, so we integrate the MachineSnapshot's flow here.
+  // Always, not only without a scale: it is the readout whenever the machine
+  // stops on volume (see hwByWeight).
+  if (isHotWater.value) {
     flowVolume.value += (liveShot.flow || 0) * (now - lastTickMs) / 1000;
+    const w = machine.weight;
+    if (Number.isFinite(w) && w < startWeight) startWeight = w; // follows the gateway's tare
   }
   lastTickMs = now;
   // Before the advancing guard because sampleSteam keeps its own notion of
@@ -216,7 +237,11 @@ watch(
       lastTickMs = Date.now();
       elapsedSec.value = 0;
       flowVolume.value = 0;
-      startWeight = machine.weight ?? 0;       // tare-relative dispense baseline
+      startWeight = machine.weight ?? 0;       // dispense baseline; tick() lowers it on the gateway's tare
+      // Fresh, because the readout's unit follows it (hwByWeight) and Nova
+      // otherwise only loads app settings when a settings page opens. Until it
+      // answers, the gateway's default (by weight) stands.
+      if (state === 'hotWater') loadAppSettings().catch(() => {});
       graphOriginMs.value = Date.now();
       resetSteamSeries();
       // The graph closes with the session rather than staying open for the
