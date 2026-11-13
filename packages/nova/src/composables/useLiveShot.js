@@ -22,6 +22,14 @@ export const phase = ref('hidden'); // 'hidden' | 'live' | 'history'
 // just-brewed graph/metrics stay on screen; LiveShotOverlay renders this as a
 // small corner spinner instead of taking over the whole screen.
 export const savingShot = ref(false);
+// True once the graph has stopped receiving samples for this shot: the pour is
+// over (substate left preinfusion/pouring — the machine can sit in `espresso`
+// for the post-pour drip well after that) or the shot ended outright. Stays on
+// until the next shot starts, so the live strip chart freezes where recording
+// stopped instead of scrolling on into time with no data. savingShot is too
+// late (it waits for the state to leave espresso) and too short (it clears
+// once the shot is saved) to drive that.
+export const captureEnded = ref(false);
 export const series = reactive({ elapsed: [], pressure: [], targetPressure: [], flow: [], targetFlow: [], temperature: [], weightFlow: [] });
 
 // ── No-scale virtual weight (live volume-stop estimate) ──────────────────────
@@ -202,8 +210,20 @@ watch(
   }
 );
 
+// Freeze the moment the capture filter in the liveShot handler below stops
+// taking samples (same two substates). Re-entering them — should a machine ever
+// step back mid-shot — resumes, since samples then resume too.
+watch(
+  () => machine.substate,
+  (ss) => {
+    if (phase.value !== 'live' || !_captureStarted) return;
+    captureEnded.value = ss !== 'preinfusion' && ss !== 'pouring';
+  }
+);
+
 function startLive() {
   phase.value = 'live';
+  captureEnded.value = false;
   shotStartMs.value = Date.now();
   // Both of these are LAST SHOT's leftovers, and the snapshot stream keeps
   // reporting the frame the previous shot ended on for as long as the machine
@@ -313,6 +333,7 @@ async function finishLive() {
   // stopped before any pour (e.g. an immediate manual abort) never gets
   // recorded at all, and waiting out the full timeout for a shot that will
   // never arrive would turn a fast abort into a several-second stall.
+  captureEnded.value = true; // the shot is over, whatever substate it ended in
   let fullShot = null;
   if (_captureStarted) {
     savingShot.value = true;

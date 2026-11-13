@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { phase, savingShot, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, liveFrame } from '../composables/useLiveShot.js';
+import { phase, savingShot, captureEnded, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, liveFrame } from '../composables/useLiveShot.js';
 import { recipe } from '../composables/useRecipe.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { machine, currentWorkflow, formatMediumDate } from '../composables/useCore.js';
@@ -237,7 +237,7 @@ async function editGrindSetting() {
         </span>
       </div>
       <div class="shot-graph">
-        <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" :temp-anchor="liveTempAnchor" :stopped="savingShot" />
+        <ShotStripChart :series="series" mode="scroll" :origin-ms="shotStartMs" :show-targets="skinSettings.showTargets" :expert="expertGraph" :temp-anchor="liveTempAnchor" :stopped="captureEnded" />
         <!-- Inside the plot, top right, rather than on a row of its own below it:
              a legend is a caption for the graph, and it was costing a full row of
              the column for three short words.

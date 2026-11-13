@@ -91,10 +91,17 @@ const props = defineProps({
 // seconds — the wall-clock `now` frozen, NOT the last sample's time: snapping
 // back to the last sample would visibly jerk the curve right by however long
 // the final sample was ago.
+// A chart MOUNTED already stopped (the steam graph opened after the steam
+// ended) has no moment to freeze at, and nothing on screen to jerk: it freezes
+// on the last sample instead.
 let frozenNow = null;
-watch(() => props.stopped, (on) => {
-  frozenNow = on ? (Date.now() - props.originMs) / 1000 : null;
-});
+watch(() => props.stopped, (on, was) => {
+  if (!on) { frozenNow = null; return; }
+  const ts = props.series.elapsed;
+  frozenNow = was === undefined && ts.length
+    ? ts[ts.length - 1]
+    : (Date.now() - props.originMs) / 1000;
+}, { immediate: true });
 // Touch-and-hold scrubbing (static/history mode only): emits the sample under
 // the finger so the legend can read out pressure/flow/weight-flow at that point,
 // null when released. Live mode never scrubs (it's still moving).

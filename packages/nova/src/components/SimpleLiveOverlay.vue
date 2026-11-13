@@ -17,8 +17,9 @@
  *    'steam' state also covers wand heat-up, so the anchor is the first pour,
  *    not the state transition — mirrors NSX's steamSession). Direction follows
  *    the auto-stop toggle: on counts DOWN from the dialed duration, off up.
- *    Flanking the timer are the two live readings that actually move while
- *    steaming — boiler temperature and flow — and a Show-graph toggle opens
+ *    Flanking the timer are the live readings that actually move while
+ *    steaming — boiler temperature on one side, flow and pressure stacked on
+ *    the other — and a Show-graph toggle opens
  *    the temperature / flow / pressure plot underneath for anyone who wants to
  *    watch the steam curve rather than just the clock. The ring alone said
  *    nothing about how the machine was doing, which is what made the steam
@@ -71,6 +72,7 @@ const hwSub = computed(() => (hwTarget.value > 0 ? `/ ${hwTarget.value} ml` : 'm
 const steamTemp = computed(() => (liveShot.steamTemperature > 0 ? liveShot.steamTemperature : null));
 const steamTempLabel = computed(() => (steamTemp.value == null ? '—' : String(dispTemp(steamTemp.value))));
 const steamFlowLabel = computed(() => (liveShot.flow || 0).toFixed(1));
+const steamPressureLabel = computed(() => (liveShot.pressure || 0).toFixed(1));
 
 // ── The steam curve ─────────────────────────────────────────────────────────
 // Sampled by the tick below for as long as the machine is steaming, whether or
@@ -251,6 +253,12 @@ async function stop() {
         <div class="sl-sv">{{ steamFlowLabel }}<small>ml/s</small></div>
         <div class="sl-sl">{{ t('cleaning.flow') }}</div>
       </div>
+      <!-- Stacked under flow: the two hydraulic readings side by side with the
+           ring, temperature alone on the other side. -->
+      <div class="sl-stat sl-stat-next">
+        <div class="sl-sv">{{ steamPressureLabel }}<small>bar</small></div>
+        <div class="sl-sl">{{ t('liveShot.mPressure') }}</div>
+      </div>
     </template>
     <button class="rate-btn" @click="stop">{{ t('common.stop') }}</button>
     <button class="rate-btn sl-ghost" @click="showGraph = !showGraph">
@@ -271,7 +279,7 @@ async function stop() {
     <ShotStripChart
       :series="steamSeries" mode="scroll" :origin-ms="graphOriginMs" :window-s="35"
       :max-y="8" :temp-band="[135, 170]"
-      expert :omit="['weight', 'goals']"
+      expert :omit="['weight', 'goals']" :stopped="steamFrozen"
     />
   </div>
 
@@ -289,6 +297,7 @@ async function stop() {
    under value, unit as a small suffix), scaled down — the ring's own number is
    the headline and these two must stay secondary to it. */
 .sl-stat { pointer-events: none; }
+.sl-stat-next { margin-top: 14px; }
 .sl-sv {
   font-size: var(--fs-lg); font-weight: 700; line-height: 1;
   font-variant-numeric: tabular-nums;
