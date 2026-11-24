@@ -178,6 +178,7 @@ function finish() {
     <ProfilePicker
       v-else
       mode="pick"
+      :show-recent="false"
       :confirm-label="t('recipePicker.createRecipe')"
       @select="onProfilePicked"
       @back="step = profileBack"

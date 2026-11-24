@@ -19,6 +19,9 @@ import ProfileEditor from './settings/ProfileEditor.vue';
 
 const props = defineProps({
   mode: { type: String, default: 'pick' }, // 'pick' | 'manage'
+  // false drops the Recent tab even in pick mode — the new-recipe wizard
+  // (RecipePicker.vue) has no room for a third tab; Custom + Decent suffice.
+  showRecent: { type: Boolean, default: true },
   currentTitle: { type: String, default: '' },
   // Overrides the pick-mode confirm button's label; empty keeps "Select".
   confirmLabel: { type: String, default: '' },
@@ -65,7 +68,7 @@ const decentProfiles = computed(() => sourceList.value.filter((p) => !isUserOwne
  * Only in pick mode — the library screen is for managing, not repeating.
  */
 const recentProfiles = computed(() => {
-  if (props.mode !== 'pick') return [];
+  if (props.mode !== 'pick' || !props.showRecent) return [];
   return NSXCore.recentFromShots(shots.value, (shot) => {
     const title = shot?.workflow?.profile?.title || shot?.workflow?.context?.profileTitle;
     return title ? sourceList.value.find((p) => (p.profile?.title || '') === title) ?? null : null;
@@ -103,24 +106,27 @@ function onBackTap() {
   else emit('back');
 }
 
-// Which group is on screen — always opens on Decent's factory profiles,
-// regardless of which group the current profile lives in. 'recent' is the
-// third tab (pick mode only, and only once something has been brewed).
-const activeGroup = ref('decent');
+// Which group is on screen — opens on the first library tab, Custom (your own
+// profiles), or on Decent's factory ones while you have none yet; regardless
+// of which group the current profile lives in. 'recent' is the third tab
+// (pick mode only, and only once something has been brewed).
+const openingGroup = () => (myProfiles.value.length ? 'user' : 'decent');
+const activeGroup = ref(openingGroup());
 const showRecentTab = computed(() => recentProfiles.value.length > 0);
 const isRecent = computed(() => activeGroup.value === 'recent');
 const groupProfiles = computed(() => (activeGroup.value === 'user' ? myProfiles.value : decentProfiles.value));
 // The tab can vanish under the user — the recent list is derived from shots,
 // and hiding or deleting the last-brewed profile can empty it. Fall back to
 // where the picker opens rather than leaving a tab selected that isn't there.
-watch(showRecentTab, (has) => { if (!has && isRecent.value) activeGroup.value = 'decent'; });
+watch(showRecentTab, (has) => { if (!has && isRecent.value) activeGroup.value = openingGroup(); });
 // Which slot the thumb sits in. Recent leads the row — it is the shortcut, so
 // it reads before the two halves of the library it shortcuts past — which
-// pushes the other two along by one whenever it is there at all.
+// pushes the other two along by one whenever it is there at all. Then Custom,
+// then Decent: your own profiles come before the factory ones.
 const segPos = computed(() => {
   if (isRecent.value) return 0;
   const offset = showRecentTab.value ? 1 : 0;
-  return (activeGroup.value === 'user' ? 1 : 0) + offset;
+  return (activeGroup.value === 'decent' ? 1 : 0) + offset;
 });
 
 // Second-level filter, below the Decent/Custom toggle: Profile.beverage_type
@@ -412,8 +418,8 @@ async function onEditorSaved({ profile: built, originalProfile }) {
         <div class="seg seg-tall" :class="{ 'seg-three': showRecentTab }" :data-pos="segPos">
           <span class="seg-thumb"></span>
           <button v-if="showRecentTab" :class="{ on: isRecent }" @click="activeGroup = 'recent'">{{ t('common.recent') }}</button>
-          <button :class="{ on: activeGroup === 'decent' }" @click="activeGroup = 'decent'">{{ t('profilePicker.decentProfiles') }}</button>
           <button :class="{ on: activeGroup === 'user' }" @click="activeGroup = 'user'">{{ t('profilePicker.myProfiles') }}</button>
+          <button :class="{ on: activeGroup === 'decent' }" @click="activeGroup = 'decent'">{{ t('profilePicker.decentProfiles') }}</button>
         </div>
 
         <!-- Greyed out and inert on the Recent tab: a beverage type filters a

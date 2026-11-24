@@ -2,8 +2,8 @@
 /**
  * The coffee page's graph layout (skinSettings.coffeeGraph): recipe cards on
  * the left; the selected one's shot stepper, graph and dose/grind/output/temp
- * card on the right (Rate and Edit profile live in a card's hold menu — see
- * openCardMenu). Selecting a card here IS loading the recipe onto the machine
+ * card on the right (holding a card deletes it — see confirmDeleteRecipe;
+ * everything else is on Edit Recipe). Selecting a card here IS loading the recipe onto the machine
  * — same as RecipeOverlay.vue's cards — but the push is debounced (see selectRecipe/schedulePushForRecipe in
  * useRecipe.js) so flicking through several cards to compare their graphs
  * pushes once, not once per tap.
