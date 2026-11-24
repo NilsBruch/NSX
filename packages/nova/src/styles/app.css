@@ -1073,6 +1073,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    .recipe-title's full-width bar); align-items:center would shrink-wrap each to
    its content width instead. */
 .espresso-body { flex: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 22px; min-height: 0; }
+/* The title sits halfway between the page title (COFFEE) and the orbs rather
+   than hugging the orbs with all the slack above it: auto margins split the
+   spare height into three equal parts — above the title, between title and
+   orbs, below the orbs. The 22px padding-top matches the 22px gap, so the two
+   spaces around the title stay equal even when there is no slack at all. */
+.espresso-body { padding-top: 22px; }
+.espresso-body > .recipe-title { margin-top: auto; margin-bottom: auto; }
+.espresso-body > .dials { margin-bottom: auto; }
 /* The rating control, in the bottom button row's middle slot: the "Rate"
    label when unrated, the earned stars once rated. flex:1 gives it an equal
    third of the row like its two .btn siblings, so its width is fixed by the
