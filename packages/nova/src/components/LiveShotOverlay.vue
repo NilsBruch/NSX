@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { phase, savingShot, captureEnded, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, liveFrame } from '../composables/useLiveShot.js';
+import { phase, savingShot, captureEnded, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, displayFrame } from '../composables/useLiveShot.js';
 import { recipe } from '../composables/useRecipe.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { machine, currentWorkflow, formatMediumDate } from '../composables/useCore.js';
@@ -51,8 +51,9 @@ const phaseNames = computed(() => {
 const liveTempAnchor = computed(() =>
   NSXCore.resolveProfileTemp(currentWorkflow.value?.profile) ?? (recipe.groupTemp > 0 ? recipe.groupTemp : null));
 // profileFrame is 0-based into that same list (core's normalizeShotData
-// indexes frames[profileFrame] directly); null until the first snapshot.
-const phaseIndex = computed(() => liveFrame.value ?? 0);
+// indexes frames[profileFrame] directly). displayFrame, not the raw liveFrame:
+// it holds the first stage while the machine heats (see useLiveShot.js).
+const phaseIndex = computed(() => displayFrame.value);
 
 // With no scale + volume stop, the weight readout is the machine-flow estimate
 // (liveVirtualWeight), not a real scale weight — see useLiveShot.js.

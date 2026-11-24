@@ -49,6 +49,15 @@ export const liveVirtualWeight = ref(0);       // g, running estimate while coun
 // skipStep's guard uses it to tell "the machine has moved on" from "my tap
 // hasn't landed yet".
 export const liveFrame = ref(null);
+// True from the first extraction sample (preinfusion/pouring) of this shot.
+// Until then the machine keeps reporting the PREVIOUS shot's last frame while
+// it heats and prepares — it only resets to frame 0 once water flows — so the
+// stage shown would be the old shot's last one. displayFrame holds the first
+// stage until extraction has really begun, then follows the machine.
+export const extractionStarted = ref(false);
+/** The stage to SHOW on the shot screen (liveFrame stays the raw reading for
+ *  skipStep's guard). */
+export const displayFrame = computed(() => (extractionStarted.value ? (liveFrame.value ?? 0) : 0));
 let _liveVolume = 0;   // ml integrated from live flow since counting started
 let _volCounting = false;
 let _lastSnapMs = 0;
@@ -232,6 +241,7 @@ function startLive() {
   // skipStep's repeat guard silently swallowed the first skip if it happened
   // to be on the same frame number as the last one it sent.
   liveFrame.value = null;
+  extractionStarted.value = false;
   _skipGuardFrame = null;
   series.elapsed = [];
   series.pressure = [];
@@ -269,7 +279,7 @@ NSXCore.on('liveShot', (snap) => {
   // machineState stream (useCore.js).
   const ss = machine.substate;
   if (ss !== 'preinfusion' && ss !== 'pouring') return;
-  if (!_captureStarted) { _captureStarted = true; shotStartMs.value = Date.now(); }
+  if (!_captureStarted) { _captureStarted = true; extractionStarted.value = true; shotStartMs.value = Date.now(); }
   series.elapsed.push((Date.now() - shotStartMs.value) / 1000);
   series.pressure.push(snap?.pressure ?? 0);
   series.targetPressure.push(snap?.targetPressure ?? 0);
