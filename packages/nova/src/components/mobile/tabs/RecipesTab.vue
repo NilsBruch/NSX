@@ -33,7 +33,7 @@ import {
   diaryState, recipeRows, ensureDiaryLoaded, cycleSort, finishedBeanIds,
 } from '../../../composables/useDiary.js';
 import { loadRecipeChecked } from '../../../composables/useBeanActions.js';
-import { recipe, selectRecipe, togglePinRecipe, deleteRecipe, beanForRecipe, recipeParked } from '../../../composables/useRecipe.js';
+import { RECIPE_RATING, recipe, selectRecipe, togglePinRecipe, deleteRecipe, beanForRecipe, recipeParked } from '../../../composables/useRecipe.js';
 import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName } from '../../../composables/useCore.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
@@ -137,7 +137,7 @@ const orderedRows = computed(() => [
   <section class="phone-page">
     <div class="phone-head">
       <span class="phone-crumb">{{ t('phone.recipes') }}</span>
-      <button class="sort-btn" @click="cycleSort">
+      <button v-if="RECIPE_RATING" class="sort-btn" @click="cycleSort">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>{{ sortLabel }}
       </button>
       <button class="phone-icon-btn" :aria-label="t('diary.search')" @click="openSearch">
@@ -174,7 +174,7 @@ const orderedRows = computed(() => [
           </span>
           <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
         </span>
-        <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="10" />
+        <StarRating v-if="RECIPE_RATING && Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="10" />
       </button>
       <div v-if="!recipeRows.length" class="phone-empty">{{ t('diary.noRecipesYet') }}</div>
     </div>

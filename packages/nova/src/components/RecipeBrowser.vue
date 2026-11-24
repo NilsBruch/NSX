@@ -20,7 +20,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { loadRecipeChecked } from '../composables/useBeanActions.js';
-import { recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
+import { RECIPE_RATING, recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { shots, loadShots, formatDateParts, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
@@ -93,7 +93,7 @@ async function openCardMenu(entry) {
     title: `${recipeRoasterName(entry)} ${recipeCoffeeName(entry)}`,
     options: [
       ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
-      ['rate', t('rating.rate')],
+      ...(RECIPE_RATING ? [['rate', t('rating.rate')]] : []),
       // Only for a recipe that actually references a profile — same id-then-title
       // rule useRecipe's hasProfile applies, but read off THIS entry rather than
       // the loaded one, since the menu can be opened on any card.
@@ -357,7 +357,12 @@ const stepperDetail = computed(() => {
       <!-- The recipe's dose/grind/output/temp, inlined here instead of behind
            an Edit Recipe button — see useRecipeDials.js for the shared
            tap/drag wiring RecipeBody.vue's own big dials use identically. -->
-      <RecipeSettingsCard @open-roast="emit('open-roast')" />
+      <RecipeSettingsCard
+        @open-roast="emit('open-roast')"
+        @pick-bean="emit('pick-bean')"
+        @pick-grinder="emit('pick-grinder')"
+        @pick-profile="emit('pick-profile')"
+      />
     </div>
   </div>
 </template>

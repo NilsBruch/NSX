@@ -1460,6 +1460,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    A GRID of three fixed shares rather than a flex row, so each button keeps
    its third whatever its label's length. */
 .prep-bottom.prep-bottom-even { display: grid; grid-template-columns: repeat(3, 1fr); }
+/* History always takes the right-hand slot, even while the middle one (Rate,
+   off with RECIPE_RATING) is empty — otherwise it slid in next to Edit Recipe. */
+.prep-bottom.prep-bottom-even > :last-child { grid-column: 3; }
 .prep-bottom.prep-bottom-even .btn { width: auto; flex: 1; }
 
 .empty-recipe {

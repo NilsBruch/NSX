@@ -9,26 +9,20 @@
  * ask one question at different times — what IS this coffee (here) versus
  * what WAS that shot (there).
  *
- * Most of it is READ-ONLY, and greys uniformly: one treatment meaning "not
- * yours to act on here", whatever the underlying reason. Those reasons do
- * differ — the bean, the dials' dose and yield, the grinder, the grind and
- * the profile are all set elsewhere in the app; yield, time, TDS and the
- * analysis strip wait on a shot that hasn't happened; RPM doesn't apply to a
- * fixed-speed grinder — but they are not a distinction anybody can read off
- * the screen, so the page does not try to draw one. The recipe's own targets
- * still show through wherever it has them (dose, target yield, their ratio);
- * only what a shot alone can answer is a dash.
+ * It is also where the recipe is EDITED: every tile the recipe itself holds
+ * opens its editor. Dose, grind, target yield (with its ratio) and
+ * temperature use the coffee page's own number pads (useRecipeDials.js);
+ * bean, bag, grinder and profile ask EspressoView for the pickers it already
+ * owns (emitted pick-bean / open-roast / pick-grinder / pick-profile, passed
+ * up through RecipeSettingsCard / RecipeBody) — so there is still only ONE
+ * implementation of each change, not a second one kept in step here. Basket,
+ * equipment, RPM, barista, drinker and beverage are the DYE fields proper and
+ * are set right here. Every setter pushes on its own: no save button.
  *
- * Showing the read-only tiles at all is what keeps the mirror complete,
- * without opening a second way to change them that would have to be kept in
- * step with the coffee page.
- *
- * What this page actually edits is the DYE fields proper — basket, equipment,
- * RPM, barista, drinker, beverage. Those write to the RECIPE and push, so
- * they take effect on the next shot, and only the next one: a shot
- * already pulled keeps what it recorded, and is corrected on the shot's own
- * DYE page. Every setter used here pushes on its own, so there is no save
- * button and no separate persist step.
+ * What stays greyed (.dye-off) is what the recipe cannot answer: the bean's
+ * own record (origin, process, variety, notes — edited in the Diary's bean
+ * editor) and everything only a pulled shot has (yield, time, TDS, EY, the
+ * analysis strip). RPM greys on a fixed-speed grinder.
  *
  * The shot's enjoyment and its note have no counterpart on a recipe — there
  * is no cup to score and no verdict to write — so both are shown greyed in
@@ -44,12 +38,13 @@ import {
 import { baskets, equipment, grinders, formatGrinderLabel, formatShortDate, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from '../composables/useCore.js';
 import { openTextField, openChooser, openNumberPad } from '../composables/useModals.js';
 import { useRecipeKit, recipeBasketName, recipeEquipmentNames } from '../composables/useRecipeKit.js';
+import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import { reportRuntimeError } from '../composables/useErrorReporting.js';
 // The same four section icons the shot page uses — the mirror is the point.
 import { PaperBag, Coffee, LensConcave, Users } from '@lucide/vue';
 
-defineEmits(['close']);
+const emit = defineEmits(['close', 'pick-bean', 'pick-grinder', 'pick-profile', 'open-roast']);
 const { t } = useI18n();
 const { NSXCore } = window;
 
@@ -113,6 +108,8 @@ const tempLabel = computed(() =>
 // The pickers themselves are shared with the coffee page's kit chips — see
 // useRecipeKit.js.
 const { pickBasket, pickEquipment } = useRecipeKit();
+// The coffee page's own number pads — the same edit, wherever it is started.
+const { editDose, editGrind, editYield, editTemp } = useRecipeDials();
 
 // Both through the library by id — a renamed row reads by its new name here.
 const basketLabel = computed(() => recipeBasketName(recipe));
@@ -172,89 +169,91 @@ async function pickBeverage() {
          slots — see the file comment on why the mirror is deliberate. -->
     <div class="dye-scroll">
       <div class="dye-cols">
-        <!-- Read-only: the bean and its bag are changed on the coffee page
-             (the title bar's recipe picker), which resolves the batch record
-             behind them — this page only shows what that chose. -->
-        <section class="dye-sect dye-off">
+        <!-- Roaster/bean swap the recipe's bean and the bag picks or opens a
+             bag — both through EspressoView's own pickers. The rest is the
+             bean's record, edited in the Diary. -->
+        <section class="dye-sect">
           <header class="dye-head">
             <PaperBag aria-hidden="true" />
             <span>{{ t('dye.secBeans') }}</span>
           </header>
           <div class="dye-grid">
-            <div class="dye-tile static">
+            <button class="dye-tile" @click="emit('pick-bean')">
               <span class="dl">{{ t('dye.roaster') }}</span>
               <span class="dv" :class="{ muted: !recipeRoasterName(recipe) }">{{ dash(recipeRoasterName(recipe)) }}</span>
-            </div>
-            <div class="dye-tile static">
+            </button>
+            <button class="dye-tile" @click="emit('pick-bean')">
               <span class="dl">{{ t('dye.bean') }}</span>
               <span class="dv" :class="{ muted: !recipeCoffeeName(recipe) }">{{ dash(recipeCoffeeName(recipe)) }}</span>
-            </div>
-            <div class="dye-tile static">
+            </button>
+            <!-- Needs a real bean to hang bags off (EspressoView's openBatchPicker). -->
+            <button class="dye-tile" :disabled="!bean" @click="emit('open-roast')">
               <span class="dl">{{ t('dye.bag') }}</span>
               <span class="dv" :class="{ muted: !roastLabel }">{{ dash(roastLabel) }}</span>
-            </div>
-            <div class="dye-tile static">
+            </button>
+            <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.origin') }}</span>
               <span class="dv" :class="{ muted: !beanOrigin }">{{ dash(beanOrigin) }}</span>
             </div>
-            <div class="dye-tile static">
+            <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.process') }}</span>
               <span class="dv" :class="{ muted: !bean?.processing }">{{ dash(bean?.processing) }}</span>
             </div>
-            <div class="dye-tile static">
+            <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.variety') }}</span>
               <span class="dv" :class="{ muted: !bean?.variety }">{{ dash(bean?.variety) }}</span>
             </div>
             <!-- The roaster's own notes on the bag, not a verdict on a shot.
                  Full width of this section: they run long. -->
-            <div class="dye-tile static dye-span">
+            <div class="dye-tile static dye-span dye-off">
               <span class="dl">{{ t('dye.beanNotes') }}</span>
               <span class="dv fit" :class="{ muted: !bean?.notes }">{{ dash(bean?.notes) }}</span>
             </div>
           </div>
         </section>
 
-        <!-- Read-only: a recipe has targets, not an extraction. The tiles it
-             CAN answer show through; the rest wait for a shot. -->
-        <section class="dye-sect dye-off">
+        <!-- Dose, target yield and ratio are the recipe's own targets and edit
+             here (ratio opens the yield pad, which carries the linked ratio);
+             the rest wait for a shot. -->
+        <section class="dye-sect">
           <header class="dye-head">
             <Coffee aria-hidden="true" />
             <span>{{ t('dye.secExtraction') }}</span>
           </header>
           <div class="dye-grid">
-            <div class="dye-tile static">
+            <button class="dye-tile" @click="editDose">
               <span class="dl">{{ t('dye.dose') }}</span>
               <span class="dv" :class="{ muted: !(recipe.targetDoseWeight > 0) }">
                 {{ recipe.targetDoseWeight > 0 ? `${recipe.targetDoseWeight.toFixed(1)} g` : '—' }}
               </span>
-            </div>
-            <div class="dye-tile static">
+            </button>
+            <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.yield') }}</span>
               <span class="dv muted">—</span>
             </div>
-            <div class="dye-tile static">
+            <button class="dye-tile" @click="editYield">
               <span class="dl">{{ t('dye.targetYield') }}</span>
               <span class="dv" :class="{ muted: !(recipe.targetYield > 0) }">
                 {{ recipe.targetYield > 0 ? `${recipe.targetYield.toFixed(0)} g` : '—' }}
               </span>
-            </div>
-            <div class="dye-tile static">
+            </button>
+            <button class="dye-tile" @click="editYield">
               <span class="dl">{{ t('dye.ratio') }}</span>
               <span class="dv" :class="{ muted: !targetRatio }">{{ dash(targetRatio) }}</span>
-            </div>
-            <div class="dye-tile static">
+            </button>
+            <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.time') }}</span>
               <span class="dv muted">—</span>
             </div>
-            <div class="dye-tile static">
+            <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.stopReason') }}</span>
               <span class="dv muted">—</span>
             </div>
-            <div class="dye-tile static">
+            <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.tds') }}</span>
               <span class="dv muted">—</span>
             </div>
-            <div class="dye-tile static">
+            <div class="dye-tile static dye-off">
               <span class="dl">{{ t('dye.ey') }}</span>
               <span class="dv muted">—</span>
             </div>
@@ -275,19 +274,19 @@ async function pickBeverage() {
           </div>
         </div>
 
-        <!-- The one mixed section: the grinder, the grind and the profile are
-             the coffee page's to set, so they're read-only here — while the
-             basket and the kit have no other home and are edited right here. -->
+        <!-- All editable: grinder and profile through EspressoView's pickers,
+             grind and temperature through the coffee page's number pads,
+             basket/kit/RPM right here. -->
         <section class="dye-sect">
           <header class="dye-head">
             <LensConcave aria-hidden="true" />
             <span>{{ t('dye.secEquipment') }}</span>
           </header>
           <div class="dye-grid">
-            <div class="dye-tile static dye-off">
+            <button class="dye-tile" :disabled="!grinders.length" @click="emit('pick-grinder')">
               <span class="dl">{{ t('dye.grinder') }}</span>
               <span class="dv" :class="{ muted: !grinderLabel }">{{ dash(grinderLabel) }}</span>
-            </div>
+            </button>
             <!-- Greys to the same 0.55 as every other tile you can't act on
                  here (see .dye-off in app.css); :disabled rather than the
                  class so it also drops out of the focus order. -->
@@ -295,10 +294,10 @@ async function pickBeverage() {
               <span class="dl">{{ t('recipeDye.rpm') }}</span>
               <span class="dv" :class="{ muted: dye.rpm == null }">{{ dash(dye.rpm) }}</span>
             </button>
-            <div class="dye-tile static dye-off">
+            <button class="dye-tile" @click="editGrind">
               <span class="dl">{{ t('dye.grind') }}</span>
               <span class="dv" :class="{ muted: recipe.grinderSetting === '—' }">{{ dash(recipe.grinderSetting) }}</span>
-            </div>
+            </button>
             <button class="dye-tile" :disabled="!baskets.length" @click="pickBasket">
               <span class="dl">{{ t('recipeDye.basket') }}</span>
               <span class="dv" :class="{ muted: !basketLabel }">{{ dash(basketLabel) }}</span>
@@ -309,15 +308,15 @@ async function pickBeverage() {
               <span class="dl">{{ t('recipeDye.equipment') }}</span>
               <span class="dv" :class="{ muted: !equipmentLabel }">{{ dash(equipmentLabel) }}</span>
             </button>
-            <div class="dye-pair dye-off">
-              <div class="dye-tile static">
+            <div class="dye-pair">
+              <button class="dye-tile" @click="emit('pick-profile')">
                 <span class="dl">{{ t('dye.profile') }}</span>
                 <span class="dv fit" :class="{ muted: !recipeProfileTitle(recipe) }">{{ dash(recipeProfileTitle(recipe)) }}</span>
-              </div>
-              <div class="dye-tile static">
+              </button>
+              <button class="dye-tile" @click="editTemp">
                 <span class="dl">{{ t('dye.temperature') }}</span>
                 <span class="dv" :class="{ muted: !tempLabel }">{{ dash(tempLabel) }}</span>
-              </div>
+              </button>
             </div>
           </div>
         </section>

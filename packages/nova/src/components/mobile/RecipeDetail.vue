@@ -28,7 +28,7 @@ import { useI18n } from 'vue-i18n';
 import { grinders, profiles, formatGrinderLabel, singleGrinder, recipeIdentityParts, formatShortDate, recipeCoffeeName, recipeProfileTitle, recipeRoasterName } from '../../composables/useCore.js';
 import {
   recipe, recipes, pushRecipe, deleteRecipe, togglePinRecipe, patchRecipeEntry,
-  setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, roastAge, beanForRecipe,
+  RECIPE_RATING, setRoastDate, setRecipeRating, setRecipeBean, setRecipeGrinder, roastAge, beanForRecipe,
 } from '../../composables/useRecipe.js';
 import { openNumberPad, openRating, openChooser, openConfirm } from '../../composables/useModals.js';
 import { skinSettings } from '../../composables/useSettings.js';
@@ -299,7 +299,7 @@ async function removeThis() {
         <!-- Rate finishes the row the toggle starts. It was a full-width
              tile in a grid of its own below, which had no gap above it and so
              read as if it had come loose from the group. -->
-        <button class="phone-tile" @click="openRateRow">
+        <button v-if="RECIPE_RATING" class="phone-tile" @click="openRateRow">
           <span class="tl">{{ t('rating.rate') }}</span>
           <span class="tv">
             <StarRating v-if="Number(source.rating) > 0" :model-value="Number(source.rating)" readonly :size="16" />

@@ -196,6 +196,9 @@ async function onBatchPicked(batch) {
       @open-recipes="showRecipeOverlay = true"
       @open-roast="openBatchPicker"
       @edit-profile="openProfileEditor"
+      @pick-bean="showBeanChooser = true"
+      @pick-grinder="pickGrinder"
+      @pick-profile="showProfilePicker = true"
     />
 
     <RecipeOverlay

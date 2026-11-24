@@ -254,6 +254,17 @@ async function persistCurrentRecipeEdits() {
 /** Set the user's 0–5 star rating for the loaded recipe (half steps) and persist
  *  it. No-op with nothing loaded; if the recipe isn't saved yet the value still
  *  lives on `recipe` and is written out when it's first saved. */
+/**
+ * Recipe ratings are switched off for now: a recipe isn't good or bad on its
+ * own — the same settings pull differently as the bag ages — so only SHOTS
+ * are rated. With this false, every place that showed, set or sorted by a
+ * recipe's rating is hidden (Rate button, hold-menu entry, card/row stars, the
+ * phone detail tile, the "by use / by rating" sort buttons). Stored `rating`
+ * values are left untouched — still carried through snapshots, just never
+ * shown or changed — so flipping this back restores everything as it was.
+ */
+export const RECIPE_RATING = false;
+
 export async function setRecipeRating(value) {
   recipe.rating = Math.max(0, Math.min(5, Number(value) || 0));
   await persistCurrentRecipeEdits();

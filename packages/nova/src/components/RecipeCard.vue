@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { grinders, singleGrinder, formatGrinderLabel, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from '../composables/useCore.js';
 import { recipeKitNames } from '../composables/useRecipeKit.js';
 import StarRating from './StarRating.vue';
+import { RECIPE_RATING } from '../composables/useRecipe.js';
 import { fmtTemp } from '../composables/useUnits.js';
 
 /**
@@ -70,7 +71,7 @@ const kit = computed(() => recipeKitNames(props.entry));
           <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
         </svg>
         <StarRating
-          v-if="Number(entry.rating) > 0"
+          v-if="RECIPE_RATING && Number(entry.rating) > 0"
           class="rp-rating"
           :model-value="Number(entry.rating)"
           readonly

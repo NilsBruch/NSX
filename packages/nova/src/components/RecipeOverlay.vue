@@ -16,7 +16,7 @@
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { loadRecipeChecked } from '../composables/useBeanActions.js';
-import { refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
+import { RECIPE_RATING, refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
@@ -146,7 +146,7 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
       </div>
 
       <div class="rp-bottom">
-        <button class="sort-btn" @click="cycleSort">
+        <button v-if="RECIPE_RATING" class="sort-btn" @click="cycleSort">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>{{ sortLabel }}
         </button>
         <span class="spacer" style="flex: 1"></span>

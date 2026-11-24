@@ -23,7 +23,7 @@ import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import RecipeDyeModal from './RecipeDyeModal.vue';
 
-const emit = defineEmits(['open-roast']);
+const emit = defineEmits(['open-roast', 'pick-bean', 'pick-grinder', 'pick-profile']);
 const { t } = useI18n();
 const { NSXCore } = window;
 const {
@@ -150,6 +150,14 @@ const ICONS = {
   <!-- Rises from the bottom, not pushed in from the right: DYE is the page
        below, the same way it is on a shot (see .dye-up in app.css). -->
   <PageTransition name="dye-up">
-    <RecipeDyeModal v-if="dyeOpen" @close="dyeOpen = false" />
+    <!-- Its bean/bag/grinder/profile tiles open EspressoView's pickers. -->
+    <RecipeDyeModal
+      v-if="dyeOpen"
+      @close="dyeOpen = false"
+      @open-roast="emit('open-roast')"
+      @pick-bean="emit('pick-bean')"
+      @pick-grinder="emit('pick-grinder')"
+      @pick-profile="emit('pick-profile')"
+    />
   </PageTransition>
 </template>

@@ -609,11 +609,10 @@ export default {
     backfillMessage: 'One recipe has no grinder yet. Set it to {grinder}? | {n} recipes have no grinder yet. Set them to {grinder}?',
   },
   recipeDye: {
-    // The button on the coffee page, left of Rate.
-    // Not "settings": the page is mostly a record, and only a handful of its
-    // tiles are editable — see RecipeDyeModal's own header.
-    button: 'Describe your recipe',
-    title: 'Describe your recipe',
+    // The button on the coffee page, left of Rate. "Edit": the page is where
+    // the whole recipe is edited now — see RecipeDyeModal's own header.
+    button: 'Edit Recipe',
+    title: 'Recipe Overview',
     basket: 'Basket', equipment: 'Equipment', rpm: 'RPM',
     barista: 'Barista', drinker: 'Drinker', beverage: 'Beverage',
     none: '— None —',

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipeIdentityParts, formatMediumDate } from '../composables/useCore.js';
-import { recipe, roastAge, hasProfile, effectiveVolumeCalibration } from '../composables/useRecipe.js';
+import { recipe, roastAge, hasProfile, effectiveVolumeCalibration, RECIPE_RATING } from '../composables/useRecipe.js';
 import { openAlert } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { useRecipeKit, recipeBasketName, recipeEquipmentNames } from '../composables/useRecipeKit.js';
@@ -20,7 +20,7 @@ import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
  * drag/tap wiring lives in useRecipeDials.js so both stay in exactly one
  * place regardless of which layout is on screen.
  */
-const emit = defineEmits(['open-recipes', 'open-roast', 'edit-profile']);
+const emit = defineEmits(['open-recipes', 'open-roast', 'edit-profile', 'pick-bean', 'pick-grinder', 'pick-profile']);
 
 const { t } = useI18n();
 const {
@@ -263,7 +263,7 @@ const roastLabel = computed(() =>
     <button class="btn" @click="dyeOpen = true">
       <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.dye"></svg>{{ t('recipeDye.button') }}
     </button>
-    <button class="rate-recipe-btn" :aria-label="t('rating.rate')" @click="rateRecipe">
+    <button v-if="RECIPE_RATING" class="rate-recipe-btn" :aria-label="t('rating.rate')" @click="rateRecipe">
       <StarRating v-if="recipe.rating > 0" :model-value="recipe.rating" readonly :size="18" />
       <template v-else>
         <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.star"></svg>{{ t('rating.rate') }}
@@ -277,6 +277,14 @@ const roastLabel = computed(() =>
   <!-- Rises from the bottom, not pushed in from the right: DYE is the page
        below, the same way it is on a shot (see .dye-up in app.css). -->
   <PageTransition name="dye-up">
-    <RecipeDyeModal v-if="dyeOpen" @close="dyeOpen = false" />
+    <!-- Its bean/bag/grinder/profile tiles open EspressoView's pickers. -->
+    <RecipeDyeModal
+      v-if="dyeOpen"
+      @close="dyeOpen = false"
+      @open-roast="emit('open-roast')"
+      @pick-bean="emit('pick-bean')"
+      @pick-grinder="emit('pick-grinder')"
+      @pick-profile="emit('pick-profile')"
+    />
   </PageTransition>
 </template>

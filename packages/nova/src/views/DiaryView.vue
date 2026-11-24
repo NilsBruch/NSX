@@ -17,7 +17,7 @@ import { useLongPress } from '../composables/useLongPress.js';
 import { vScrollEdges } from '../composables/useScrollEdges.js';
 import { confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBean, toggleArchiveBatch, loadRecipeChecked } from '../composables/useBeanActions.js';
 import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName, formatLongDate } from '../composables/useCore.js';
-import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
+import { RECIPE_RATING, selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
 import BagsPanel from '../components/BagsPanel.vue';
 import RecipePicker from '../components/RecipePicker.vue';
@@ -402,7 +402,7 @@ watch(
               <span class="rsub">{{ recipeFacts(row.recipe) }}</span>
             </span>
           </button>
-          <StarRating v-if="Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="16" />
+          <StarRating v-if="RECIPE_RATING && Number(row.recipe.rating) > 0" :model-value="Number(row.recipe.rating)" readonly :size="16" />
           <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleRecipeExpanded(row.recipe.id)">
             <span class="chev" :class="{ open: diaryState.expandedRecipe === row.recipe.id }">›</span>
           </button>
@@ -495,7 +495,7 @@ watch(
                       </span>
                     </span>
                     <StarRating
-                      v-if="Number(savedRecipeForGroup(group)?.rating) > 0"
+                      v-if="RECIPE_RATING && Number(savedRecipeForGroup(group)?.rating) > 0"
                       class="row-stars"
                       :model-value="Number(savedRecipeForGroup(group).rating)"
                       readonly
