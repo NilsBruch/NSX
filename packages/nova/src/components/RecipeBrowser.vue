@@ -20,12 +20,11 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { loadRecipeChecked } from '../composables/useBeanActions.js';
-import { RECIPE_RATING, recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
+import { RECIPE_RATING, recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
-import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { shots, loadShots, formatDateParts, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
 import { skinSettings } from '../composables/useSettings.js';
-import { openChooser, openConfirm } from '../composables/useModals.js';
+import { openConfirm } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { useRecipeList } from '../composables/useRecipeList.js';
 import { formatClock } from '../utils/clock.js';
@@ -42,7 +41,6 @@ import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 const emit = defineEmits(['edit-profile', 'open-roast', 'pick-bean', 'pick-grinder', 'pick-profile']);
 const { t } = useI18n();
 const { NSXCore } = window;
-const { rateRecipe } = useRecipeDials();
 
 // Same reason RecipeOverlay.vue's onMounted has: shots are what date/sort a
 // recipe, and the recipe library itself may not have been fetched yet if the
@@ -69,67 +67,22 @@ async function pick(entry) {
 }
 
 /**
- * Same press-and-hold menu as RecipeOverlay.vue's cards, minus Load: a plain
- * tap already loads the recipe here (see pick() above — RecipeOverlay's own
- * tap only browses, it needs the menu's Load to actually switch), so a
- * second way to do the same thing from the hold menu would be redundant.
- * Pin/Delete are identical either way.
- *
- * Change bean/grinder/profile live here (not on the page itself) because
- * this layout has no identity bubbles to tap — the card list already IS how
- * you switch between bean+profile combinations, so this is the one door left
- * for changing just ONE part of an existing recipe in place. Rate and Edit
- * profile joined them here for the same reason: this layout is short on
- * vertical space (list, graph, settings card), and both are per-recipe
- * actions, so the card they belong to is a better home than a page-wide row
- * under the graph.
- *
- * Every one of those acts on the loaded `recipe` singleton, so a menu opened
- * from a card that ISN'T already loaded loads it first — otherwise the action
- * would land on a different recipe than the one just long-pressed.
+ * Press-and-hold on a card is Delete, straight to its confirm — no menu. The
+ * menu's other entries all have a better home now: change bean/grinder/
+ * profile on the Edit Recipe page (RecipeDyeModal), edit a profile in
+ * Settings, and the list's own order (open bags first) replaced pinning.
  */
-async function openCardMenu(entry) {
-  const choice = await openChooser({
-    title: `${recipeRoasterName(entry)} ${recipeCoffeeName(entry)}`,
-    options: [
-      ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
-      ...(RECIPE_RATING ? [['rate', t('rating.rate')]] : []),
-      // Only for a recipe that actually references a profile — same id-then-title
-      // rule useRecipe's hasProfile applies, but read off THIS entry rather than
-      // the loaded one, since the menu can be opened on any card.
-      ...(entryHasProfile(entry) ? [['editProfile', t('espresso.editProfile')]] : []),
-      ['bean', t('espresso.changeBean')],
-      ['grinder', t('espresso.changeGrinder')],
-      ['profile', t('espresso.changeProfile')],
-      ['delete', t('common.delete')],
-    ],
+async function confirmDeleteRecipe(entry) {
+  const ok = await openConfirm({
+    title: t('diary.deleteRecipeConfirm'),
+    message: `${recipeRoasterName(entry)} – ${recipeCoffeeName(entry)}`,
+    confirmLabel: t('common.delete'),
+    danger: true,
   });
-  if (choice === 'pin') {
-    await togglePinRecipe(entry);
-  } else if (choice === 'rate' || choice === 'editProfile' || choice === 'bean' || choice === 'grinder' || choice === 'profile') {
-    if (!isCurrent(entry)) await pick(entry);
-    if (choice === 'rate') await rateRecipe();
-    else if (choice === 'editProfile') emit('edit-profile');
-    else if (choice === 'bean') emit('pick-bean');
-    else if (choice === 'grinder') emit('pick-grinder');
-    else emit('pick-profile');
-  } else if (choice === 'delete') {
-    const ok = await openConfirm({
-      title: t('diary.deleteRecipeConfirm'),
-      message: `${recipeRoasterName(entry)} – ${recipeCoffeeName(entry)}`,
-      confirmLabel: t('common.delete'),
-      danger: true,
-    });
-    if (ok) await deleteRecipe(entry.id);
-  }
+  if (ok) await deleteRecipe(entry.id);
 }
 
-// See the Edit-profile entry in openCardMenu: the loaded recipe's own version
-// of this is useRecipe's `hasProfile`.
-const entryHasProfile = (entry) =>
-  Boolean(entry.selectedProfileId) || (Boolean(entry.profileTitle) && entry.profileTitle !== '—');
-
-const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
+const cardPress = useLongPress({ tap: pick, hold: confirmDeleteRecipe });
 
 // ── This recipe's shots, newest-first — independent of useLiveShot.js ──
 // The expert plot brings its own legend (toggles, not a caption), so the

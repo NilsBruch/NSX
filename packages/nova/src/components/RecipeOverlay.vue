@@ -16,9 +16,9 @@
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { loadRecipeChecked } from '../composables/useBeanActions.js';
-import { RECIPE_RATING, refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
+import { RECIPE_RATING, refreshRecipes, selectRecipe, deleteRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
-import { openChooser, openConfirm } from '../composables/useModals.js';
+import { openConfirm } from '../composables/useModals.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { useRecipeList } from '../composables/useRecipeList.js';
@@ -62,40 +62,22 @@ async function pick(entry) {
 }
 
 /**
- * Same gesture as the Diary's profile rows: tap switches to the recipe — that
- * is what this browser is FOR, so it stays one tap — and press-and-hold opens
- * the actions on it. Every card here is a saved recipe, so unlike the Diary all
- * three entries are always available.
- *
- * The overlay closes on Load (the recipe it was browsing away from has
- * changed), but stays open on Pin and Delete: both are list housekeeping, and
- * shutting the list to show the result of tidying it would be backwards.
+ * Tap switches to the recipe — that is what this browser is FOR — and
+ * press-and-hold is Delete, straight to its confirm. No menu: Load is the tap
+ * itself, and the list's own order (open bags first) replaced pinning. The
+ * overlay stays open after a delete — tidying the list shouldn't shut it.
  */
-async function openCardMenu(entry) {
-  const choice = await openChooser({
-    title: `${recipeRoasterName(entry)} ${recipeCoffeeName(entry)}`,
-    options: [
-      ['load', t('diary.loadRecipe')],
-      ['pin', entry.pinned ? t('diary.unpin') : t('diary.pin')],
-      ['delete', t('common.delete')],
-    ],
+async function confirmDeleteRecipe(entry) {
+  const ok = await openConfirm({
+    title: t('diary.deleteRecipeConfirm'),
+    message: `${recipeRoasterName(entry)} – ${recipeCoffeeName(entry)}`,
+    confirmLabel: t('common.delete'),
+    danger: true,
   });
-  if (choice === 'load') {
-    await pick(entry);
-  } else if (choice === 'pin') {
-    await togglePinRecipe(entry);
-  } else if (choice === 'delete') {
-    const ok = await openConfirm({
-      title: t('diary.deleteRecipeConfirm'),
-      message: `${recipeRoasterName(entry)} – ${recipeCoffeeName(entry)}`,
-      confirmLabel: t('common.delete'),
-      danger: true,
-    });
-    if (ok) await deleteRecipe(entry.id);
-  }
+  if (ok) await deleteRecipe(entry.id);
 }
 
-const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
+const cardPress = useLongPress({ tap: pick, hold: confirmDeleteRecipe });
 </script>
 
 <template>
