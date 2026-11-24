@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { grinders, formatGrinderLabel, profiles, profilesAll, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
 import { showToast } from '../composables/useToast.js';
 import { offerFinishOtherBags } from '../composables/useBeanActions.js';
-import { recipe, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile, beanForRecipe } from '../composables/useRecipe.js';
+import { recipe, recipeParked, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile, beanForRecipe } from '../composables/useRecipe.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
 import RecipePicker from '../components/RecipePicker.vue';
@@ -34,6 +34,9 @@ const hasRecipe = computed(() => {
   const name = recipe.coffeeName;
   return !!(roaster && roaster !== '—' && name && name !== '—');
 });
+// Parked (useDiary.js's finished-coffee guard): every coffee's bags are done,
+// so the loaded recipe is shown as nothing - same empty state, own wording.
+const showEmpty = computed(() => !hasRecipe.value || recipeParked.value);
 
 // The blurred recipe browser, opened by tapping the classic layout's combined
 // identity title (RecipeBody.vue). The graph layout has no such title — its
@@ -160,8 +163,17 @@ async function onBatchPicked(batch) {
     <!-- In the graph layout the title moves into the graph column itself
          (RecipeBrowser.vue) so the list on the left can use the freed space
          and start higher, right under the status island. -->
-    <div v-if="!hasRecipe || !skinSettings.coffeeGraph" class="page-title">{{ t('espresso.pageTitle') }}</div>
-    <div v-if="!hasRecipe" class="empty-recipe">
+    <div v-if="showEmpty || !skinSettings.coffeeGraph" class="page-title">{{ t('espresso.pageTitle') }}</div>
+    <div v-if="recipeParked" class="empty-recipe">
+      <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.bean"></svg>
+      <span class="empty-title">{{ t('espresso.noOpenBagsTitle') }}</span>
+      <span class="empty-sub">{{ t('espresso.noOpenBagsSub') }}</span>
+      <button class="btn accent" @click="showRecipeOverlay = true">{{ t('espresso.openRecipes') }}</button>
+      <button class="btn" @click="showRecipeCreator = true">
+        <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.profile"></svg>{{ t('recipePicker.createRecipe') }}
+      </button>
+    </div>
+    <div v-else-if="!hasRecipe" class="empty-recipe">
       <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.bean"></svg>
       <span class="empty-title">{{ t('espresso.emptyTitle') }}</span>
       <span class="empty-sub">{{ t('espresso.emptySub') }}</span>

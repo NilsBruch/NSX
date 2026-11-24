@@ -19,7 +19,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { chooseBagForFinishedCoffee } from '../composables/useBeanActions.js';
+import { loadRecipeChecked } from '../composables/useBeanActions.js';
 import { recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
@@ -64,9 +64,7 @@ const { isCurrent, isFinished, listedRecipes } = useRecipeList();
 
 async function pick(entry) {
   if (isCurrent(entry)) return;
-  const bag = await chooseBagForFinishedCoffee(entry);
-  if (bag === false) return;
-  await selectRecipe(entry, { push: false, batch: bag?.batch });
+  if (!(await loadRecipeChecked(entry, { push: false }))) return;
   schedulePushForRecipe(entry);
 }
 

@@ -23,8 +23,8 @@
  */
 import i18n from '../i18n/index.js';
 import { openConfirm, openChooser, openRoastDate } from './useModals.js';
-import { recipesUsingBean, deleteRecipesUsingBean, refreshRecipes, beanForRecipe } from './useRecipe.js';
-import { loadBatchMap, allBatches, finishedBeanIds } from './useDiary.js';
+import { recipesUsingBean, deleteRecipesUsingBean, refreshRecipes, beanForRecipe, selectRecipe } from './useRecipe.js';
+import { loadBatchMap, allBatches, finishedBeanIds, finishedGuardHold } from './useDiary.js';
 import { formatLongDate } from './useCore.js';
 
 const { NSXCore, NSXApi } = window;
@@ -266,3 +266,26 @@ export async function chooseBagForFinishedCoffee(entry) {
   }
   return false;
 }
+
+/**
+ * Load a recipe the user tapped: ask for a bag first if its coffee is finished
+ * (chooseBagForFinishedCoffee), then selectRecipe. Holds useDiary.js's
+ * finished-coffee guard for the whole way, so reopening a bag never lets the
+ * guard jump to a recipe of its own choosing mid-load.
+ *
+ * `onChosen` runs once the bag question is settled, just before loading (the
+ * phone opens its detail screen there). Resolves false if cancelled.
+ */
+export async function loadRecipeChecked(entry, { push = true, onChosen } = {}) {
+  finishedGuardHold.value++;
+  try {
+    const bag = await chooseBagForFinishedCoffee(entry);
+    if (bag === false) return false;
+    onChosen?.();
+    await selectRecipe(entry, { push, batch: bag?.batch });
+    return true;
+  } finally {
+    finishedGuardHold.value--;
+  }
+}
+

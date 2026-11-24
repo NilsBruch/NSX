@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, recipes, beanForRecipe, justCreatedRecipeId, selectRecipe } from './useRecipe.js';
+import { recipe, recipes, beanForRecipe, justCreatedRecipeId, selectRecipe, recipeParked } from './useRecipe.js';
 import { shots } from './useCore.js';
 import { finishedBeanIds } from './useDiary.js';
 import { openTextField } from './useModals.js';
@@ -23,7 +23,8 @@ export function useRecipeList() {
   const query = ref('');
   const sortMode = ref('use');
 
-  const isCurrent = (entry) => entry.id != null && entry.id === recipe.id;
+  // Nothing counts as loaded while parked (useRecipe.js's recipeParked).
+  const isCurrent = (entry) => !recipeParked.value && entry.id != null && entry.id === recipe.id;
 
   function cycleSort() { sortMode.value = sortMode.value === 'use' ? 'rating' : 'use'; }
   const sortLabel = computed(() => t(sortMode.value === 'rating' ? 'recipePicker.sortRating' : 'recipePicker.sortUse'));

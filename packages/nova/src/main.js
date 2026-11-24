@@ -63,6 +63,7 @@ import { bootCore } from './composables/useCore.js';
 import { adoptCurrentWorkflowAsRecipe } from './composables/useRecipe.js';
 import { skinSettings, loadSkinSettings, loadDisplaySupport } from './composables/useSettings.js';
 import { wireRevalidateTriggers } from './composables/useRevalidate.js';
+import { wireFinishedCoffeeGuard } from './composables/useDiary.js';
 import { installErrorReporting } from './composables/useErrorReporting.js';
 
 const app = createApp(App);
@@ -94,6 +95,8 @@ bootCore({ onStoreLoaded: loadSkinSettings }).then(() => {
   wireRevalidateTriggers();
 
   adoptCurrentWorkflowAsRecipe();
+  // The loaded recipe never stands on a finished coffee - see useDiary.js.
+  wireFinishedCoffeeGuard();
   loadSkinSettings();
 
 

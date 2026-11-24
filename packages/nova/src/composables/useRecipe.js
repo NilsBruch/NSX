@@ -688,6 +688,15 @@ export async function applyEditedLibraryProfile(savedRecord) {
   await pushRecipe();
 }
 
+/**
+ * Nova-side "nothing loaded": set by useDiary.js's finished-coffee guard when
+ * the loaded recipe's coffee has every bag marked done and no other recipe is
+ * active. The machine still holds its last workflow (it can't hold none) and
+ * `recipe` keeps mirroring it - this only tells the espresso page to show
+ * "No open bags" instead. Loading or creating a recipe clears it.
+ */
+export const recipeParked = ref(false);
+
 /** Loads an existing recipe entity from the library and pushes it — selecting
  *  a recipe is "load it onto the machine now", since starting the brew itself
  *  happens on the machine's own hardware. Does NOT touch lastUsed (matching
@@ -699,6 +708,7 @@ export async function applyEditedLibraryProfile(savedRecord) {
  *  calls schedulePushForRecipe(entry) right after instead, which debounces
  *  that push exactly the way NSX's own recipe list does. */
 export async function selectRecipe(entry, { push = true, batch = null } = {}) {
+  recipeParked.value = false;
   // Loading anything else ends the just-created recipe's turn at the top of
   // the list (see justCreatedRecipeId); re-selecting it keeps it there.
   if (justCreatedRecipeId.value !== (entry.id ?? null)) justCreatedRecipeId.value = null;
@@ -776,6 +786,7 @@ export function schedulePushForRecipe(entry) {
  * no such data, so it defaults to null and nothing changes there.
  */
 export async function composeNewRecipe({ bean, profile, seedContext = null, batch = null }) {
+  recipeParked.value = false;
   recipe.id = null;
   Object.assign(recipe, {
     coffeeRoaster: bean.roaster || '—',

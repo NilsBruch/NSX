@@ -4,8 +4,8 @@
  * the real bean cache and shot list — no mock data here.
  */
 import { computed, reactive, ref, watch } from 'vue';
-import { beans, shots, loadShots, shotsFromResponse } from './useCore.js';
-import { recipes, refreshRecipes, loadOrCreateRecipeForBeanProfile } from './useRecipe.js';
+import { beans, shots, loadShots, shotsFromResponse, boot } from './useCore.js';
+import { recipe, recipes, refreshRecipes, loadOrCreateRecipeForBeanProfile, selectRecipe, beanForRecipe, recipeParked } from './useRecipe.js';
 
 const { NSXApi, NSXCore } = window;
 
@@ -80,6 +80,52 @@ export const finishedBeanIds = computed(() => {
   for (const [beanId, list] of byBean) if (NSXCore.allBatchesFinished(list)) ids.add(beanId);
   return ids;
 });
+
+/** Is this recipe's coffee in rotation: bean not archived, not every bag done? */
+const isActiveRecipe = (r) => {
+  const bean = beanForRecipe(r);
+  return !bean?.archived && !finishedBeanIds.value.has(bean?.id);
+};
+
+/**
+ * The loaded recipe must stand on a coffee with an open bag. When its last bag
+ * is marked done (here, in the bean editor, or on another device), load the
+ * FIRST active recipe in the espresso list's default order (pinned first, then
+ * by use) - which also pushes it to the machine. With none left, park
+ * (recipeParked): the espresso page shows "No open bags". While parked, the
+ * moment a bag opens again the same rule loads that coffee's first recipe.
+ *
+ * Call once after boot (main.js). Waits for both the bag map and boot, so a
+ * half-loaded state never reads as "nothing active".
+ */
+/** > 0 while a user-started load is choosing/opening a bag (useBeanActions.js's
+ *  loadRecipeChecked) - the guard waits, so it never races that load with a
+ *  pick of its own, and re-checks once the load is done. */
+export const finishedGuardHold = ref(0);
+
+export function wireFinishedCoffeeGuard() {
+  let busy = false;
+  watch(
+    [finishedBeanIds, recipes, () => recipe.beanId, () => recipe.coffeeName, recipeParked, () => boot.done, finishedGuardHold],
+    async () => {
+      if (busy || finishedGuardHold.value > 0 || !boot.done || !batchMapLoaded.value) return;
+      const loadedFinished = finishedBeanIds.value.has(beanForRecipe(recipe)?.id);
+      if (!loadedFinished && !recipeParked.value) return;
+      const byUse = NSXCore.sortRecipesByLastUsed(recipes.value, shots.value);
+      const next = [...byUse.filter((r) => r.pinned), ...byUse.filter((r) => !r.pinned)].find(isActiveRecipe);
+      if (!next) { recipeParked.value = true; return; }
+      busy = true;
+      try {
+        await selectRecipe(next);
+      } catch (err) {
+        console.warn('[Nova] could not load the next active recipe', err?.message);
+      } finally {
+        busy = false;
+      }
+    },
+    { immediate: true },
+  );
+}
 
 /** Does this shot come from that bean? Exported because the recipe wizard's
  *  bean step asks the same question to work out which beans were brewed most

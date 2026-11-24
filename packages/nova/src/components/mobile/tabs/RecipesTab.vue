@@ -32,8 +32,8 @@ import { useI18n } from 'vue-i18n';
 import {
   diaryState, recipeRows, ensureDiaryLoaded, cycleSort, finishedBeanIds,
 } from '../../../composables/useDiary.js';
-import { chooseBagForFinishedCoffee } from '../../../composables/useBeanActions.js';
-import { recipe, selectRecipe, togglePinRecipe, deleteRecipe, beanForRecipe } from '../../../composables/useRecipe.js';
+import { loadRecipeChecked } from '../../../composables/useBeanActions.js';
+import { recipe, selectRecipe, togglePinRecipe, deleteRecipe, beanForRecipe, recipeParked } from '../../../composables/useRecipe.js';
 import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName } from '../../../composables/useCore.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
@@ -54,14 +54,11 @@ onMounted(ensureDiaryLoaded);
 const detailEntry = ref(null);
 /** Opening a recipe is choosing it — see the file header. */
 async function openDetail(row) {
-  // Asked BEFORE the detail screen opens: cancelling must leave nothing loaded.
-  const bag = await chooseBagForFinishedCoffee(row.recipe);
-  if (bag === false) return;
-  detailEntry.value = row.recipe;
-  // Not awaited: the screen should appear on the tap, and recipe.id is set
-  // before selectRecipe's first await, so `isLoaded` is true from the first
-  // render. Only the push to the machine is still in flight.
-  selectRecipe(row.recipe, { batch: bag?.batch }).catch((err) => reportRuntimeError('load recipe', err));
+  // The bag question (if any) is settled BEFORE the detail screen opens, so
+  // cancelling leaves nothing loaded; then the screen appears and the load
+  // (push to the machine) runs on.
+  loadRecipeChecked(row.recipe, { onChosen: () => { detailEntry.value = row.recipe; } })
+    .catch((err) => reportRuntimeError('load recipe', err));
 }
 
 // Same entry point the tablet's Diary "+" opens (RecipePicker) — no preset
@@ -76,9 +73,7 @@ async function openSearch() {
 }
 
 async function loadRow(row) {
-  const bag = await chooseBagForFinishedCoffee(row.recipe);
-  if (bag === false) return;
-  await selectRecipe(row.recipe, { batch: bag?.batch });
+  if (!(await loadRecipeChecked(row.recipe))) return;
   showToast(t('phone.recipeLoaded', { name: recipeIdentityParts(row.recipe).join(' • ') }));
 }
 
@@ -126,7 +121,7 @@ const press = useLongPress({ tap: openDetail, hold: openRowMenu });
 // Which row is on the machine right now — the same test useRecipeList makes
 // for the tablet's cards, inlined rather than pulling that whole factory in
 // for one line.
-const isCurrent = (r) => r.id != null && r.id === recipe.id;
+const isCurrent = (r) => !recipeParked.value && r.id != null && r.id === recipe.id;
 
 // Coffees whose bags are all marked done are shown faded, like on the
 // tablet's espresso page (useRecipeList.js's isFinished).

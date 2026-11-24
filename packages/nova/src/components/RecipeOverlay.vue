@@ -15,7 +15,7 @@
  */
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { chooseBagForFinishedCoffee } from '../composables/useBeanActions.js';
+import { loadRecipeChecked } from '../composables/useBeanActions.js';
 import { refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
@@ -57,9 +57,7 @@ const armed = ref(false);
 onMounted(() => { setTimeout(() => { armed.value = true; }, 400); });
 
 async function pick(entry) {
-  const bag = await chooseBagForFinishedCoffee(entry);
-  if (bag === false) return;
-  await selectRecipe(entry, { batch: bag?.batch });
+  if (!(await loadRecipeChecked(entry))) return;
   emit('close');
 }
 

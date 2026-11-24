@@ -131,6 +131,9 @@ export default {
     emptyTitle: 'No recipe yet',
     emptySub: 'Pick a bean and a profile to brew your first shot',
     createFirstRecipe: 'Create your first recipe',
+    // Every coffee's bags are marked done, so nothing is loaded (recipeParked).
+    noOpenBagsTitle: 'No open bags',
+    noOpenBagsSub: 'Open a bag in the Diary, or pick a recipe to reopen its coffee',
   },
   recipePicker: {
     sortUse: 'By use',
