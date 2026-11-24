@@ -35,6 +35,10 @@ const activeSkinName = () => {
 // The three token blocks in app.css, in the order the segmented control shows
 // them. 'midnight' is a second DARK palette (navy-tinted, raised cards), so it
 // sits next to 'dark' rather than opposite the light one.
+// The picker is hidden — Midnight is the only theme for now (light and dark
+// weren't good enough; useSettings.js always loads 'midnight'). Kept rather
+// than deleted so bringing it back is flipping this flag plus that one line.
+const SHOW_THEME_SETTING = false;
 const THEMES = [
   ['light', 'skinSettings.themeLight'],
   ['dark', 'skinSettings.themeDark'],
@@ -144,7 +148,7 @@ async function pickSkin(skin) {
            states, and a switch would force one of them to be the unlabelled
            "off" — you'd have to know which. Same control the Diary uses for
            Browse/History/Recipes, in its compact three-up size. -->
-      <div class="setting-row">
+      <div v-if="SHOW_THEME_SETTING" class="setting-row">
         <span class="sr-name">{{ t('skinSettings.theme') }}</span>
         <div class="seg seg-setting seg-3" :data-pos="THEMES.findIndex(([name]) => name === skinSettings.theme)">
           <span class="seg-thumb"></span>

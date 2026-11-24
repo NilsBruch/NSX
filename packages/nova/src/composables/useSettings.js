@@ -523,13 +523,13 @@ export function loadSkinSettings() {
   skinSettings.tapToUnlock = s.nova_tap_to_unlock === true; // default off
   skinSettings.waterUnit = s.nova_water_unit || 'ml';
   skinSettings.tabColors = s.nova_tab_colors !== false; // default on
-  // Migrates the old boolean: a device that only ever stored nova_light_mode
-  // keeps the theme it was on, and its next theme change writes nova_theme.
-  // An explicit `false` there means the user chose the original dark palette,
-  // so it stays dark rather than being moved to the new midnight default —
-  // only a device that never picked a theme at all gets that.
-  skinSettings.theme = s.nova_theme
-    || (s.nova_light_mode === true ? 'light' : s.nova_light_mode === false ? 'dark' : 'midnight');
+  // Midnight only, for now: the theme picker is hidden (SkinPanel.vue's
+  // SHOW_THEME_SETTING) and a stored nova_theme / nova_light_mode is ignored,
+  // so a device that once chose light or dark is moved to midnight too. The
+  // light and dark token blocks stay in app.css. To bring the choice back,
+  // restore: s.nova_theme || (s.nova_light_mode === true ? 'light'
+  //   : s.nova_light_mode === false ? 'dark' : 'midnight').
+  skinSettings.theme = 'midnight';
   // Default 5s; an explicit stored 0 (off) must survive, so don't `|| 5`.
   skinSettings.shotReviewAutoCloseSec = s.nova_shot_review_autoclose != null ? Number(s.nova_shot_review_autoclose) : 5;
   skinSettings.showTargets = s.nova_show_targets === true; // default off
