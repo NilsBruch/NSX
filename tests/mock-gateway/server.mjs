@@ -311,7 +311,8 @@ function routeApi(req, res, url, body) {
   if (path === "/api/v1/machine/settings") return method === "GET" ? json({}) : noContent();
 
   // ── workflow ──
-  if (path === "/api/v1/workflow/current" && method === "GET") return json(state.workflow);
+  // Both spellings: api.js's fetchCurrentWorkflow reads GET /api/v1/workflow.
+  if ((path === "/api/v1/workflow" || path === "/api/v1/workflow/current") && method === "GET") return json(state.workflow);
   if (path === "/api/v1/workflow" && (method === "PUT" || method === "POST")) {
     state.workflow = body ?? state.workflow;
     return json(state.workflow);
