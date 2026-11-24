@@ -15,7 +15,7 @@ import { openTextField, openConfirm, openChooser } from '../composables/useModal
 import { useLongPress } from '../composables/useLongPress.js';
 // A `vFoo` binding in <script setup> registers as the v-foo directive.
 import { vScrollEdges } from '../composables/useScrollEdges.js';
-import { confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBean, toggleArchiveBatch } from '../composables/useBeanActions.js';
+import { confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBean, toggleArchiveBatch, chooseBagForFinishedCoffee } from '../composables/useBeanActions.js';
 import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName, formatLongDate } from '../composables/useCore.js';
 import { selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
@@ -88,7 +88,9 @@ onMounted(ensureDiaryLoaded);
 // profile rows, but straight from the library entry rather than rebuilding
 // a recipe out of a shot's workflow.
 async function loadRecipeRow(recipe) {
-  await selectRecipe(recipe);
+  const bag = await chooseBagForFinishedCoffee(recipe);
+  if (bag === false) return;
+  await selectRecipe(recipe, { batch: bag?.batch });
   router.push({ name: 'espresso' });
 }
 // The row's second line: what the recipe actually brews. calcRatio is core's,

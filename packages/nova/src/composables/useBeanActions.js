@@ -22,9 +22,9 @@
  * batch code in its own idiom already.
  */
 import i18n from '../i18n/index.js';
-import { openConfirm } from './useModals.js';
-import { recipesUsingBean, deleteRecipesUsingBean, refreshRecipes } from './useRecipe.js';
-import { loadBatchMap } from './useDiary.js';
+import { openConfirm, openChooser, openRoastDate } from './useModals.js';
+import { recipesUsingBean, deleteRecipesUsingBean, refreshRecipes, beanForRecipe } from './useRecipe.js';
+import { loadBatchMap, allBatches, finishedBeanIds } from './useDiary.js';
 import { formatLongDate } from './useCore.js';
 
 const { NSXCore, NSXApi } = window;
@@ -148,7 +148,9 @@ export async function offerFinishOtherBags(beanId, keepBatchId) {
     const res = await NSXApi.fetchBatches(beanId, false);
     const others = (Array.isArray(res) ? res : (res?.items ?? []))
       .filter((b) => b?.id && b.id !== keepBatchId && !b.archived);
-    if (!others.length) return false;
+    // Nothing to finish — but the new bag may reopen a finished coffee, and
+    // the recipe lists hide those until the bag map knows (finishedBeanIds).
+    if (!others.length) { await loadBatchMap(); return false; }
     const dates = others
       .map((b) => (b.roastDate ? formatLongDate(b.roastDate) : t('diary.noRoastDate')))
       .join(', ');
@@ -200,4 +202,67 @@ export async function confirmAndDeleteBatch(batch) {
 
   await NSXApi.deleteBatch(batch.id);
   return true;
+}
+
+/**
+ * Before loading a recipe whose coffee has every bag marked done: ask which
+ * bag to brew from. Left alone, selectRecipe would let core's resolveBrewBatch
+ * quietly create a fresh undated bag (a done bag never gets another shot) —
+ * reopening the coffee behind the user's back and showing an empty graph.
+ *
+ * Resolves:
+ *  - null      — the coffee isn't finished; load the recipe as usual
+ *  - { batch } — the bag to load it with (selectRecipe's `batch` option)
+ *  - false     — cancelled; load nothing
+ *
+ * Reads the Diary's already-loaded bag map (finishedBeanIds), so a recipe
+ * whose coffee is not finished costs no extra request.
+ */
+export async function chooseBagForFinishedCoffee(entry) {
+  const bean = beanForRecipe(entry);
+  if (!bean?.id || !finishedBeanIds.value.has(bean.id)) return null;
+
+  // The most recent bag: newest roast first, undated bags last.
+  const last = allBatches.value
+    .filter((p) => p.bean.id === bean.id)
+    .map((p) => p.batch)
+    .sort((a, b) => String(b.roastDate || '').localeCompare(String(a.roastDate || '')))[0];
+  const lastLabel = last?.roastDate ? t('diary.roastedOn', { date: formatLongDate(last.roastDate) }) : t('diary.noRoastDate');
+
+  const choice = await openChooser({
+    title: t('diary.allBagsDone'),
+    options: [
+      ...(last ? [['reopen', t('diary.reopenLastBag', { bag: lastLabel })]] : []),
+      ['new', t('diary.openNewBag')],
+    ],
+  });
+  try {
+    if (choice === 'reopen') {
+      const batch = await toggleArchiveBatch(last); // archived -> open
+      await loadBatchMap();
+      return { batch: { ...last, ...(batch || {}), archived: false } };
+    }
+    if (choice === 'new') {
+      // A new bag is a new roast: ask its date straight away. Cancelling the
+      // calendar cancels the whole load — no undated bag left behind.
+      const iso = await openRoastDate();
+      if (!iso) return false;
+      // A done bag with that very date is the same bag (a bag's identity is
+      // bean + roast date, see core's bean.js) — reopen it, don't duplicate it.
+      const beanBags = allBatches.value.filter((p) => p.bean.id === bean.id).map((p) => p.batch);
+      const same = NSXCore.findBatchForRoastDate(beanBags, iso);
+      if (same) {
+        const reopened = same.archived ? await toggleArchiveBatch(same) : same;
+        await loadBatchMap();
+        return { batch: { ...same, ...(reopened || {}), archived: false } };
+      }
+      const batch = await NSXApi.createBatch(bean.id, { roastDate: iso });
+      await loadBatchMap();
+      return { batch };
+    }
+  } catch (err) {
+    console.warn('[Nova] could not open a bag for this coffee', err?.message);
+    NSXCore.emit('toast', err?.message || String(err));
+  }
+  return false;
 }

@@ -15,6 +15,7 @@
  */
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { chooseBagForFinishedCoffee } from '../composables/useBeanActions.js';
 import { refreshRecipes, selectRecipe, togglePinRecipe, deleteRecipe } from '../composables/useRecipe.js';
 import { shots, loadShots, recipeCoffeeName, recipeRoasterName } from '../composables/useCore.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
@@ -34,7 +35,7 @@ onMounted(() => {
   if (!shots.value.length) loadShots(200).catch(() => { /* unsorted list is still usable */ });
 });
 
-const { query, isCurrent, cycleSort, sortLabel, listedRecipes, visibleRecipes, openSearch } = useRecipeList();
+const { query, isCurrent, isFinished, cycleSort, sortLabel, listedRecipes, visibleRecipes, openSearch } = useRecipeList();
 
 /**
  * Nothing in here is hit-testable for the first 400ms.
@@ -56,7 +57,9 @@ const armed = ref(false);
 onMounted(() => { setTimeout(() => { armed.value = true; }, 400); });
 
 async function pick(entry) {
-  await selectRecipe(entry);
+  const bag = await chooseBagForFinishedCoffee(entry);
+  if (bag === false) return;
+  await selectRecipe(entry, { batch: bag?.batch });
   emit('close');
 }
 
@@ -127,6 +130,7 @@ const cardPress = useLongPress({ tap: pick, hold: openCardMenu });
           :key="entry.id"
           :entry="entry"
           :current="isCurrent(entry)"
+          :class="{ finished: isFinished(entry) }"
           reserve-kit
           @pointerdown="cardPress.down($event, entry)"
           @pointermove="cardPress.move"

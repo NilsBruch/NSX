@@ -195,6 +195,29 @@ export function resolveNumberPad(value) {
  *  (RecipePicker/ProfilePicker's own delete rows, which deliberately skip a
  *  confirm step): this is for actions worth an explicit pause, e.g. discarding
  *  unsaved profile-editor changes. */
+/**
+ * The roast-date calendar (RoastDatePicker.vue) as a shared, promise-based
+ * dialog, for flows that live in a composable rather than a view — e.g.
+ * useBeanActions.js's chooseBagForFinishedCoffee. Views that already mount
+ * their own RoastDatePicker keep doing so.
+ */
+export const roastDateState = reactive({ open: false, value: null, _resolve: null });
+
+/** @returns {Promise<string|null>} 'YYYY-MM-DD', or null if cancelled */
+export function openRoastDate({ value = null } = {}) {
+  return new Promise((resolve) => {
+    roastDateState.value = value;
+    roastDateState._resolve = resolve;
+    roastDateState.open = true;
+  });
+}
+
+export function resolveRoastDate(value) {
+  roastDateState.open = false;
+  roastDateState._resolve?.(value);
+  roastDateState._resolve = null;
+}
+
 export const confirmState = reactive({
   open: false, title: '', message: '', confirmLabel: '', danger: false, alert: false, _resolve: null,
 });

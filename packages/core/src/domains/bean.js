@@ -35,7 +35,7 @@
  *
  * Registered on NSXCore:
  *   Selectors: getBeans(), normalizeRoastDate(v), findBatchForRoastDate(batches, roastDate),
- *              findCurrentBatch(batches)
+ *              findCurrentBatch(batches), allBatchesFinished(batches)
  *   Commands:  loadBeans(includeArchived?), setBeansCache(list),
  *              createBean(payload), updateBean(id, payload), deleteBean(id),
  *              resolveBean(roaster, name), resolveBatch(beanId, roastDate),
@@ -175,6 +175,18 @@
     return best;
   }
 
+  /**
+   * True when a bean HAS bags and every one of them is marked done (archived):
+   * the coffee is finished. A bean with no bags at all is NOT finished — it may
+   * simply predate bag tracking. Pure — pass the already-fetched list
+   * (archived bags included, or the answer is meaningless).
+   */
+  function allBatchesFinished(batches) {
+    if (!Array.isArray(batches)) return false;
+    const real = batches.filter(Boolean);
+    return real.length > 0 && real.every((b) => b.archived);
+  }
+
   /** findCurrentBatch against the gateway's current list for this bean. */
   async function fetchCurrentBatch(beanId) {
     const { fetchBatches } = window.NSXApi || {};
@@ -255,6 +267,7 @@
     normalizeRoastDate,
     findBatchForRoastDate,
     findCurrentBatch,
+    allBatchesFinished,
     fetchCurrentBatch,
     resolveBean,
     resolveBatch,

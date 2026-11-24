@@ -19,6 +19,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { chooseBagForFinishedCoffee } from '../composables/useBeanActions.js';
 import { recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, togglePinRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
@@ -59,11 +60,13 @@ onMounted(() => {
 // own default sortMode), and with no way to set a query, listedRecipes and
 // its old query-filtered visibleRecipes are the same list; only the former
 // is needed now.
-const { isCurrent, listedRecipes } = useRecipeList();
+const { isCurrent, isFinished, listedRecipes } = useRecipeList();
 
 async function pick(entry) {
   if (isCurrent(entry)) return;
-  await selectRecipe(entry, { push: false });
+  const bag = await chooseBagForFinishedCoffee(entry);
+  if (bag === false) return;
+  await selectRecipe(entry, { push: false, batch: bag?.batch });
   schedulePushForRecipe(entry);
 }
 
@@ -281,6 +284,8 @@ const stepperDetail = computed(() => {
          graph, so the list visibly reaches further down than the graph does,
          as if more recipes are queued up just out of view. -->
     <div class="browse-list">
+      <!-- Lines up with the graph column's own "Coffee" title opposite. -->
+      <div class="page-title browse-list-title">{{ t('espresso.recipesTitle') }}</div>
       <div class="rp-list">
         <div class="rp-list-scroll">
           <RecipeCard
@@ -288,6 +293,7 @@ const stepperDetail = computed(() => {
             :key="entry.id"
             :entry="entry"
             :current="isCurrent(entry)"
+            :class="{ finished: isFinished(entry) }"
             @pointerdown="cardPress.down($event, entry)"
             @pointermove="cardPress.move"
             @pointerup="cardPress.up(entry)"

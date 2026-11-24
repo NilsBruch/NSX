@@ -17,6 +17,8 @@ import NumberPad from './components/NumberPad.vue';
 import ChooserModal from './components/ChooserModal.vue';
 import ConfirmModal from './components/ConfirmModal.vue';
 import RatingModal from './components/RatingModal.vue';
+import RoastDatePicker from './components/RoastDatePicker.vue';
+import { roastDateState, resolveRoastDate } from './composables/useModals.js';
 import Toast from './components/Toast.vue';
 import LiveShotOverlay from './components/LiveShotOverlay.vue';
 import SimpleLiveOverlay from './components/SimpleLiveOverlay.vue';
@@ -119,5 +121,11 @@ watch(isPhone, (v) => { document.body.dataset.phone = v ? 'true' : 'false'; }, {
   <ChooserModal />
   <ConfirmModal />
   <RatingModal />
+  <RoastDatePicker
+    v-if="roastDateState.open"
+    :model-value="roastDateState.value"
+    @confirm="resolveRoastDate"
+    @cancel="resolveRoastDate(null)"
+  />
   <Toast />
 </template>

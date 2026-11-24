@@ -30,9 +30,10 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
-  diaryState, recipeRows, ensureDiaryLoaded, cycleSort,
+  diaryState, recipeRows, ensureDiaryLoaded, cycleSort, finishedBeanIds,
 } from '../../../composables/useDiary.js';
-import { recipe, selectRecipe, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
+import { chooseBagForFinishedCoffee } from '../../../composables/useBeanActions.js';
+import { recipe, selectRecipe, togglePinRecipe, deleteRecipe, beanForRecipe } from '../../../composables/useRecipe.js';
 import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName } from '../../../composables/useCore.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { useLongPress } from '../../../composables/useLongPress.js';
@@ -52,12 +53,15 @@ onMounted(ensureDiaryLoaded);
 
 const detailEntry = ref(null);
 /** Opening a recipe is choosing it — see the file header. */
-function openDetail(row) {
+async function openDetail(row) {
+  // Asked BEFORE the detail screen opens: cancelling must leave nothing loaded.
+  const bag = await chooseBagForFinishedCoffee(row.recipe);
+  if (bag === false) return;
   detailEntry.value = row.recipe;
   // Not awaited: the screen should appear on the tap, and recipe.id is set
   // before selectRecipe's first await, so `isLoaded` is true from the first
   // render. Only the push to the machine is still in flight.
-  selectRecipe(row.recipe).catch((err) => reportRuntimeError('load recipe', err));
+  selectRecipe(row.recipe, { batch: bag?.batch }).catch((err) => reportRuntimeError('load recipe', err));
 }
 
 // Same entry point the tablet's Diary "+" opens (RecipePicker) — no preset
@@ -72,7 +76,9 @@ async function openSearch() {
 }
 
 async function loadRow(row) {
-  await selectRecipe(row.recipe);
+  const bag = await chooseBagForFinishedCoffee(row.recipe);
+  if (bag === false) return;
+  await selectRecipe(row.recipe, { batch: bag?.batch });
   showToast(t('phone.recipeLoaded', { name: recipeIdentityParts(row.recipe).join(' • ') }));
 }
 
@@ -121,6 +127,15 @@ const press = useLongPress({ tap: openDetail, hold: openRowMenu });
 // for the tablet's cards, inlined rather than pulling that whole factory in
 // for one line.
 const isCurrent = (r) => r.id != null && r.id === recipe.id;
+
+// Coffees whose bags are all marked done are shown faded, like on the
+// tablet's espresso page (useRecipeList.js's isFinished).
+const isFinished = (r) => finishedBeanIds.value.has(beanForRecipe(r)?.id);
+// ...and always listed behind the active ones, each half in the chosen sort.
+const orderedRows = computed(() => [
+  ...recipeRows.value.filter((row) => !isFinished(row.recipe)),
+  ...recipeRows.value.filter((row) => isFinished(row.recipe)),
+]);
 </script>
 
 <template>
@@ -146,9 +161,9 @@ const isCurrent = (r) => r.id != null && r.id === recipe.id;
       <!-- One button again, like every other .phone-list-row: with the Load
            button gone there is no second action to split the row for. -->
       <button
-        v-for="row in recipeRows" :key="row.recipe.id"
+        v-for="row in orderedRows" :key="row.recipe.id"
         class="phone-list-row"
-        :class="{ current: isCurrent(row.recipe) }"
+        :class="{ current: isCurrent(row.recipe), finished: isFinished(row.recipe) }"
         @pointerdown="press.down($event, row)"
         @pointermove="press.move"
         @pointerup="press.up(row)"

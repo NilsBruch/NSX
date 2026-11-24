@@ -1146,6 +1146,13 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    icons — by the same 10% at once. Only this list, not the recipe picker's
    own cards. */
 .browse-list .rp-list-scroll { zoom: 0.9; }
+.browse-list-title { flex: none; }
+/* A short list sits vertically centred in the column instead of hugging the
+   top with empty space below. Auto margins rather than justify-content:
+   center — an overflowing list then still starts at the top and scrolls
+   (plain `center` would push its first cards out of reach above). */
+.browse-list .rp-list-scroll > :first-child { margin-top: auto; }
+.browse-list .rp-list-scroll > :last-child { margin-bottom: auto; }
 /* The non-scrolling shell that carries the bottom fade — .rp-list-scroll
    (below) is the part that actually scrolls, exactly like NSX's own
    recipe-list-shell/recipe-list-scroll split, so the fade stays pinned to the
@@ -1198,10 +1205,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    (.rq-extras). Height comes from the tiles' own content (icon + number +
    label) rather than a fixed value — a fixed one clipped the labels as soon
    as the skin's text scale grew. It's still stable shot to shot, so the graph
-   above, which takes the leftover space, doesn't resize as values change. */
+   above, which takes the leftover space, doesn't resize as values change.
+   No card background or border: the four values sit straight on the page. */
 .recipe-quick {
   flex: none; display: flex; flex-direction: column;
-  background: var(--card-bg); border: 1px solid var(--edge); border-radius: var(--r-md);
   padding: 10px 14px;
 }
 .rq-values { display: grid; grid-template-columns: repeat(4, 1fr); }
@@ -1880,6 +1887,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   padding: 18px 20px; color: var(--text); font-family: inherit;
 }
 .rp-card.current { border-color: var(--accent); }
+/* The coffee's bags are all marked done (useDiary.js's finishedBeanIds):
+   still listed and loadable, just stepped back. Also the phone list's rows. */
+.rp-card.finished, .phone-list-row.finished { opacity: 0.45; }
 /* The one place midnight goes past tokens into a rule, and deliberately: a
    recipe card is how that palette is recognised, and in the original it isn't
    a flat fill at all — it's a white 8%->2% sheen over its surface, with the

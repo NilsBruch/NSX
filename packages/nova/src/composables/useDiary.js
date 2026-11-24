@@ -63,6 +63,24 @@ export async function loadBatchMap() {
 }
 watch(beans, loadBatchMap, { immediate: true });
 
+/**
+ * Ids of the beans whose bags are ALL marked done (core's allBatchesFinished):
+ * coffees that are finished. The recipe lists (useRecipeList.js, the phone's
+ * RecipesTab) leave their recipes out. Built from allBatches above, so it
+ * follows every finish/reopen/delete that already reloads it — no fetch of
+ * its own. Empty until the first load, so nothing is hidden on a guess.
+ */
+export const finishedBeanIds = computed(() => {
+  const byBean = new Map();
+  for (const { batch, bean } of allBatches.value) {
+    if (!byBean.has(bean.id)) byBean.set(bean.id, []);
+    byBean.get(bean.id).push(batch);
+  }
+  const ids = new Set();
+  for (const [beanId, list] of byBean) if (NSXCore.allBatchesFinished(list)) ids.add(beanId);
+  return ids;
+});
+
 /** Does this shot come from that bean? Exported because the recipe wizard's
  *  bean step asks the same question to work out which beans were brewed most
  *  recently (BeanChooser.vue). */

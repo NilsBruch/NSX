@@ -95,6 +95,8 @@ export default {
   },
   espresso: {
     pageTitle: 'Coffee',
+    // Heading over the graph layout's recipe card column (RecipeBrowser.vue).
+    recipesTitle: 'Recipes',
     bean: 'Bean',
     bag: 'Bag',
     grinder: 'Grinder',
@@ -396,6 +398,11 @@ export default {
     finishOldBag: 'Mark the previous bag done? | Mark the previous bags done?',
     finishOldBagMsg: 'Roasted {dates}. Recipes of this coffee now brew from the new bag.',
     newBag: 'New bag',
+    // Asked when loading a recipe whose coffee has every bag marked done
+    // (chooseBagForFinishedCoffee). {bag} is "Roasted <date>" or "No roast date".
+    allBagsDone: 'All bags of this coffee are done',
+    reopenLastBag: 'Reopen last bag ({bag})',
+    openNewBag: 'Open a new bag',
     // vue-i18n plural forms (zero | one | other) — selected by the third
     // argument at the call site: t('diary.shotCount', { n }, n).
     shotCount: 'no shots | 1 shot | {n} shots',

@@ -178,3 +178,10 @@ test("resolveBrewBatch falls back to the open undated bag, then creates one", as
   assert.equal((await NSXCore.resolveBrewBatch("bean-1")).id, "batch-new");
   assert.deepEqual(creates, [["bean-1", {}]]);
 });
+
+test("allBatchesFinished: only when the bean HAS bags and every one is done", () => {
+  assert.equal(NSXCore.allBatchesFinished([{ id: "a", archived: true }, { id: "b", archived: true }]), true);
+  assert.equal(NSXCore.allBatchesFinished([{ id: "a", archived: true }, { id: "b" }]), false, "one open bag keeps the coffee in rotation");
+  assert.equal(NSXCore.allBatchesFinished([]), false, "no bags at all is not 'finished' — it may predate bag tracking");
+  assert.equal(NSXCore.allBatchesFinished(null), false);
+});

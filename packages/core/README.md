@@ -112,7 +112,9 @@ global (keeps core app-state-free).
   both **find-or-create**. `resolveBrewBatch(beanId)` is the bag a recipe on
   that bean brews from now: the bean's newest open dated bag, else its open
   undated bag (created if missing). The open bag belongs to the bean, so every
-  recipe of a coffee shares it.
+  recipe of a coffee shares it. `allBatchesFinished(batches)` (pure) is true
+  when a bean has bags and every one is marked done (archived) — a bean with no
+  bags at all is not "finished".
   A *batch* is one **bag** of a bean, identified by **(beanId, roastDate)** —
   *not* one per shot: every shot from the same bag resolves to the same batch.
   A batch's `roastDate` is treated as **immutable**; a new roast date means a

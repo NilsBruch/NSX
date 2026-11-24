@@ -2,6 +2,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipe, recipes, beanForRecipe, justCreatedRecipeId, selectRecipe } from './useRecipe.js';
 import { shots } from './useCore.js';
+import { finishedBeanIds } from './useDiary.js';
 import { openTextField } from './useModals.js';
 
 /**
@@ -70,9 +71,17 @@ export function useRecipeList() {
    * and all) reads as a bug. Archiving is reversible and deliberately soft —
    * unlike deletion, which takes the recipes outright.
    */
-  const listedRecipes = computed(() =>
-    sortedRecipes.value.filter((entry) => isCurrent(entry) || !beanForRecipe(entry)?.archived)
-  );
+  /** The recipe's coffee has bags and all of them are marked done
+   *  (useDiary.js's finishedBeanIds) — still listed, but shown faded. */
+  const isFinished = (entry) => finishedBeanIds.value.has(beanForRecipe(entry)?.id);
+
+  // Faded (finished) recipes always go behind the active ones — another
+  // partition like the pinned one in sortedRecipes, so each half keeps the
+  // active sort's order (a pinned finished recipe leads the finished half).
+  const listedRecipes = computed(() => {
+    const listed = sortedRecipes.value.filter((entry) => isCurrent(entry) || !beanForRecipe(entry)?.archived);
+    return [...listed.filter((e) => !isFinished(e)), ...listed.filter((e) => isFinished(e))];
+  });
 
   const visibleRecipes = computed(() => {
     const q = query.value.trim().toLowerCase();
@@ -88,5 +97,5 @@ export function useRecipeList() {
     if (value !== null) query.value = value;
   }
 
-  return { query, sortMode, isCurrent, cycleSort, sortLabel, sortedRecipes, listedRecipes, visibleRecipes, openSearch };
+  return { query, sortMode, isCurrent, isFinished, cycleSort, sortLabel, sortedRecipes, listedRecipes, visibleRecipes, openSearch };
 }
