@@ -285,7 +285,14 @@
     // half shares the object with `tags`; the native half is spread into the
     // context below.
     const dyeExtras = NSXCore.dyeExtras ? NSXCore.dyeExtras(workflow.dye) : {};
-    const extras = { ...(tags.length > 0 ? { tags } : {}), ...dyeExtras };
+    const own = { ...(tags.length > 0 ? { tags } : {}), ...dyeExtras };
+    // The gateway merges `extras` key by key, so a partial object keeps every
+    // key it leaves out (Decaid 0.9.3): a cleared basket stayed on the machine
+    // and DYE2's feedRate / recipe marker leaked onto our shots. So whenever we
+    // send an object, every key we know of is in it — set, or explicitly null.
+    // With nothing to set, `extras: null` drops the whole object at once.
+    const clears = NSXCore.workflowExtrasClears ? NSXCore.workflowExtrasClears() : {};
+    const extras = Object.keys(own).length > 0 ? { tags: null, ...clears, ...own } : null;
     const workflowName = [workflow.coffeeRoaster, workflow.coffeeName, resolvedProfile?.title || workflow.profileTitle]
       .map(v => String(v || "").trim())
       .filter(v => v && v !== "—")
@@ -308,7 +315,7 @@
         ...(workflow.beanBatchId ? { beanBatchId: workflow.beanBatchId } : {}),
         // Always sent (null included) for the same reason targetWaterVolume is.
         ...(NSXCore.dyeContextFields ? NSXCore.dyeContextFields(workflow.dye) : {}),
-        extras: Object.keys(extras).length > 0 ? extras : null,
+        extras,
       },
       // Bundle the machine-function settings into the same atomic workflow update so the
       // gateway applies them in ONE PUT (instead of 4 racing PUTs that get "Queue Cancelled").

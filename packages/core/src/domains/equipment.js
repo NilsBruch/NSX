@@ -203,6 +203,35 @@
   const blank = (v) => v == null || v === "";
 
   /**
+   * Every `context.extras` key a workflow push must CLEAR when it doesn't set
+   * it. The gateway merges `extras` key by key (verified on Decaid 0.9.3: a PUT
+   * with `{rpm: 800}` kept an earlier `feedRate`), so a key left out keeps
+   * whatever was there — a basket cleared in the skin stayed on the machine,
+   * and DYE2's own keys leaked onto shots pulled from another skin:
+   *  - our DYE fields (basket, rpm, equipment arrays + the legacy pair);
+   *  - `equipmentCustom` — DYE2's per-record overrides of equipment fields;
+   *  - `feedRate` — DYE2's grinder feed rate (dye2 v0.1.34+), no field of ours;
+   *  - `dye` — DYE2's "this workflow IS recipe X" marker (`dye.recipeId`); a
+   *    workflow pushed by another skin is not that recipe any more.
+   * `tags` is the workflow domain's own and is cleared there.
+   */
+  const WORKFLOW_EXTRAS_CLEARED = [
+    ...DYE_SCALAR_EXTRAS, "equipmentIds", "equipmentNames", ...LEGACY_EQUIPMENT_KEYS,
+    "equipmentCustom", "feedRate", "dye",
+  ];
+  /** `{ key: null }` for every key in WORKFLOW_EXTRAS_CLEARED — spread first,
+   *  under the values actually being set. */
+  function workflowExtrasClears() {
+    return Object.fromEntries(WORKFLOW_EXTRAS_CLEARED.map((k) => [k, null]));
+  }
+
+  /** Baskets still in rotation: DYE2 marks a set-aside one `archived: true`
+   *  (dye2 v0.1.41) and leaves it out of every picker; so do we. */
+  function activeBaskets(list) {
+    return (Array.isArray(list) ? list : []).filter((b) => b && !b.archived);
+  }
+
+  /**
    * The equipment on a shot or a workflow, always as `{ ids, names }` — from
    * the arrays if they're there, from the legacy singular pair if not, and
    * empty otherwise. Mirrors DYE2's own equipmentArrays exactly, including
@@ -351,6 +380,8 @@
     normalizeDye,
     dyeContextFields,
     dyeExtras,
+    workflowExtrasClears,
+    activeBaskets,
     isDyeEmpty,
     getBaskets,
     getEquipment,

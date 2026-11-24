@@ -234,7 +234,8 @@ test("a recipe's DYE fields ride into the context, split by where readers look",
   // Basket/equipment have no native home — they go under the names DYE2
   // denormalises onto a shot, so it can read a shot we pulled. Equipment is a
   // LIST: one shot, a scale and a WDT tool.
-  assert.deepEqual(payload.context.extras, {
+  const { basketId, basketName, equipmentIds, equipmentNames } = payload.context.extras;
+  assert.deepEqual({ basketId, basketName, equipmentIds, equipmentNames }, {
     basketId: "bskt-1", basketName: "VST 18g",
     equipmentIds: ["eqp-1", "eqp-2"], equipmentNames: ["Lunar", "WDT tool"],
   });
@@ -246,9 +247,23 @@ test("DYE fields and tags share `extras` rather than one replacing the other", a
     ...DYE_WORKFLOW, tags: ["morning"], dye: { basketId: "bskt-1", basketName: "VST 18g" },
   }, {});
 
-  assert.deepEqual(payload.context.extras, {
-    tags: ["morning"], basketId: "bskt-1", basketName: "VST 18g",
-  });
+  const { tags, basketId, basketName } = payload.context.extras;
+  assert.deepEqual({ tags, basketId, basketName }, { tags: ["morning"], basketId: "bskt-1", basketName: "VST 18g" });
+});
+
+test("an extras object clears every key it doesn't set — the gateway merges extras key by key", async () => {
+  // Decaid 0.9.3: PUT {extras:{rpm:800}} kept an earlier feedRate. So a basket
+  // cleared in the skin, or DYE2's own feedRate / recipe marker, must be nulled
+  // explicitly or it stays on the machine and lands on the next shot.
+  stubCore();
+  const payload = await NSXCore.buildGatewayPayload({ ...DYE_WORKFLOW, dye: { rpm: 900 } }, {});
+  const ex = payload.context.extras;
+  assert.equal(ex.rpm, 900);
+  for (const k of ["tags", "basketId", "basketName", "equipmentIds", "equipmentNames",
+    "equipmentId", "equipmentName", "equipmentCustom", "feedRate", "dye"]) {
+    assert.equal(k in ex, true, `${k} present`);
+    assert.equal(ex[k], null, `${k} cleared`);
+  }
 });
 
 test("a cleared DYE field is sent as an explicit null, so the gateway drops it", async () => {
@@ -265,7 +280,7 @@ test("a cleared DYE field is sent as an explicit null, so the gateway drops it",
 test("a recipe with no DYE fields at all pushes exactly what it used to", async () => {
   stubCore();
   const payload = await NSXCore.buildGatewayPayload({ ...DYE_WORKFLOW, tags: ["morning"] }, {});
-  assert.deepEqual(payload.context.extras, { tags: ["morning"] });
+  assert.deepEqual(payload.context.extras.tags, ["morning"]);
 
   const bare = await NSXCore.buildGatewayPayload({ ...DYE_WORKFLOW }, {});
   assert.equal(bare.context.extras, null);

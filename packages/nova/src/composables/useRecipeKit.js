@@ -87,7 +87,8 @@ export function useRecipeKit() {
 
   async function pickBasket() {
     await refreshLibrary();
-    const rows = baskets.value;
+    // Archived baskets (set aside in DYE2) are not offered — core's activeBaskets.
+    const rows = window.NSXCore.activeBaskets(baskets.value);
     const options = [['', t('recipeDye.none')], ...rows.map((r) => [r.id, r.name || '—'])];
     const id = await openChooser({
       title: t('recipeDye.basket'), options, current: recipe.dye?.basketId ?? '',

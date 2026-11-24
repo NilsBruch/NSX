@@ -297,3 +297,10 @@ test("isDyeEmpty counts an equipment list as something set", () => {
   assert.equal(NSXCore.isDyeEmpty({ equipmentIds: [], equipmentNames: [] }), true);
   assert.equal(NSXCore.isDyeEmpty({ equipmentIds: ['eqp-1'], equipmentNames: ['Lunar'] }), false);
 });
+
+test("activeBaskets leaves out the baskets DYE2 archived", () => {
+  const list = [{ id: 'a', name: 'VST' }, { id: 'b', name: 'Old', archived: true }, { id: 'c', archived: false }, null];
+  assert.deepEqual(NSXCore.activeBaskets(list).map((b) => b.id), ['a', 'c']);
+  assert.deepEqual(NSXCore.activeBaskets(undefined), []);
+});
+
