@@ -23,9 +23,8 @@ import { useLongPress } from '../composables/useLongPress.js';
 import { skinSettings } from '../composables/useSettings.js';
 import { useRecipeList } from '../composables/useRecipeList.js';
 import RecipeCard from './RecipeCard.vue';
-import RecipeIdentityBubbles from './RecipeIdentityBubbles.vue';
 
-const emit = defineEmits(['close', 'pickBean', 'pickGrinder', 'pickProfile']);
+const emit = defineEmits(['close']);
 const { t } = useI18n();
 
 // Same reason as RecipePicker: shots are what date a recipe, so the list
@@ -86,16 +85,10 @@ const cardPress = useLongPress({ tap: pick, hold: confirmDeleteRecipe });
        here and dismiss; its three interactive sections opt back in. -->
   <div class="rov-scrim" :class="{ 'is-arming': !armed }" @click.self="emit('close')">
     <div class="rov-panel">
-      <!-- Sits at the same offset as EspressoView's own .page-title +
-           .recipe-identity, so the title the user tapped appears to stay put
-           and split rather than being replaced by a new screen. -->
+      <!-- Sits at the same offset as EspressoView's own .page-title. No
+           bean / grinder / profile bubbles under it any more: swapping one
+           part of a recipe is Edit Recipe's job now (RecipeDyeModal). -->
       <div class="page-title">{{ t('espresso.pageTitle') }}</div>
-
-      <RecipeIdentityBubbles
-        @pick-bean="emit('pickBean')"
-        @pick-grinder="emit('pickGrinder')"
-        @pick-profile="emit('pickProfile')"
-      />
 
       <!-- .self: the strip fills the middle of the screen, so the empty bands
            above and below the cards are the strip itself — a tap there

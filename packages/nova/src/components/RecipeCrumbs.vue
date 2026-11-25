@@ -8,9 +8,9 @@
  * title into (.rov-identity / .rov-bubble). A user meets this arrangement once
  * while creating a recipe and then again every time they switch one — telling
  * the same story twice in the same shape is what makes it stick, and it costs
- * no new styling. The Coffee page's own identity row has no Bag bubble (it
- * shows only Bean/Grinder/Profile — see RecipeIdentityBubbles.vue), so this is
- * the one place these four bubbles appear together.
+ * no new styling. This is now the only place these bubbles appear (the
+ * recipe overlay's Bean/Grinder/Profile row is gone — Edit Recipe swaps one
+ * part of a recipe now).
  *
  * The grinder bubble follows the same rule as everywhere else: with one
  * grinder configured it is implicit and drops out entirely (useCore's

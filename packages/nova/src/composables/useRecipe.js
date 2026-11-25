@@ -369,16 +369,6 @@ export const hasProfile = computed(() =>
   Boolean(recipe.selectedProfileId) || (Boolean(recipe.profileTitle) && recipe.profileTitle !== '—')
 );
 
-// A recipe composed while no grinder existed yet carries none (composeNewRecipe
-// falls back to '—'). "One grinder is implicit" (useCore's singleGrinder) only
-// holds once the recipe actually HAS it, so an unset grinder stays pickable
-// however many are configured — otherwise such a recipe could never be given
-// one. Shared by RecipeOverlay.vue's bubbles and RecipeIdentityBubbles.vue
-// (the same bubbles, reused in the Edit Recipe overlay's header).
-export const grinderUnset = computed(() =>
-  recipe.grinderId == null && (!recipe.grinderModel || recipe.grinderModel === '—')
-);
-
 /**
  * Upholds the bean/bag invariant: after this, the recipe has a real beanId and
  * a real beanBatchId. Called from pushRecipe(), the single choke point every

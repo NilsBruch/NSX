@@ -236,9 +236,6 @@ async function onBatchPicked(batch) {
     <RecipeOverlay
       v-if="showRecipeOverlay"
       @close="showRecipeOverlay = false"
-      @pick-bean="showBeanChooser = true"
-      @pick-grinder="pickGrinder"
-      @pick-profile="showProfilePicker = true"
     />
     <PageTransition>
       <RecipePicker
