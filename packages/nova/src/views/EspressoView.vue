@@ -3,8 +3,8 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders, formatGrinderLabel, profiles, profilesAll, refreshProfilesAll, saveLibraryProfile } from '../composables/useCore.js';
 import { showToast } from '../composables/useToast.js';
-import { offerFinishOtherBags } from '../composables/useBeanActions.js';
-import { recipe, recipeParked, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile, beanForRecipe } from '../composables/useRecipe.js';
+import { offerFinishOtherBags, loadRecipeChecked } from '../composables/useBeanActions.js';
+import { recipe, recipes, recipeParked, pushRecipe, setRoastDate, setRecipeBean, setRecipeGrinder, applyEditedLibraryProfile, beanForRecipe } from '../composables/useRecipe.js';
 import { openChooser, openConfirm } from '../composables/useModals.js';
 import { skinSettings } from '../composables/useSettings.js';
 import RecipePicker from '../components/RecipePicker.vue';
@@ -52,8 +52,31 @@ const showRecipeCreator = ref(false);
 // Bean and grinder tiles' own pickers — see useRecipe.js's setRecipeBean/
 // setRecipeGrinder for why these swap in place (same recipe.id) rather than
 // composing a new recipe the way the "+ New recipe" flow does.
+/**
+ * One recipe per bean + grinder + profile. A swap that would turn the loaded
+ * recipe into one that already exists offers to switch to that one instead —
+ * otherwise the library ends up holding two copies with the same identity
+ * (and, matched by that identity, the same shots). Resolves true when the
+ * swap was handled here (switched, or declined), so the caller stops.
+ */
+async function switchIfRecipeExists(candidate) {
+  const existing = NSXCore.findMatchingRecipe(recipes.value, candidate, recipe.id);
+  if (!existing) return false;
+  const ok = await openConfirm({
+    title: t('espresso.recipeExistsTitle'),
+    message: t('espresso.recipeExistsMsg'),
+    confirmLabel: t('espresso.switchToRecipe'),
+  });
+  if (ok) await loadRecipeChecked(existing);
+  return true;
+}
+
 async function onBeanPicked(bean) {
   showBeanChooser.value = false;
+  if (await switchIfRecipeExists({ ...recipe, coffeeRoaster: bean.roaster, coffeeName: bean.name })) {
+    showRecipeOverlay.value = false;
+    return;
+  }
   const ok = await openConfirm({ title: t('espresso.confirmReplaceBean'), confirmLabel: t('common.replace') });
   if (!ok) return;
   await setRecipeBean(bean);
@@ -71,6 +94,10 @@ async function pickGrinder() {
   if (grinderId == null) return;
   const grinder = grinders.value.find((g) => g.id === grinderId);
   if (!grinder) return;
+  if (await switchIfRecipeExists({ ...recipe, grinderId: grinder.id, grinderModel: grinder.model || '—' })) {
+    showRecipeOverlay.value = false;
+    return;
+  }
   // Nothing to replace when the recipe never had a grinder (composed before any
   // existed) — only confirm when the pick actually overwrites one.
   const hadGrinder = recipe.grinderId != null || (recipe.grinderModel && recipe.grinderModel !== '—');
@@ -83,6 +110,11 @@ async function pickGrinder() {
 }
 
 async function onProfileSelected(profile) {
+  if (await switchIfRecipeExists({ ...recipe, profileTitle: profile.profile?.title || '—' })) {
+    showProfilePicker.value = false;
+    showRecipeOverlay.value = false;
+    return;
+  }
   const ok = await openConfirm({ title: t('espresso.confirmReplaceProfile'), confirmLabel: t('common.replace') });
   if (!ok) { showProfilePicker.value = false; return; }
   recipe.profileTitle = profile.profile?.title || '—';

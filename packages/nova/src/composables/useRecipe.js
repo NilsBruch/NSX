@@ -148,7 +148,7 @@ let recipeShotsToken = 0;
  *  only the newest call's result is kept. Failures leave the previous list in
  *  place; currentRecipeShots still falls back to the reference list. */
 export async function loadRecipeShots() {
-  const key = NSXCore.getWorkflowKey(recipe);
+  const key = NSXCore.getRecipeIdentityKey(recipe);
   const my = ++recipeShotsToken;
   try {
     const list = await NSXCore.fetchShotsForWorkflow(recipe);
@@ -172,7 +172,7 @@ export async function loadRecipeShots() {
  */
 export const currentRecipeShots = computed(() => {
   const local = NSXCore.findShotsForWorkflow(recipe, shots.value);
-  if (recipeShotsKey.value !== NSXCore.getWorkflowKey(recipe)) return local;
+  if (recipeShotsKey.value !== NSXCore.getRecipeIdentityKey(recipe)) return local;
   const byId = new Map();
   for (const shot of [...local, ...recipeShots.value]) {
     if (shot?.id && !byId.has(shot.id)) byId.set(shot.id, shot);
@@ -192,7 +192,7 @@ export const currentRecipeShots = computed(() => {
  * Not `immediate`: at module load `recipe` is still the empty placeholder, and
  * querying shots for "—" would be a wasted round-trip before boot fills it in.
  */
-watch(() => NSXCore.getWorkflowKey(recipe), (key) => {
+watch(() => NSXCore.getRecipeIdentityKey(recipe), (key) => {
   if (key !== recipeShotsKey.value) loadRecipeShots();
 });
 
@@ -864,11 +864,28 @@ export async function composeNewRecipe({ bean, profile, seedContext = null, batc
 /** Case-insensitive match on the identity a recipe carries (roaster + name +
  *  profile title). Nothing else links a bean+profile pair to a recipe — a shot
  *  has no recipe id of its own, only these strings. */
-export function findRecipeForBeanProfile(bean, profileTitle) {
+/**
+ * The saved recipe for this bean + profile + GRINDER (core's isSameRecipe:
+ * bean, grinder record, profile — one grinder with two burr sets is two
+ * grinders). `grinder` is anything carrying grinderId / grinderModel (a shot's
+ * workflow context, the loaded recipe). Only when it names no grinder at all
+ * — a workflow or shot that never recorded one — does this fall back to the
+ * old bean + profile match, so such a workflow still finds its recipe instead
+ * of spawning a duplicate.
+ */
+export function findRecipeForBeanProfile(bean, profileTitle, grinder = null) {
   const roaster = (bean?.roaster || '').trim().toLowerCase();
   const name = (bean?.name || '').trim().toLowerCase();
   const title = (profileTitle || '').trim().toLowerCase();
   if (!roaster || !name) return null;
+  const grinderModel = grinder?.grinderModel && grinder.grinderModel !== '—' ? grinder.grinderModel : null;
+  const grinderId = grinder?.grinderId || null;
+  if (grinderModel || grinderId) {
+    return NSXCore.findMatchingRecipe(recipes.value, {
+      coffeeRoaster: bean.roaster, coffeeName: bean.name, profileTitle,
+      grinderModel: grinderModel || '—', grinderId,
+    });
+  }
   return recipes.value.find((r) =>
     (r.coffeeRoaster || '').trim().toLowerCase() === roaster &&
     (r.coffeeName || '').trim().toLowerCase() === name &&
@@ -917,7 +934,7 @@ export async function loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallb
     : 'NONE');
   log('  (both taken from the MOST RECENT shot brewed with this profile)');
 
-  const existing = findRecipeForBeanProfile(bean, profileTitle);
+  const existing = findRecipeForBeanProfile(bean, profileTitle, fallbackContext);
   if (existing) {
     log(`  -> existing recipe found (id=${existing.id}, profileTitle="${existing.profileTitle}") — loading it`);
     await selectRecipe(existing, { batch });
@@ -971,7 +988,7 @@ export async function adoptCurrentWorkflowAsRecipe() {
   const { coffeeRoaster: roaster, coffeeName: name, profileTitle } = recipe;
   if (!roaster || roaster === '—' || !name || name === '—') return null; // nothing dialled in yet
 
-  const existing = findRecipeForBeanProfile({ roaster, name }, profileTitle);
+  const existing = findRecipeForBeanProfile({ roaster, name }, profileTitle, recipe);
   if (existing) {
     recipe.id = existing.id;
     // Fields the gateway workflow doesn't carry, but the saved recipe does.

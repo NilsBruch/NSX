@@ -131,6 +131,10 @@ export default {
     emptyTitle: 'No recipe yet',
     emptySub: 'Pick a bean and a profile to brew your first shot',
     createFirstRecipe: 'Create your first recipe',
+    // A bean/grinder/profile swap that would duplicate an existing recipe.
+    recipeExistsTitle: 'This recipe already exists',
+    recipeExistsMsg: 'A recipe with this bean, grinder and profile is already in your library. Switch to it?',
+    switchToRecipe: 'Switch',
     // Every coffee's bags are marked done, so nothing is loaded (recipeParked).
     noOpenBagsTitle: 'No open bags',
     noOpenBagsSub: 'Open a bag in the Diary, or pick a recipe to reopen its coffee',
@@ -150,6 +154,8 @@ export default {
     createRecipe: 'Create recipe',
     noRecipesYet: 'No recipes yet — brew something to start one',
     noBeansYet: 'No beans yet — add one in the Diary first',
+    // The wizard found the bean + grinder + profile already saved and loaded it.
+    existingLoaded: 'You already had this recipe — loaded it',
   },
   profilePicker: {
     pickTitle: 'Choose profile',

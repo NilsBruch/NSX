@@ -252,6 +252,9 @@
       coffeeRoaster: ctx.coffeeRoaster || "—",
       coffeeName: ctx.coffeeName || "—",
       grinderModel: ctx.grinderModel || "—",
+      // The grinder RECORD, not just its model: two burr sets on one model are
+      // two grinder records sharing a model name (see isSameRecipe).
+      grinderId: ctx.grinderId || null,
       grinderSetting: ctx.grinderSetting || "—",
       targetDoseWeight: dose,
       targetYield: yield_,
@@ -272,6 +275,34 @@
       normalizeWorkflowKeyPart(workflow?.grinderModel),
       normalizeWorkflowKeyPart(workflow?.profileTitle),
     ].join("||");
+  }
+
+  /**
+   * Recipe identity is bean + GRINDER + profile — and the grinder is a record,
+   * not a model name: one grinder with two burr sets is two grinder records
+   * that share a model ("Mahlkönig EK43"), and they must not share recipes or
+   * shot histories. getWorkflowKey only knows the model, so this adds the id:
+   * when BOTH sides carry a grinderId the ids must match; when either side has
+   * none (an older shot or recipe, or a skin that never stores ids — NSX) the
+   * model name in the key is all there is, and that keeps matching as before.
+   */
+  function sameGrinder(a, b) {
+    const ia = a?.grinderId || null;
+    const ib = b?.grinderId || null;
+    return !(ia && ib) || ia === ib;
+  }
+  function isSameRecipe(a, b) {
+    return getWorkflowKey(a) === getWorkflowKey(b) && sameGrinder(a, b);
+  }
+  /** getWorkflowKey plus the grinder id — for "did the recipe's identity
+   *  change" checks (e.g. refetching its shots) that a string must answer. */
+  function getRecipeIdentityKey(workflow) {
+    return `${getWorkflowKey(workflow)}||${workflow?.grinderId || ""}`;
+  }
+  /** The library recipe with this identity (isSameRecipe), or null.
+   *  `exceptId` skips one entry — the recipe being edited itself. */
+  function findMatchingRecipe(recipes, workflow, exceptId = null) {
+    return (recipes || []).find((r) => r && (exceptId == null || r.id !== exceptId) && isSameRecipe(r, workflow)) ?? null;
   }
 
   function normalizeShotData(shot) {
@@ -919,7 +950,7 @@
     const key = getWorkflowKey(workflow);
 
     return source
-      .filter((shot) => getWorkflowKey(mapShotToWorkflow(shot)) === key)
+      .filter((shot) => getWorkflowKey(mapShotToWorkflow(shot)) === key && sameGrinder(workflow, mapShotToWorkflow(shot)))
       .sort((a, b) => {
         const tsA = Date.parse(a?.timestamp || 0);
         const tsB = Date.parse(b?.timestamp || 0);
@@ -1050,6 +1081,9 @@
     mapShotToWorkflow,
     normalizeWorkflowKeyPart,
     getWorkflowKey,
+    isSameRecipe,
+    getRecipeIdentityKey,
+    findMatchingRecipe,
     normalizeShotData,
     getShotDurationSeconds,
     buildShotSparkline,

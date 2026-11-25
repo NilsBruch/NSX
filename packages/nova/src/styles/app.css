@@ -1816,6 +1816,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .load-more:disabled { opacity: 0.5; }
 .list-row .rmeta { display: flex; flex-direction: column; gap: 2px; }
 .list-row .rsub { font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.04em; text-transform: none; color: var(--muted); }
+/* A bag row is ONE line: the profile, then its settings (useDiary.js's
+   bagRowFacts) — "A-Flow · Niche · 10 · 18.0 → 36.0 g (1:2.0) · 93°C". Both
+   halves ellipsise rather than wrap; the profile may take at most 60% so the
+   settings always keep some room. Tablet (.list-row) and phone rows alike. */
+.rmeta.bag-inline { flex-direction: row; align-items: baseline; gap: 6px; min-width: 0; }
+.rmeta.bag-inline .bag-title { flex: 0 1 auto; max-width: 60%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rmeta.bag-inline .bag-facts { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rmeta.bag-inline .bag-facts::before { content: "· "; color: var(--faint); }
 /* Name and details on ONE line rather than stacked: these rows are as wide as
    the page and were carrying two short strings in their left third, leaving
    the middle empty. Baseline-aligned, since the two are different sizes and

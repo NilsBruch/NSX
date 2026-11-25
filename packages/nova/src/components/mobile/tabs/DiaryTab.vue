@@ -16,7 +16,7 @@ import {
   goBack, cycleSort, setView, ensureDiaryLoaded,
   toggleProfileExpanded, openRecipeForBeanProfile,
   shotMetrics, ensureShotMetrics, hasMoreHistory, loadMoreHistory,
-  batchRows, batchProfileGroups, enterBatch, loadBatchMap,
+  batchRows, batchProfileGroups, enterBatch, loadBatchMap, bagRowFacts,
 } from '../../../composables/useDiary.js';
 import { findRecipeForBeanProfile, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
 import { toggleArchiveBean, confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBatch } from '../../../composables/useBeanActions.js';
@@ -105,7 +105,9 @@ const groupBatch = () => {
   return bag && !bag.archived ? bag : null;
 };
 function savedRecipeForGroup(group) {
-  return findRecipeForBeanProfile(groupBean(), group.title);
+  // The group's newest shot names the grinder too — recipe identity is
+  // bean + grinder + profile (see findRecipeForBeanProfile).
+  return findRecipeForBeanProfile(groupBean(), group.title, group.context);
 }
 async function loadGroupRecipe(group) {
   try {
@@ -139,7 +141,7 @@ async function openGroupMenu(group) {
   else if (choice === 'pin') await togglePinRecipe(saved);
   else if (choice === 'delete') await removeGroupRecipe(saved);
 }
-const groupPress = useLongPress({ tap: (group) => toggleProfileExpanded(group.title), hold: openGroupMenu });
+const groupPress = useLongPress({ tap: (group) => toggleProfileExpanded(group.key), hold: openGroupMenu });
 
 // Bag rows: tap opens the bag, hold offers the coffee's menu plus Done/Reopen.
 // The tablet also has Done as a button on the row; a phone row is one button
@@ -193,10 +195,10 @@ const bagPress = useLongPress({ tap: enterBatch, hold: openBagMenu });
 // flat full-history list once that's the active view.
 watch(
   () => diaryState.expandedProfile,
-  (title) => {
-    if (!title) return;
+  (key) => {
+    if (!key) return;
     const { current, earlier } = batchProfileGroups.value;
-    const group = [...current, ...earlier].find((g) => g.title === title);
+    const group = [...current, ...earlier].find((g) => g.key === key);
     if (group) ensureShotMetrics(group.ordered);
   }
 );
@@ -318,7 +320,7 @@ async function onRecipeCreated() {
     <div v-else class="phone-list">
       <template v-for="(list, half) in [batchProfileGroups.current, batchProfileGroups.earlier]" :key="half">
         <div v-if="half === 1 && list.length" class="diary-divider">{{ t('diary.earlierBags') }}</div>
-        <template v-for="group in list" :key="group.title">
+        <template v-for="group in list" :key="group.key">
           <button
             class="phone-list-row"
             @pointerdown="groupPress.down($event, group)"
@@ -327,10 +329,13 @@ async function onRecipeCreated() {
             @pointercancel="groupPress.cancel"
             @pointerleave="groupPress.cancel"
           >
-            <span class="rmeta">{{ group.title }}</span>
-            <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
+            <span class="rmeta bag-inline">
+              <span class="bag-title">{{ group.title }}</span>
+              <span class="rsub bag-facts">{{ bagRowFacts(group, savedRecipeForGroup(group)) }}</span>
+            </span>
+            <span class="chev" :class="{ open: diaryState.expandedProfile === group.key }">›</span>
           </button>
-          <div v-if="diaryState.expandedProfile === group.title" class="phone-sublist">
+          <div v-if="diaryState.expandedProfile === group.key" class="phone-sublist">
             <template v-for="section in group.sections" :key="section.id ?? 'none'">
               <div v-if="!section.current" class="diary-divider">{{ bagLabel(section.batch) }}</div>
               <button

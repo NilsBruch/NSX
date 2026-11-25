@@ -14,7 +14,8 @@
  */
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { recipe, composeNewRecipe, createRecipeFromCurrent } from '../composables/useRecipe.js';
+import { recipe, recipes, composeNewRecipe, createRecipeFromCurrent, selectRecipe } from '../composables/useRecipe.js';
+import { showToast } from '../composables/useToast.js';
 import { grinders, singleGrinder, formatGrinderLabel } from '../composables/useCore.js';
 import { openChooser } from '../composables/useModals.js';
 import { offerFinishOtherBags } from '../composables/useBeanActions.js';
@@ -132,7 +133,18 @@ async function onProfilePicked(profile) {
   const g = chosenGrinder.value;
   const seedContext = g ? { grinderId: g.id, grinderModel: g.model || '—' } : null;
   await composeNewRecipe({ bean: chosenBean.value, profile, seedContext, batch: chosenBatch.value });
-  createdRecipe.value = await createRecipeFromCurrent();
+  // composeNewRecipe has resolved the grinder exactly as a new recipe would
+  // get it — so `recipe` now carries the identity to check. One recipe per
+  // bean + grinder + profile: if it already exists, load THAT one on the bag
+  // just chosen instead of saving a copy beside it.
+  const existing = window.NSXCore.findMatchingRecipe(recipes.value, recipe);
+  if (existing) {
+    await selectRecipe(existing, { batch: chosenBatch.value });
+    createdRecipe.value = existing;
+    showToast(t('recipePicker.existingLoaded'));
+  } else {
+    createdRecipe.value = await createRecipeFromCurrent();
+  }
   finish();
 }
 

@@ -4,7 +4,8 @@
  * the real bean cache and shot list — no mock data here.
  */
 import { computed, reactive, ref, watch } from 'vue';
-import { beans, shots, loadShots, shotsFromResponse, boot } from './useCore.js';
+import { beans, shots, loadShots, shotsFromResponse, boot, grinders, formatGrinderLabel } from './useCore.js';
+import { fmtTemp } from './useUnits.js';
 import { recipe, recipes, refreshRecipes, loadOrCreateRecipeForBeanProfile, selectRecipe, beanForRecipe, recipeParked } from './useRecipe.js';
 
 const { NSXApi, NSXCore } = window;
@@ -14,7 +15,7 @@ export const diaryState = reactive({
   // The Diary opens on Batches (what is open right now).
   view: 'batches', // 'batches' | 'full' (flat, all shots) | 'recipes' (the library)
   query: '',
-  expandedProfile: null, // which profile group (by title) is expanded, in an opened bag
+  expandedProfile: null, // which profile+grinder group (group.key) is expanded, in an opened bag
   expandedRecipe: null, // which recipe (by id) is expanded, in the recipes view
   editingRecipes: false, // recipes view: reveal the per-row delete
   minStars: 0, // full history: only shots rated at least this many stars (0 = all)
@@ -191,12 +192,67 @@ export async function loadBeanShots(bean, query = '') {
  * Filtering client-side instead would only ever see the shots already
  * fetched.
  */
+/**
+ * The grinder a shot was pulled on, as a stable group key plus a label.
+ * By grinder RECORD (id): one grinder with two burr sets is two records that
+ * share a model, and recipe identity is bean + grinder + profile (core's
+ * isSameRecipe). An older shot with no id is matched to the configured grinder
+ * of that model when exactly one has it, so it joins that grinder's row rather
+ * than forming a twin row of its own.
+ */
+const normModel = (m) => String(m || '').trim().toLowerCase();
+function shotGrinder(shot) {
+  const ctx = shot?.workflow?.context || {};
+  const model = ctx.grinderModel && ctx.grinderModel !== '—' ? ctx.grinderModel : '';
+  let id = ctx.grinderId || null;
+  if (!id && model) {
+    const same = grinders.value.filter((g) => normModel(g.model) === normModel(model));
+    if (same.length === 1) id = same[0].id;
+  }
+  const record = id ? grinders.value.find((g) => g.id === id) : null;
+  return {
+    key: id ? `id:${id}` : `m:${normModel(model)}`,
+    label: record ? formatGrinderLabel(record) : (model || null),
+  };
+}
+
+/**
+ * The one-line settings under a bag row's profile title:
+ * "Niche · 10 · 18.0 → 36.0 g (1:2.0) · 93°C" — grinder, grind, dose → yield
+ * (ratio), temperature. From the SAVED recipe when the row has one (what you'd
+ * brew if you loaded it now), else from the row's newest shot (what was
+ * brewed). Parts with nothing to say are left out rather than shown as dashes.
+ */
+export function bagRowFacts(group, saved) {
+  const ctx = group?.context || {};
+  const src = saved || {
+    grinderId: ctx.grinderId, grinderModel: ctx.grinderModel, grinderSetting: ctx.grinderSetting,
+    targetDoseWeight: ctx.targetDoseWeight, targetYield: ctx.targetYield,
+    groupTemp: NSXCore.resolveProfileTemp(group?.profile),
+  };
+  const record = src.grinderId ? grinders.value.find((g) => g.id === src.grinderId) : null;
+  const grinder = record ? formatGrinderLabel(record)
+    : (src.grinderModel && src.grinderModel !== '—' ? src.grinderModel : group?.grinderLabel);
+  const grind = src.grinderSetting && src.grinderSetting !== '—' ? String(src.grinderSetting) : null;
+  const dose = Number(src.targetDoseWeight) || 0;
+  const yield_ = Number(src.targetYield) || 0;
+  const inOut = dose > 0 && yield_ > 0
+    ? `${dose.toFixed(1)} → ${yield_.toFixed(1)} g (${NSXCore.calcRatio(dose, yield_)})`
+    : (dose > 0 ? `${dose.toFixed(1)} g` : null);
+  const temp = Number(src.groupTemp) > 0 ? fmtTemp(Number(src.groupTemp)) : null;
+  return [grinder, grind, inOut, temp].filter(Boolean).join(' · ');
+}
+
 function groupShotsByProfile(shotList) {
+  // One row per profile AND grinder: the same profile brewed on two grinders
+  // is two recipes, and must be two rows (see shotGrinder).
   const byProfile = new Map();
+  const labelOf = new Map();
   for (const shot of shotList) {
-    const title = shotProfile(shot);
-    if (!byProfile.has(title)) byProfile.set(title, []);
-    byProfile.get(title).push(shot);
+    const g = shotGrinder(shot);
+    const key = `${shotProfile(shot)}||${g.key}`;
+    if (!byProfile.has(key)) { byProfile.set(key, []); labelOf.set(key, g.label); }
+    byProfile.get(key).push(shot);
   }
   // Each group carries the source shot that a recipe is rebuilt from (its
   // workflow.profile = the real steps actually brewed; its workflow.context =
@@ -210,12 +266,15 @@ function groupShotsByProfile(shotList) {
   //    land here while its .profile object is something else entirely. Only a
   //    shot whose OWN profile.title equals the group title is a trustworthy
   //    snapshot of "this" profile.
-  return [...byProfile.entries()].map(([title, list]) => {
+  return [...byProfile.entries()].map(([key, list]) => {
+    const title = shotProfile(list[0]);
     const source = list
       .filter((s) => s?.workflow?.profile?.title === title)
       .sort(byTimestampDesc)[0] ?? null;
     return {
+      key,
       title,
+      grinderLabel: labelOf.get(key),
       shots: list,
       profile: source?.workflow?.profile ?? null,
       context: source?.workflow?.context ?? null,
@@ -324,8 +383,10 @@ export function enterBatch(row) {
   loadBeanShots(row.bean);
 }
 
-export function toggleProfileExpanded(title) {
-  diaryState.expandedProfile = diaryState.expandedProfile === title ? null : title;
+/** `key` is the group's profile+grinder key (group.key), not its title — the
+ *  same profile on two grinders is two rows that expand separately. */
+export function toggleProfileExpanded(key) {
+  diaryState.expandedProfile = diaryState.expandedProfile === key ? null : key;
 }
 
 /**

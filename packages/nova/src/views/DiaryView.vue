@@ -8,7 +8,7 @@ import {
   toggleProfileExpanded, openRecipeForBeanProfile,
   ensureShotMetrics, hasMoreHistory, loadMoreHistory,
   recipeRows, toggleRecipeExpanded, toggleEditingRecipes,
-  batchRows, batchProfileGroups, enterBatch, loadBatchMap,
+  batchRows, batchProfileGroups, enterBatch, loadBatchMap, bagRowFacts,
 } from '../composables/useDiary.js';
 import { openHistoryAt } from '../composables/useLiveShot.js';
 import { openTextField, openConfirm, openChooser } from '../composables/useModals.js';
@@ -112,7 +112,9 @@ function recipeFacts(r) {
  * there is actually something to delete.
  */
 function savedRecipeForGroup(group) {
-  return findRecipeForBeanProfile(groupBean(), group.title);
+  // The group's newest shot names the grinder too — recipe identity is
+  // bean + grinder + profile (see findRecipeForBeanProfile).
+  return findRecipeForBeanProfile(groupBean(), group.title, group.context);
 }
 
 /**
@@ -305,10 +307,10 @@ watch(
 );
 watch(
   () => diaryState.expandedProfile,
-  (title) => {
-    if (!title) return;
+  (key) => {
+    if (!key) return;
     const { current, earlier } = batchProfileGroups.value;
-    const group = [...current, ...earlier].find((g) => g.title === title);
+    const group = [...current, ...earlier].find((g) => g.key === key);
     if (group) ensureShotMetrics(group.ordered);
   }
 );
@@ -476,7 +478,7 @@ watch(
           <div class="lc-inner">
             <template v-for="(list, half) in [batchProfileGroups.current, batchProfileGroups.earlier]" :key="half">
               <div v-if="half === 1 && list.length" class="diary-divider">{{ t('diary.earlierBags') }}</div>
-              <template v-for="group in list" :key="group.title">
+              <template v-for="group in list" :key="group.key">
                 <div class="list-row bean-row">
                   <button
                     class="row-main"
@@ -486,13 +488,14 @@ watch(
                     @pointercancel="groupPress.cancel"
                     @pointerleave="groupPress.cancel"
                   >
-                    <span class="rmeta">
-                      <span class="row-title">
+                    <span class="rmeta bag-inline">
+                      <span class="row-title bag-title">
                         <svg v-if="savedRecipeForGroup(group)?.pinned" class="rp-pin" viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" /><path d="M12 14v7" />
                         </svg>
                         {{ group.title }}
                       </span>
+                      <span class="rsub bag-facts">{{ bagRowFacts(group, savedRecipeForGroup(group)) }}</span>
                     </span>
                     <StarRating
                       v-if="RECIPE_RATING && Number(savedRecipeForGroup(group)?.rating) > 0"
@@ -502,11 +505,11 @@ watch(
                       :size="15"
                     />
                   </button>
-                  <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleProfileExpanded(group.title)">
-                    <span class="chev" :class="{ open: diaryState.expandedProfile === group.title }">›</span>
+                  <button class="row-edit" :aria-label="t('diary.expandProfile')" @click="toggleProfileExpanded(group.key)">
+                    <span class="chev" :class="{ open: diaryState.expandedProfile === group.key }">›</span>
                   </button>
                 </div>
-                <div v-if="diaryState.expandedProfile === group.title" class="sublist">
+                <div v-if="diaryState.expandedProfile === group.key" class="sublist">
                   <template v-for="section in group.sections" :key="section.id ?? 'none'">
                     <div v-if="!section.current" class="sublist-divider">{{ bagLabel(section.batch) }}</div>
                     <button

@@ -51,7 +51,7 @@ onMounted(() => {
   // The loaded recipe's own history may never have been fetched — the
   // identity watcher in useRecipe.js only fires on a CHANGE, and arriving on
   // this page with the boot-time recipe still loaded isn't one.
-  if (recipeShotsKey.value !== NSXCore.getWorkflowKey(recipe)) loadRecipeShots();
+  if (recipeShotsKey.value !== NSXCore.getRecipeIdentityKey(recipe)) loadRecipeShots();
 });
 
 // No sort/search UI on this screen — always sorted by use (useRecipeList's
