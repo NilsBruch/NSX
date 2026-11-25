@@ -1160,7 +1160,9 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .browse-list-title { flex: none; }
 /* The graph layout's list: at the top of its column, 3½ cards high (height
    set from RecipeBrowser.vue's measureList), the settings under it. */
-.browse-list .rp-list { flex: none; }
+/* May shrink below its 5½-card height when the column is shorter (a small
+   screen, many kit rows) — the fade then still marks the cut. */
+.browse-list .rp-list { flex: 0 1 auto; min-height: 0; }
 .browse-list .rp-list:not(.scrollable)::after { display: none; }
 /* The non-scrolling shell that carries the bottom fade — .rp-list-scroll
    (below) is the part that actually scrolls, exactly like NSX's own
@@ -1199,6 +1201,25 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
 .rp-card.compact.current .rp-ident { color: var(--text); }
+.rp-card.compact .rp-ident-grinder { font-size: var(--fs-xs); margin-top: -1px; }
+/* The card's last line: its text (grinder, or profile with one grinder) on
+   the left, kit chips on the right. The text gives way first; the chips keep
+   their own sideways scroll (.rp-kit) when there are many. */
+.rp-card.compact .rp-foot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rp-card.compact .rp-foot .rp-ident { flex: 1 1 auto; margin-top: 0; }
+.rp-card.compact .rp-foot .rp-kit { flex: 0 1 auto; min-width: 0; margin-left: auto; }
+/* Compact chips match the grinder line: same type size, no extra height. */
+.rp-list .rp-card.compact .rp-kit-chip { padding: 0 6px; font-weight: 600; line-height: 1.45; }
+/* Compact: roaster and coffee share ONE line — "MOKUSKA  Brazil Gold" — the
+   roaster small and muted in front, the coffee bold after it. The COFFEE is
+   what matters: the coffee never shrinks (flex: none, capped at the line's
+   width — cut only if it alone doesn't fit), so ALL the squeeze goes to the
+   roaster, which ellipsises and can give way entirely. Absolute rather than
+   weighted shrink factors: under the list's zoom Chromium's text measuring
+   was off enough that a weighted coffee still lost letters. */
+.rp-list .rp-card.compact .rp-head { flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; }
+.rp-list .rp-card.compact .rp-roaster { flex: 0 1 auto; min-width: 0; }
+.rp-list .rp-card.compact .rp-name { flex: none; max-width: 100%; display: block; white-space: nowrap; }
 /* The right column: the page title (freed up from the top of .page in graph
    mode — see EspressoView.vue), the graph, then its own stepper row below it
    — moved off the full-width row it used to be so the left column's list is

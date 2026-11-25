@@ -50,6 +50,13 @@ function grinderDisplay(entry) {
   const g = grinders.value.find((x) => x.id === entry.grinderId) ?? grinders.value.find((x) => x.model === model);
   return g ? formatGrinderLabel(g) : model;
 }
+// Compact card: a grinder line only when it says something — there is a
+// choice of grinders AND this recipe names one (an older recipe may name none;
+// a line reading "—" is noise).
+const showGrinderLine = computed(() => {
+  const model = props.entry.grinderModel;
+  return !singleGrinder.value && !!model && model !== '—';
+});
 const num = (v, digits = 1) => (Number.isFinite(Number(v)) ? Number(v).toFixed(digits) : '—');
 const ratio = (entry) => window.NSXCore.calcRatio(Number(entry.targetDoseWeight) || 0, Number(entry.targetYield) || 0);
 /**
@@ -91,13 +98,20 @@ const kit = computed(() => recipeKitNames(props.entry));
       </span>
       <span class="rp-name">{{ recipeCoffeeName(entry) }}</span>
     </div>
-    <!-- Compact: the rest of the identity on one line — PROFILE first, then the
-         grinder: cards of one coffee differ mostly by profile, and a long
-         grinder name ("Mahlkönig EK43 (SSP Brew)") then gets cut, not the
-         profile. The grinder only when there is a choice of grinders. -->
-    <span v-if="compact" class="rp-ident">
-      {{ [recipeProfileTitle(entry), singleGrinder ? null : grinderDisplay(entry)].filter(Boolean).join(' · ') }}
-    </span>
+    <!-- Compact: the rest of the identity, one line each — the profile, then
+         the grinder (only when there is a choice of grinders). Separate lines
+         so neither is cut for the other: grinder names run long
+         ("Mahlkönig EK43 (SSP Brew)"). -->
+    <span v-if="compact && showGrinderLine" class="rp-ident">{{ recipeProfileTitle(entry) }}</span>
+    <!-- The LAST line carries the kit chips on its right, filling the card's
+         otherwise empty right half: the grinder line when there is one to show
+         (showGrinderLine), else the profile line. -->
+    <div v-if="compact" class="rp-foot">
+      <span class="rp-ident" :class="{ 'rp-ident-grinder': showGrinderLine }">{{ showGrinderLine ? grinderDisplay(entry) : recipeProfileTitle(entry) }}</span>
+      <div v-if="kit.length" class="rp-kit">
+        <span v-for="name in kit" :key="name" class="rp-kit-chip">{{ name }}</span>
+      </div>
+    </div>
     <div v-if="!compact" class="rp-rows">
       <div v-if="!singleGrinder" class="rp-row-duo">
         <div class="rp-row">
@@ -142,9 +156,8 @@ const kit = computed(() => recipeKitNames(props.entry));
          and these sit in a list whose even heights are what you scan down.
          Not ellipsised either — "Decent 18g, RD…" hides exactly the part that
          tells two recipes on the same basket apart. -->
-    <!-- Compact cards show the kit row too, but only when there IS kit: a card
-         without stays short (uneven heights read better than empty bands). -->
-    <div v-if="kit.length || reserveKit" class="rp-kit">
+    <!-- (Compact cards carry their kit on the grinder line above.) -->
+    <div v-if="!compact && (kit.length || reserveKit)" class="rp-kit">
       <span v-for="name in kit" :key="name" class="rp-kit-chip">{{ name }}</span>
       <!-- A real chip, just invisible: it reserves EXACTLY a chip's height,
            whatever that becomes, instead of a magic number here that has to be
