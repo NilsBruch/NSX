@@ -17,13 +17,20 @@
  */
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { formatMediumDate } from '../composables/useCore.js';
-import { recipe, roastAge } from '../composables/useRecipe.js';
+import { recipe } from '../composables/useRecipe.js';
 import { useRecipeDials } from '../composables/useRecipeDials.js';
 import { dispTemp, tempUnitLabel } from '../composables/useUnits.js';
 import RecipeDyeModal from './RecipeDyeModal.vue';
 
 const emit = defineEmits(['open-roast', 'pick-bean', 'pick-grinder', 'pick-profile']);
+/**
+ * The graph layout (RecipeBrowser.vue) places the two halves apart:
+ *  - `values`: dose, grind, target yield, temp — above the plot;
+ *  - `actions`: Edit Recipe (left), stop at weight (middle), and a `right`
+ *    slot — the page's bottom row. (The bag / roast date is set on Edit
+ *    Recipe's Bag tile.)
+ */
+defineProps({ part: { type: String, default: 'values' } });
 const { t } = useI18n();
 const { NSXCore } = window;
 const {
@@ -41,13 +48,6 @@ const dyeOpen = ref(false);
 // needs to re-derive or format it.
 const ratio = computed(() => NSXCore.calcRatio(recipe.targetDoseWeight, recipe.targetYield));
 
-// Same label as RecipeBody's roast chip (see its own copy of this computed,
-// including why the date is spelled rather than the locale's digit order).
-const roastLabel = computed(() =>
-  (recipe.roastDate
-    ? `${t('espresso.roasted')} ${formatMediumDate(recipe.roastDate)} (${roastAge.value})`
-    : t('espresso.setRoastDate'))
-);
 
 const ICONS = {
   thermo: '<path d="M10 4a2 2 0 0 1 4 0v9a4.5 4.5 0 1 1-4 0V4z"/><path d="M12 9v6"/>',
@@ -59,7 +59,9 @@ const ICONS = {
 </script>
 
 <template>
-  <div class="recipe-quick">
+  <!-- `part` picks which half renders (see the prop). Values are tap-to-type /
+       drag-to-adjust as before (useRecipeDials.js). -->
+  <div v-if="part === 'values'" class="recipe-quick">
     <div class="rq-values">
       <button
         class="rq-item"
@@ -112,39 +114,32 @@ const ICONS = {
         <span class="rq-num">{{ dispTemp(recipe.groupTemp) }}<span class="rq-unit">{{ tempUnitLabel }}</span></span>
         <span class="rq-label">{{ t('espresso.temp') }}</span>
       </button>
-    </div>
 
+    </div>
   </div>
 
-  <!-- Roast chip + auto-stop toggle, on their OWN row below the card rather
-       than inside it: the card is the four dialled values, these two are the
-       context around them (which bag, and whether the yield auto-stops). The
-       row keeps the card's 4 columns and side padding, so the toggle still
-       lines up under the target yield it governs — the dimmed yield
-       (.rq-item.faded) is the only other cue it's off. -->
-  <div class="rq-extras">
-    <button class="roast-chip" @click="emit('open-roast')">
-      <svg viewBox="0 0 24 24" aria-hidden="true" v-html="ICONS.drop"></svg>{{ roastLabel }}
-    </button>
-    <button
-      class="switch sm"
-      :class="{ on: recipe.stopAtWeight }"
-      role="switch"
-      :aria-checked="recipe.stopAtWeight"
-      :aria-label="t('espresso.stopAtWeight')"
-      @click="toggleStopAtWeight"
-    ></button>
-    <!-- The row's fourth column, which nothing else uses. It belongs here
-         rather than beside the page title: this row is already the CONTEXT
-         around the four dialled values, and who drank it, in what cup, on
-         which basket is exactly that. Costs the page no height either, which
-         matters on a view that deliberately doesn't scroll. -->
-    <button class="roast-chip rq-dye" @click="dyeOpen = true">
+  <div v-if="part === 'actions'" class="rq-extras">
+    <button class="btn" @click="dyeOpen = true">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <rect x="4" y="4" width="16" height="16" rx="2" />
         <path d="M8 10h8M8 14h5" />
       </svg>{{ t('recipeDye.button') }}
     </button>
+    <!-- Stop at weight: off dims the target yield above the plot (.rq-item.faded). -->
+    <label class="rq-toggle">
+      <span class="rq-toggle-label">{{ t('espresso.stopAtWeight') }}</span>
+      <button
+        class="switch sm"
+        :class="{ on: recipe.stopAtWeight }"
+        role="switch"
+        :aria-checked="recipe.stopAtWeight"
+        :aria-label="t('espresso.stopAtWeight')"
+        @click="toggleStopAtWeight"
+      ></button>
+    </label>
+    <!-- The row's right end is the caller's (RecipeBrowser puts the shot
+         stepper here). -->
+    <div class="rq-extras-right"><slot name="right" /></div>
   </div>
 
   <!-- Rises from the bottom, not pushed in from the right: DYE is the page

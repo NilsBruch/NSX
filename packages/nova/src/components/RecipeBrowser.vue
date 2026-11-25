@@ -17,7 +17,7 @@
  * tap here kills the review's auto-close timer. This component owns its own
  * small, disposable slice of that same shape instead.
  */
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch, onBeforeUnmount, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { loadRecipeChecked } from '../composables/useBeanActions.js';
 import { RECIPE_RATING, recipe, refreshRecipes, selectRecipe, schedulePushForRecipe, deleteRecipe, currentRecipeShots, loadRecipeShots, recipeShotsKey } from '../composables/useRecipe.js';
@@ -59,6 +59,23 @@ onMounted(() => {
 // its old query-filtered visibleRecipes are the same list; only the former
 // is needed now.
 const { isCurrent, isFinished, listedRecipes } = useRecipeList();
+
+// The list shows 3½ cards: three, plus half of a fourth under the fade, which
+// is what says "there's more". Measured from the rendered cards (not a fixed
+// number), so it follows the skin's text scale and the compact card's real
+// height; rendered px, since the list's cards sit under a CSS zoom.
+const listEl = ref(null);
+const listHeight = ref(0);
+function measureList() {
+  const cards = listEl.value?.querySelectorAll('.rp-card');
+  if (!cards?.length) return;
+  const first = cards[0].getBoundingClientRect();
+  const gap = cards[1] ? cards[1].getBoundingClientRect().top - first.bottom : 7;
+  listHeight.value = Math.round(3.5 * first.height + 3 * gap);
+}
+onMounted(() => { nextTick(measureList); window.addEventListener('resize', measureList); });
+onBeforeUnmount(() => window.removeEventListener('resize', measureList));
+watch(() => listedRecipes.value.length, () => nextTick(measureList));
 
 async function pick(entry) {
   if (isCurrent(entry)) return;
@@ -237,7 +254,10 @@ const stepperDetail = computed(() => {
     <div class="browse-list">
       <!-- Lines up with the graph column's own "Coffee" title opposite. -->
       <div class="page-title browse-list-title">{{ t('espresso.recipesTitle') }}</div>
-      <div class="rp-list">
+      <!-- 3½ cards high (listHeight, measured from the real cards), so the
+           half card and the fade say "scroll for more"; fewer recipes leave
+           the same height, so the settings below never jump. -->
+      <div ref="listEl" class="rp-list" :class="{ scrollable: listedRecipes.length > 3 }" :style="listHeight ? { height: listHeight + 'px' } : null">
         <div class="rp-list-scroll">
           <RecipeCard
             v-for="entry in listedRecipes"
@@ -245,6 +265,7 @@ const stepperDetail = computed(() => {
             :entry="entry"
             :current="isCurrent(entry)"
             :class="{ finished: isFinished(entry) }"
+            compact
             @pointerdown="cardPress.down($event, entry)"
             @pointermove="cardPress.move"
             @pointerup="cardPress.up(entry)"
@@ -262,33 +283,9 @@ const stepperDetail = computed(() => {
          width rather than the full page, which is what leaves the list on
          the left free to run past it. -->
     <div class="browse-graph-col">
-      <div class="page-title browse-graph-title">{{ t('espresso.pageTitle') }}</div>
-
-      <!-- The shot stepper, centred under the title — moved up from the
-           bottom row now that the settings card (below the graph) took its
-           old spot. A fixed-width pill (see .date-nav.browse-nav
-           .date's own comment), so centring it here never jitters shot to shot. -->
-      <div class="browse-nav-row">
-        <div class="date-nav browse-nav" :class="{ 'is-pressed': datePressed }">
-          <button :disabled="!canOlder" :aria-label="t('espresso.olderShot')" @click="olderShot">‹</button>
-          <!-- The ‹ › buttons step through shots in place; tapping the label
-               itself opens the full-screen review at whichever one is shown. -->
-          <button
-            class="date"
-            :disabled="!graphShots.length"
-            :aria-label="t('liveShot.historyTitle')"
-            @click="openHistoricalReview"
-            @pointerdown="datePressed = true"
-            @pointerup="datePressed = false"
-            @pointercancel="datePressed = false"
-            @pointerleave="datePressed = false"
-          >
-            {{ stepperLabel }}
-            <small v-if="stepperDetail" class="date-time">{{ stepperDetail }}</small>
-          </button>
-          <button :disabled="!canNewer" :aria-label="t('espresso.newerShot')" @click="newerShot">›</button>
-        </div>
-      </div>
+      <!-- The selected recipe's dose / grind / target yield / temp, above the
+           plot (no page title: the recipe list says what this page is). -->
+      <RecipeSettingsCard part="values" />
 
       <div class="shot-graph">
         <ShotStripChart :series="graphSeries" mode="static" :show-targets="skinSettings.showTargets" :expert="expertGraph" @scrub="scrub = $event" />
@@ -307,15 +304,43 @@ const stepperDetail = computed(() => {
         <div v-if="!graphShots.length" class="browse-graph-empty">{{ t('liveShot.noShotsYet') }}</div>
       </div>
 
-      <!-- The recipe's dose/grind/output/temp, inlined here instead of behind
-           an Edit Recipe button — see useRecipeDials.js for the shared
-           tap/drag wiring RecipeBody.vue's own big dials use identically. -->
+    </div>
+    <!-- The bottom row across the whole page: Edit Recipe, stop at weight,
+         the bag picker. See RecipeSettingsCard.vue. -->
+    <div class="browse-settings">
       <RecipeSettingsCard
+        part="actions"
         @open-roast="emit('open-roast')"
         @pick-bean="emit('pick-bean')"
         @pick-grinder="emit('pick-grinder')"
         @pick-profile="emit('pick-profile')"
-      />
+      >
+        <!-- The shot stepper, at the bottom right: ‹ › step through this
+             recipe's shots on the plot above; tapping the label opens the
+             full-screen review at the one shown. A fixed-width pill (see
+             .date-nav.browse-nav .date), so the row never jitters. -->
+        <template #right>
+          <div class="date-nav browse-nav" :class="{ 'is-pressed': datePressed }">
+              <button :disabled="!canOlder" :aria-label="t('espresso.olderShot')" @click="olderShot">‹</button>
+              <!-- The ‹ › buttons step through shots in place; tapping the label
+                   itself opens the full-screen review at whichever one is shown. -->
+              <button
+                class="date"
+                :disabled="!graphShots.length"
+                :aria-label="t('liveShot.historyTitle')"
+                @click="openHistoricalReview"
+                @pointerdown="datePressed = true"
+                @pointerup="datePressed = false"
+                @pointercancel="datePressed = false"
+                @pointerleave="datePressed = false"
+              >
+                {{ stepperLabel }}
+                <small v-if="stepperDetail" class="date-time">{{ stepperDetail }}</small>
+              </button>
+              <button :disabled="!canNewer" :aria-label="t('espresso.newerShot')" @click="newerShot">›</button>
+            </div>
+        </template>
+      </RecipeSettingsCard>
     </div>
   </div>
 </template>

@@ -1147,7 +1147,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    width however wide the screen is. It used to be a share of the screen as
    well (a quarter), so a wider screen only made wider cards; now all the
    extra width goes to the graph column. */
-.espresso-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: 207px 1fr; gap: 18px; }
+/* Two columns on top (the recipe list, the graph), and the selected recipe's
+   settings across the whole width below them (.browse-settings). */
+.espresso-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 14px 18px; }
+.browse-settings { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .browse-list { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
 /* Zoom, not font-size: the cards are sized in rem, which a container's font
    size cannot reach, and zoom scales the whole card — type, padding, gaps,
@@ -1155,12 +1158,10 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    own cards. */
 .browse-list .rp-list-scroll { zoom: 0.9; }
 .browse-list-title { flex: none; }
-/* A short list sits vertically centred in the column instead of hugging the
-   top with empty space below. Auto margins rather than justify-content:
-   center — an overflowing list then still starts at the top and scrolls
-   (plain `center` would push its first cards out of reach above). */
-.browse-list .rp-list-scroll > :first-child { margin-top: auto; }
-.browse-list .rp-list-scroll > :last-child { margin-bottom: auto; }
+/* The graph layout's list: at the top of its column, 3½ cards high (height
+   set from RecipeBrowser.vue's measureList), the settings under it. */
+.browse-list .rp-list { flex: none; }
+.browse-list .rp-list:not(.scrollable)::after { display: none; }
 /* The non-scrolling shell that carries the bottom fade — .rp-list-scroll
    (below) is the part that actually scrolls, exactly like NSX's own
    recipe-list-shell/recipe-list-scroll split, so the fade stays pinned to the
@@ -1190,17 +1191,20 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
 .rp-list .rp-card .rp-label { font-size: 0.65rem; }
 .rp-list .rp-card .rp-val { font-size: var(--fs-sm); }
 .rp-list .rp-card .rp-profile { margin-top: 2px; }
+/* Compact card (RecipeCard's `compact`, the graph layout's list): identity
+   only — roaster, coffee, then grinder · profile on one line. */
+.rp-list .rp-card.compact { gap: 3px; padding: 9px 14px; }
+.rp-card.compact .rp-ident {
+  font-size: var(--fs-sm); color: var(--muted); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.rp-card.compact.current .rp-ident { color: var(--text); }
 /* The right column: the page title (freed up from the top of .page in graph
    mode — see EspressoView.vue), the graph, then its own stepper row below it
    — moved off the full-width row it used to be so the left column's list is
    free to run past it (see the block comment above). */
 .browse-graph-col { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
 .browse-graph-title { flex: none; }
-/* Centres the shot stepper under the title (see RecipeBrowser.vue's template
-   comment — it used to sit bottom-right, next to the now-deleted Edit Recipe
-   button). The pill is a fixed width (.date-nav.browse-nav .date's own
-   comment), so a plain centred flex row never jitters shot to shot. */
-.browse-nav-row { flex: none; display: flex; justify-content: center; }
 .browse-graph-col .shot-graph { max-height: none; min-height: 180px; }
 .browse-graph-empty {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -1219,7 +1223,7 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   flex: none; display: flex; flex-direction: column;
   padding: 10px 14px;
 }
-.rq-values { display: grid; grid-template-columns: repeat(4, 1fr); }
+.rq-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .rq-item {
   background: none; border: none; color: var(--text); font-family: inherit;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
@@ -1237,19 +1241,16 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
    itself (it inherits .rq-num), just muted, since it IS a second reading of
    that value rather than a caption on it. */
 .rq-ratio { color: var(--muted); margin-left: 5px; }
-/* The row BELOW the card (not inside it — see RecipeSettingsCard.vue), on the
-   card's own 4 columns and side padding, so the auto-stop switch still sits in
-   the target-yield column it governs rather than floating at the right edge.
-   The chip spans the two columns left of it and keeps the left edge. */
-.rq-extras {
-  flex: none; height: 34px; display: grid; grid-template-columns: repeat(4, 1fr);
-  align-items: center; padding: 0 15px; /* 14px card padding + its 1px border */
-}
-.rq-extras .roast-chip { grid-column: 1 / 3; justify-self: start; }
-.rq-extras .switch { grid-column: 3; justify-self: center; }
-/* The DYE chip takes the fourth column, right-aligned so it ends flush with
-   the card's edge (and with the TEMP value above it) rather than floating. */
-.rq-extras .rq-dye { grid-column: 4; justify-self: end; }
+/* The page's bottom row (RecipeSettingsCard part="actions"): Edit Recipe left,
+   stop at weight centred, the bag / roast-date picker right. Three columns,
+   so the switch stays centred whatever the two buttons' widths. */
+.rq-extras { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.rq-extras .btn { height: 52px; justify-content: center; white-space: nowrap; }
+.rq-extras > .btn:first-child { justify-self: start; }
+.rq-extras-right { justify-self: end; display: flex; }
+.rq-toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.rq-toggle-label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
 
 /* The overlay. A scrim that BLURS the espresso page rather than hiding it —
    the recipe you're browsing away from stays visible behind its own browser.
@@ -1867,6 +1868,14 @@ button:focus-visible { outline: 2px solid #7fa8c9; outline-offset: 2px; }
   display: flex; flex-direction: column; gap: 14px;
   padding: 16px 22px 20px;
 }
+/* The recipe page (Edit Recipe, RecipeDyeModal.vue) sits ONE layer below the
+   other full-screen pages, because its tiles open them — bean chooser, bag
+   picker, profile picker — and they must land on top of it. With equal
+   z-index the later element in the DOM wins, and that order is not stable:
+   the graph layout mounts after the page's pickers (it appears once the skin
+   settings load), so its recipe page used to cover the picker it had just
+   opened. Its own number pads and choosers are .scrim (z 30), unaffected. */
+.overlay-full.dye-page { z-index: 19; }
 
 /* ===== Recipe library: card grid (RecipePicker.vue) =====
    Each card carries what a recipe actually brews (dose -> yield, temp, grind),

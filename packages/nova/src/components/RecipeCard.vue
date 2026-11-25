@@ -31,6 +31,16 @@ const props = defineProps({
   reserveKit: { type: Boolean, default: false },
   entry: { type: Object, required: true },
   current: { type: Boolean, default: false },
+  /**
+   * Identity only: roaster, coffee, and one line of grinder · profile — no
+   * settings rows, no kit. For the graph layout's list (RecipeBrowser.vue),
+   * where the SELECTED recipe's dose / grind / yield / temperature are shown
+   * large and editable right beside it, so repeating them on every card was
+   * noise; and a recipe IS bean + grinder + profile, so that is what tells
+   * two cards apart. The classic overlay keeps the full card: there it's a
+   * picker shown over the page, with the dials hidden behind it.
+   */
+  compact: { type: Boolean, default: false },
 });
 const { t } = useI18n();
 
@@ -56,7 +66,7 @@ const kit = computed(() => recipeKitNames(props.entry));
 </script>
 
 <template>
-  <div class="rp-card" :class="{ current }">
+  <div class="rp-card" :class="{ current, compact }">
     <div class="rp-head">
       <!-- The roaster's line carries the card's markers at its right edge:
            the pin, then the rating as one star plus the number ("4.5"). Both
@@ -81,7 +91,12 @@ const kit = computed(() => recipeKitNames(props.entry));
       </span>
       <span class="rp-name">{{ recipeCoffeeName(entry) }}</span>
     </div>
-    <div class="rp-rows">
+    <!-- Compact: the rest of the identity on one line. The grinder only when
+         there is a choice of grinders — with one it would repeat everywhere. -->
+    <span v-if="compact" class="rp-ident">
+      {{ [singleGrinder ? null : grinderDisplay(entry), recipeProfileTitle(entry)].filter(Boolean).join(' · ') }}
+    </span>
+    <div v-if="!compact" class="rp-rows">
       <div v-if="!singleGrinder" class="rp-row-duo">
         <div class="rp-row">
           <span class="rp-label">{{ t('recipePicker.lGrinder') }}</span>
@@ -107,7 +122,7 @@ const kit = computed(() => recipeKitNames(props.entry));
         </div>
       </div>
     </div>
-    <div class="rp-row rp-profile">
+    <div v-if="!compact" class="rp-row rp-profile">
       <span class="rp-label">{{ t('recipePicker.lProfile') }}</span>
       <!-- Plain .rp-val, not a pill: the profile is one of the card's FACTS,
            like the grinder or the dose, so it's read the same way. The pill it
@@ -125,7 +140,7 @@ const kit = computed(() => recipeKitNames(props.entry));
          and these sit in a list whose even heights are what you scan down.
          Not ellipsised either — "Decent 18g, RD…" hides exactly the part that
          tells two recipes on the same basket apart. -->
-    <div v-if="kit.length || reserveKit" class="rp-kit">
+    <div v-if="!compact && (kit.length || reserveKit)" class="rp-kit">
       <span v-for="name in kit" :key="name" class="rp-kit-chip">{{ name }}</span>
       <!-- A real chip, just invisible: it reserves EXACTLY a chip's height,
            whatever that becomes, instead of a magic number here that has to be
