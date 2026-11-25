@@ -2,9 +2,10 @@
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { phase, savingShot, captureEnded, series, historyShots, historyIndex, currentFullShot, shotStartMs, skipStep, closeHistory, olderShot, newerShot, rateShot, setActualDose, setActualYield, grindSetting, setGrindSetting, deleteCurrentShot, virtualScaleActive, liveVirtualWeight, displayFrame } from '../composables/useLiveShot.js';
-import { recipe } from '../composables/useRecipe.js';
+import { recipe, recipes } from '../composables/useRecipe.js';
+import { shotRecipeSources, saveShotAsRecipe, updateRecipeFromShot } from '../composables/useRecipeSuggestions.js';
 import { skinSettings } from '../composables/useSettings.js';
-import { machine, currentWorkflow, formatMediumDate } from '../composables/useCore.js';
+import { machine, currentWorkflow, formatMediumDate, batchBeanVersion } from '../composables/useCore.js';
 import { openNumberPad, openConfirm } from '../composables/useModals.js';
 import { showToast } from '../composables/useToast.js';
 import ShotDyePage from './ShotDyePage.vue';
@@ -70,6 +71,40 @@ const weightPct = computed(() =>
 // already has (timestamp, grinder setting) so those render instantly instead
 // of waiting on the extra fetch.
 const currentShot = computed(() => historyShots.value[historyIndex.value] ?? null);
+
+// ── Recipe from this shot ──
+// One recipe per bean + grinder + profile (core's findMatchingRecipe): a shot
+// whose recipe exists offers "Update recipe" (copy this shot's grind / dose /
+// yield / temperature into it); one without offers "Save as recipe"; one whose
+// bean or profile is gone from the library offers nothing — no brewable
+// recipe could come of it. Recipes are only ever created on this tap.
+const reviewShot = computed(() => currentFullShot.value?.id === currentShot.value?.id ? currentFullShot.value : currentShot.value);
+const shotRecipe = computed(() => {
+  void batchBeanVersion.value; // matching reads core's bag -> bean map
+  const shot = reviewShot.value;
+  if (!shot) return null;
+  const existing = NSXCore.findMatchingRecipe(recipes.value, NSXCore.mapShotToWorkflow(shot));
+  if (existing) return { kind: 'update', recipe: existing };
+  return shotRecipeSources(shot) ? { kind: 'save' } : null;
+});
+async function onShotRecipe() {
+  const shot = reviewShot.value;
+  const action = shotRecipe.value;
+  if (!shot || !action) return;
+  if (action.kind === 'save') { await saveShotAsRecipe(shot); return; }
+  const s = NSXCore.recipeSettingsFromShot(shot);
+  const parts = [
+    s.grinderSetting !== '—' ? `${t('liveShot.mGrind')} ${s.grinderSetting}` : null,
+    s.targetDoseWeight > 0 && s.targetYield > 0 ? `${s.targetDoseWeight.toFixed(1)} → ${s.targetYield.toFixed(1)} g` : null,
+    s.groupTemp > 0 ? `${dispTemp(s.groupTemp)} ${tempUnitLabel.value}` : null,
+  ].filter(Boolean).join(' · ');
+  const ok = await openConfirm({
+    title: t('shotRecipe.updateTitle'),
+    message: parts,
+    confirmLabel: t('shotRecipe.update'),
+  });
+  if (ok) await updateRecipeFromShot(shot, action.recipe);
+}
 const shotSeries = computed(() => {
   if (!currentFullShot.value) return null;
   return NSXCore.normalizeShotData(currentFullShot.value);
@@ -330,10 +365,23 @@ async function editGrindSetting() {
           <!-- Bottom left, opposite Delete: the way DOWN into the rest of this
                shot's record. Everything the graph page has no room for lives
                there (ShotDyePage.vue). -->
-          <button class="shot-dye" @click="dyeOpen = true">
-            {{ t('dye.open') }}
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" /></svg>
-          </button>
+          <div class="shot-done-left">
+            <button class="shot-dye" @click="dyeOpen = true">
+              {{ t('dye.open') }}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" /></svg>
+            </button>
+            <!-- Save as recipe / Update recipe — see shotRecipe above. -->
+            <button
+              v-if="shotRecipe"
+              class="shot-dye shot-recipe"
+              :aria-label="t(shotRecipe.kind === 'save' ? 'shotRecipe.save' : 'shotRecipe.update')"
+              @click="onShotRecipe"
+            >
+              <svg v-if="shotRecipe.kind === 'save'" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>
+              <span class="shot-recipe-label">{{ t(shotRecipe.kind === 'save' ? 'shotRecipe.save' : 'shotRecipe.update') }}</span>
+            </button>
+          </div>
           <div class="rate-stars">
             <button v-for="n in 5" :key="n" class="star" :class="{ on: n <= rating }" @click="setRating(n)">{{ n <= rating ? '★' : '☆' }}</button>
           </div>

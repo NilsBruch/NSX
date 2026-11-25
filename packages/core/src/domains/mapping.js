@@ -354,25 +354,39 @@
    * brewed with. `id`, the bean's id and the library profile's id come from
    * the caller (they need the skin's caches). Same field set the skins save.
    */
+  /**
+   * The dial settings a shot was brewed with — what "update the recipe from
+   * this shot" copies over, and the settings half of recipeEntryFromShot:
+   * grind, dose, yield (the targets that were dialled, not the measured
+   * result) and the profile's temperature. Identity (bean, grinder, profile)
+   * is not part of it — that is what makes it the SAME recipe.
+   */
+  function recipeSettingsFromShot(shot) {
+    const ctx = shot?.workflow?.context || {};
+    const targetYield = Number(ctx.targetYield) || 0;
+    return {
+      grinderSetting: ctx.grinderSetting || "—",
+      targetDoseWeight: Number(ctx.targetDoseWeight) || 0,
+      targetYield,
+      groupTemp: resolveProfileTemp(shot?.workflow?.profile) ?? 0,
+      // A pushed workflow carries targetYield 0 exactly when stop-at-weight
+      // was off (buildGatewayPayload), so that is the one thing it says here.
+      stopAtWeight: targetYield > 0,
+    };
+  }
+
   function recipeEntryFromShot(shot, { id, beanId = null, profileId = null } = {}) {
     const ctx = shot?.workflow?.context || {};
     const wf = mapShotToWorkflow(shot);
-    const targetYield = Number(ctx.targetYield) || 0;
     return {
+      ...recipeSettingsFromShot(shot),
       id,
       coffeeRoaster: wf.coffeeRoaster,
       coffeeName: wf.coffeeName,
       grinderModel: wf.grinderModel,
       grinderId: wf.grinderId,
-      grinderSetting: wf.grinderSetting,
-      targetDoseWeight: Number(ctx.targetDoseWeight) || 0,
-      targetYield,
-      groupTemp: resolveProfileTemp(shot?.workflow?.profile) ?? 0,
       profileTitle: wf.profileTitle,
       selectedProfileId: profileId,
-      // A pushed workflow carries targetYield 0 exactly when stop-at-weight
-      // was off (buildGatewayPayload), so that is the one thing it says here.
-      stopAtWeight: targetYield > 0,
       beanId,
       beanBatchId: ctx.beanBatchId ?? null,
       pinned: false,
@@ -1169,6 +1183,7 @@
     findMatchingRecipe,
     recipeCandidatesFromShots,
     recipeEntryFromShot,
+    recipeSettingsFromShot,
     normalizeShotData,
     getShotDurationSeconds,
     buildShotSparkline,

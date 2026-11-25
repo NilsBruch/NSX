@@ -10,8 +10,8 @@
  * available from Settings → General.
  */
 import i18n from '../i18n/index.js';
-import { recipes, refreshRecipes } from './useRecipe.js';
-import { beans, grinders, formatGrinderLabel, profilesAll, refreshProfilesAll, boot } from './useCore.js';
+import { recipe, recipes, refreshRecipes, patchRecipeEntry, pushRecipe } from './useRecipe.js';
+import { beans, grinders, formatGrinderLabel, profiles, profilesAll, refreshProfilesAll, boot } from './useCore.js';
 import { openMultiChooser } from './useModals.js';
 import { showToast } from './useToast.js';
 import { loadBatchMap } from './useDiary.js';
@@ -37,6 +37,57 @@ async function fetchAllShots() {
 }
 
 /**
+ * The bean and library profile a recipe made from this shot would reference,
+ * or null when either is gone (a recipe could not be brewed then). The bean
+ * through the shot's BAG first — a shot stores the coffee's name as brewed,
+ * and a bean renamed since still owns the bag — then by name. Synchronous:
+ * reads the caches (beans, profiles, core's bag -> bean map).
+ */
+export function shotRecipeSources(shot) {
+  const wf = NSXCore.mapShotToWorkflow(shot);
+  if ([wf.coffeeRoaster, wf.coffeeName, wf.profileTitle].some((v) => !v || v === '—')) return null;
+  const viaBag = NSXCore.beanIdForBatch(shot?.workflow?.context?.beanBatchId);
+  const bean = (viaBag && beans.value.find((b) => b.id === viaBag))
+    || beans.value.find((b) => same(b.roaster, wf.coffeeRoaster) && same(b.name, wf.coffeeName));
+  const library = [...profilesAll.value, ...profiles.value];
+  const pid = shot?.workflow?.profileId;
+  const profile = (pid && library.find((p) => p.id === pid))
+    || library.find((p) => (p.profile?.title || '') === wf.profileTitle);
+  return bean && profile ? { bean, profile } : null;
+}
+
+/** A library entry for this shot, named after the bean's CURRENT name. */
+function entryFromShot(shot, { bean, profile }) {
+  return {
+    ...NSXCore.recipeEntryFromShot(shot, { id: NSXCore.makeRecipeId(), beanId: bean.id, profileId: profile.id }),
+    coffeeRoaster: bean.roaster,
+    coffeeName: bean.name,
+    dye: NSXCore.normalizeDye(null),
+  };
+}
+
+/** The shot review's "Save as recipe": create the recipe this shot implies.
+ *  The caller has checked none exists yet (one per bean + grinder + profile). */
+export async function saveShotAsRecipe(shot) {
+  const sources = shotRecipeSources(shot);
+  if (!sources) return null;
+  const entry = entryFromShot(shot, sources);
+  recipes.value = await NSXCore.saveRecipes([...recipes.value, entry]);
+  showToast(t('shotRecipe.saved'));
+  return entry;
+}
+
+/** The shot review's "Update recipe": copy this shot's dial settings (grind,
+ *  dose, yield, temperature) into the existing recipe — and onto the machine
+ *  when that recipe is the loaded one. */
+export async function updateRecipeFromShot(shot, existing) {
+  if (!existing?.id) return;
+  await patchRecipeEntry(existing.id, NSXCore.recipeSettingsFromShot(shot));
+  if (recipe.id === existing.id) await pushRecipe();
+  showToast(t('shotRecipe.updated'));
+}
+
+/**
  * What could be created: each candidate with the bean and library profile it
  * would reference. A combination whose coffee is no bean in the library, or
  * whose profile is gone from it, is left out — such a recipe could not be
@@ -52,15 +103,9 @@ async function findCandidates() {
   const picks = NSXCore.recipeCandidatesFromShots(shots, recipes.value);
   return picks.map((shot) => {
     const wf = NSXCore.mapShotToWorkflow(shot);
-    // A shot stores the coffee's name AS BREWED; its bag still knows the bean
-    // after a rename. A bag that's gone (bean deleted) falls back to the name.
-    const viaBag = NSXCore.beanIdForBatch(shot?.workflow?.context?.beanBatchId);
-    const bean = (viaBag && beans.value.find((b) => b.id === viaBag))
-      || beans.value.find((b) => same(b.roaster, wf.coffeeRoaster) && same(b.name, wf.coffeeName));
-    const pid = shot?.workflow?.profileId;
-    const profile = (pid && profilesAll.value.find((p) => p.id === pid))
-      || profilesAll.value.find((p) => (p.profile?.title || '') === wf.profileTitle);
-    if (!bean || !profile) return null;
+    const sources = shotRecipeSources(shot);
+    if (!sources) return null;
+    const { bean, profile } = sources;
     const g = wf.grinderId ? grinders.value.find((x) => x.id === wf.grinderId) : null;
     const grinder = g ? formatGrinderLabel(g) : (wf.grinderModel !== '—' ? wf.grinderModel : null);
     const n = NSXCore.findShotsForWorkflow(wf, shots).length;
@@ -93,14 +138,7 @@ export async function offerRecipesFromShots({ quietIfNone = false } = {}) {
     options: candidates.map((c, i) => [String(i), c.label]),
   });
   if (!picked?.length) return 0;
-  const entries = picked.map((i) => candidates[Number(i)]).map((c) => ({
-    ...NSXCore.recipeEntryFromShot(c.shot, { id: NSXCore.makeRecipeId(), beanId: c.bean.id, profileId: c.profile.id }),
-    // The bean's CURRENT name, not the one on the (older) shot — so the recipe
-    // matches the shots brewed from now on.
-    coffeeRoaster: c.bean.roaster,
-    coffeeName: c.bean.name,
-    dye: NSXCore.normalizeDye(null),
-  }));
+  const entries = picked.map((i) => candidates[Number(i)]).map((c) => entryFromShot(c.shot, c));
   recipes.value = await NSXCore.saveRecipes([...recipes.value, ...entries]);
   showToast(t('recipeSuggest.created', { n: entries.length }, entries.length));
   return entries.length;

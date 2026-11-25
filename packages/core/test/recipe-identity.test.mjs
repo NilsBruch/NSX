@@ -115,3 +115,10 @@ test("without a resolvable bean on one side, names decide as before", () => {
   assert.equal(NSXCore.findShotsForWorkflow(recipe, [renamed]).length, 0, "no bag link and a different name: no match");
 });
 
+test("recipeSettingsFromShot is only the dial settings, not the identity", () => {
+  const shot = { workflow: { profile: { title: "A-Flow", steps: [{ temperature: 94 }] },
+    context: { coffeeRoaster: "Tesy", coffeeName: "ygt", grinderModel: "Niche", grinderSetting: "9", targetDoseWeight: 18.5, targetYield: 40 } } };
+  assert.deepEqual(NSXCore.recipeSettingsFromShot(shot),
+    { grinderSetting: "9", targetDoseWeight: 18.5, targetYield: 40, groupTemp: 94, stopAtWeight: true });
+});
+

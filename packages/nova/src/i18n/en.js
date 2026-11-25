@@ -616,6 +616,14 @@ export default {
     // yielding an empty string.
     backfillMessage: 'One recipe has no grinder yet. Set it to {grinder}? | {n} recipes have no grinder yet. Set them to {grinder}?',
   },
+  // The shot review's recipe action (LiveShotOverlay.vue).
+  shotRecipe: {
+    save: 'Save as recipe',
+    update: 'Update recipe',
+    updateTitle: "Update the recipe with this shot's settings?",
+    saved: 'Saved as recipe',
+    updated: 'Recipe updated',
+  },
   // "Create recipes from past shots" — useRecipeSuggestions.js.
   recipeSuggest: {
     title: 'Create recipes from past shots',
