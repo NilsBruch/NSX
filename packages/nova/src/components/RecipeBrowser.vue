@@ -60,22 +60,28 @@ onMounted(() => {
 // is needed now.
 const { isCurrent, isFinished, listedRecipes } = useRecipeList();
 
-// The list shows 3½ cards: three, plus half of a fourth under the fade, which
+// The list shows 5½ cards: five, plus half of a sixth under the fade, which
 // is what says "there's more". Measured from the rendered cards (not a fixed
 // number), so it follows the skin's text scale and the compact card's real
 // height; rendered px, since the list's cards sit under a CSS zoom.
 const listEl = ref(null);
 const listHeight = ref(0);
 function measureList() {
-  const cards = listEl.value?.querySelectorAll('.rp-card');
-  if (!cards?.length) return;
-  const first = cards[0].getBoundingClientRect();
-  const gap = cards[1] ? cards[1].getBoundingClientRect().top - first.bottom : 7;
-  listHeight.value = Math.round(3.5 * first.height + 3 * gap);
+  const cards = [...(listEl.value?.querySelectorAll('.rp-card') ?? [])];
+  if (!cards.length) return;
+  // Cards differ in height (a kit row only where there is kit), so add up the
+  // REAL first five plus half the sixth. Missing slots (fewer recipes) count
+  // as the shortest card, so the list keeps one height however many there are.
+  const heights = cards.map((c) => c.getBoundingClientRect().height);
+  const base = Math.min(...heights);
+  const slot = (i) => heights[i] ?? base;
+  const gap = cards[1] ? cards[1].getBoundingClientRect().top - cards[0].getBoundingClientRect().bottom : 7;
+  listHeight.value = Math.round(slot(0) + slot(1) + slot(2) + slot(3) + slot(4) + 0.5 * slot(5) + 5 * gap);
 }
 onMounted(() => { nextTick(measureList); window.addEventListener('resize', measureList); });
 onBeforeUnmount(() => window.removeEventListener('resize', measureList));
-watch(() => listedRecipes.value.length, () => nextTick(measureList));
+// Re-measure whenever the list changes — order, members, or a card's kit.
+watch(listedRecipes, () => nextTick(measureList));
 
 async function pick(entry) {
   if (isCurrent(entry)) return;
@@ -254,10 +260,10 @@ const stepperDetail = computed(() => {
     <div class="browse-list">
       <!-- Lines up with the graph column's own "Coffee" title opposite. -->
       <div class="page-title browse-list-title">{{ t('espresso.recipesTitle') }}</div>
-      <!-- 3½ cards high (listHeight, measured from the real cards), so the
+      <!-- 5½ cards high (listHeight, measured from the real cards), so the
            half card and the fade say "scroll for more"; fewer recipes leave
            the same height, so the settings below never jump. -->
-      <div ref="listEl" class="rp-list" :class="{ scrollable: listedRecipes.length > 3 }" :style="listHeight ? { height: listHeight + 'px' } : null">
+      <div ref="listEl" class="rp-list" :class="{ scrollable: listedRecipes.length > 5 }" :style="listHeight ? { height: listHeight + 'px' } : null">
         <div class="rp-list-scroll">
           <RecipeCard
             v-for="entry in listedRecipes"

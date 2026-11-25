@@ -2,8 +2,7 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipeIdentityParts, formatMediumDate } from '../composables/useCore.js';
-import { recipe, roastAge, hasProfile, effectiveVolumeCalibration, RECIPE_RATING } from '../composables/useRecipe.js';
-import { openAlert } from '../composables/useModals.js';
+import { recipe, roastAge, hasProfile, RECIPE_RATING } from '../composables/useRecipe.js';
 import { useLongPress } from '../composables/useLongPress.js';
 import { useRecipeKit, recipeBasketName, recipeEquipmentNames } from '../composables/useRecipeKit.js';
 import { loadHistoryForCurrentRecipe } from '../composables/useLiveShot.js';
@@ -25,7 +24,7 @@ const emit = defineEmits(['open-recipes', 'open-roast', 'edit-profile', 'pick-be
 const { t } = useI18n();
 const {
   onDoseClick, doseDrag, onGrindClick, grindDrag, onYieldClick, yieldDrag,
-  onTempClick, tempDrag, toggleStopAtWeight, rateRecipe,
+  onTempClick, tempDrag, toggleStopAtWeight, rateRecipe, showVolumeInfo,
 } = useRecipeDials();
 
 // Tap the title to browse recipes, HOLD it to edit the loaded recipe's
@@ -42,17 +41,6 @@ const {
  * they came from (this recipe's own shots, the profile's other recipes, an
  * old calibration, or nothing yet).
  */
-function showVolumeInfo() {
-  const cal = effectiveVolumeCalibration.value;
-  const grams = Number(recipe.targetYield) || 0;
-  const offset = Math.round(cal.offset || 0);
-  const parts = [
-    t('virtualScale.corresponds', { ml: window.NSXCore.volumeForYield(grams, cal), g: grams.toFixed(1) }),
-    t('virtualScale.numbers', { factor: (cal.factor || 1).toFixed(2), offset: `${offset >= 0 ? '+' : '−'}${Math.abs(offset)}` }),
-    t(`virtualScale.source.${cal.source}`, { n: cal.count }, cal.count),
-  ];
-  openAlert({ title: t('virtualScale.title'), message: parts.join(' ') });
-}
 
 const titlePress = useLongPress({
   tap: () => emit('open-recipes'),

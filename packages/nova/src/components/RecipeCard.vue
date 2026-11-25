@@ -32,8 +32,8 @@ const props = defineProps({
   entry: { type: Object, required: true },
   current: { type: Boolean, default: false },
   /**
-   * Identity only: roaster, coffee, and one line of grinder · profile — no
-   * settings rows, no kit. For the graph layout's list (RecipeBrowser.vue),
+   * Identity, plus the kit: roaster, coffee, one line of grinder · profile,
+   * and the kit chips when there are any — no settings rows. For the graph layout's list (RecipeBrowser.vue),
    * where the SELECTED recipe's dose / grind / yield / temperature are shown
    * large and editable right beside it, so repeating them on every card was
    * noise; and a recipe IS bean + grinder + profile, so that is what tells
@@ -91,10 +91,12 @@ const kit = computed(() => recipeKitNames(props.entry));
       </span>
       <span class="rp-name">{{ recipeCoffeeName(entry) }}</span>
     </div>
-    <!-- Compact: the rest of the identity on one line. The grinder only when
-         there is a choice of grinders — with one it would repeat everywhere. -->
+    <!-- Compact: the rest of the identity on one line — PROFILE first, then the
+         grinder: cards of one coffee differ mostly by profile, and a long
+         grinder name ("Mahlkönig EK43 (SSP Brew)") then gets cut, not the
+         profile. The grinder only when there is a choice of grinders. -->
     <span v-if="compact" class="rp-ident">
-      {{ [singleGrinder ? null : grinderDisplay(entry), recipeProfileTitle(entry)].filter(Boolean).join(' · ') }}
+      {{ [recipeProfileTitle(entry), singleGrinder ? null : grinderDisplay(entry)].filter(Boolean).join(' · ') }}
     </span>
     <div v-if="!compact" class="rp-rows">
       <div v-if="!singleGrinder" class="rp-row-duo">
@@ -140,7 +142,9 @@ const kit = computed(() => recipeKitNames(props.entry));
          and these sit in a list whose even heights are what you scan down.
          Not ellipsised either — "Decent 18g, RD…" hides exactly the part that
          tells two recipes on the same basket apart. -->
-    <div v-if="!compact && (kit.length || reserveKit)" class="rp-kit">
+    <!-- Compact cards show the kit row too, but only when there IS kit: a card
+         without stays short (uneven heights read better than empty bands). -->
+    <div v-if="kit.length || reserveKit" class="rp-kit">
       <span v-for="name in kit" :key="name" class="rp-kit-chip">{{ name }}</span>
       <!-- A real chip, just invisible: it reserves EXACTLY a chip's height,
            whatever that becomes, instead of a magic number here that has to be

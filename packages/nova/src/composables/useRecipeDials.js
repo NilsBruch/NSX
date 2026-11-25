@@ -14,8 +14,8 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { grinders } from './useCore.js';
-import { recipe, pushRecipe, setRecipeRating } from './useRecipe.js';
-import { openNumberPad, openRating } from './useModals.js';
+import { recipe, pushRecipe, setRecipeRating, effectiveVolumeCalibration } from './useRecipe.js';
+import { openNumberPad, openRating, openAlert } from './useModals.js';
 import { useDragDial, DIAL_PX_PER_STEP } from './useDragDial.js';
 import { dispTemp, toCelsius, tempRange, tempUnitLabel } from './useUnits.js';
 
@@ -157,10 +157,25 @@ export function useRecipeDials() {
     if (v !== null) await setRecipeRating(v);
   }
 
+  // The ⓘ beside the stop-at-weight switch (both layouts): what the target
+  // yield means as a volume stop when there is no scale, and where that
+  // calibration comes from.
+  function showVolumeInfo() {
+    const cal = effectiveVolumeCalibration.value;
+    const grams = Number(recipe.targetYield) || 0;
+    const offset = Math.round(cal.offset || 0);
+    const parts = [
+      t('virtualScale.corresponds', { ml: window.NSXCore.volumeForYield(grams, cal), g: grams.toFixed(1) }),
+      t('virtualScale.numbers', { factor: (cal.factor || 1).toFixed(2), offset: `${offset >= 0 ? '+' : '−'}${Math.abs(offset)}` }),
+      t(`virtualScale.source.${cal.source}`, { n: cal.count }, cal.count),
+    ];
+    openAlert({ title: t('virtualScale.title'), message: parts.join(' ') });
+  }
+
   return {
     editDose, editGrind, editYield, editTemp,
     doseDrag, grindDrag, yieldDrag, tempDrag,
     onDoseClick, onGrindClick, onYieldClick, onTempClick,
-    grindStep, toggleStopAtWeight, rateRecipe,
+    grindStep, toggleStopAtWeight, rateRecipe, showVolumeInfo,
   };
 }
