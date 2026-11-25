@@ -14,12 +14,12 @@ import { useI18n } from 'vue-i18n';
 import {
   diaryState, fullHistoryShots,
   goBack, cycleSort, setView, ensureDiaryLoaded,
-  toggleProfileExpanded, openRecipeForBeanProfile,
+  toggleProfileExpanded,
   shotMetrics, ensureShotMetrics, hasMoreHistory, loadMoreHistory,
   batchRows, batchProfileGroups, enterBatch, loadBatchMap, bagRowFacts,
 } from '../../../composables/useDiary.js';
-import { findRecipeForBeanProfile, togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
-import { toggleArchiveBean, confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBatch } from '../../../composables/useBeanActions.js';
+import { togglePinRecipe, deleteRecipe } from '../../../composables/useRecipe.js';
+import { toggleArchiveBean, confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBatch, loadRecipeChecked } from '../../../composables/useBeanActions.js';
 import { openTextField, openChooser, openConfirm } from '../../../composables/useModals.js';
 import { openHistoryAt } from '../../../composables/useLiveShot.js';
 import { singleGrinder, formatShortDate, formatLongDate, recipeCoffeeName, recipeRoasterName } from '../../../composables/useCore.js';
@@ -91,31 +91,20 @@ function openBags(bean) {
 }
 function closeBags() { showBags.value = false; }
 
-// Profile-group row: tap expands the shot history below it — unlike the
-// tablet's profile row, which taps straight to loading the recipe.
-// Hold adds the same Load / Pin / Delete the tablet's openGroupMenu offers.
-// Load routes to the phone's Recipes tab rather than router.push({name:
-// 'espresso'}) — the phone has no router navigation of its own (usePhoneNav.js).
-// Profile rows belong to the opened bag's coffee — the same rule as the
-// tablet's groupBean/groupBatch (DiaryView.vue): from an OPEN bag the recipe
-// brews from that bag, otherwise from the coffee's open bag.
-const groupBean = () => diaryState.batch?.bean;
-const groupBatch = () => {
+// Recipe row (an opened bag lists the coffee's saved recipes — see
+// batchProfileGroups): tap expands its shots, hold offers Load / Pin / Delete,
+// the same menu as the tablet. Load goes to the phone's Recipes tab (the phone
+// has no router navigation of its own, usePhoneNav.js). Never creates a recipe.
+/** The opened bag, when it's still open: a recipe loaded from its rows brews
+ *  from THAT bag (two can be open at once). A done bag gives null, and the
+ *  recipe joins the coffee's open bag — or loadRecipeChecked asks, if none. */
+const openedBag = () => {
   const bag = diaryState.batch?.batch;
   return bag && !bag.archived ? bag : null;
 };
-function savedRecipeForGroup(group) {
-  // The group's newest shot names the grinder too — recipe identity is
-  // bean + grinder + profile (see findRecipeForBeanProfile).
-  return findRecipeForBeanProfile(groupBean(), group.title, group.context);
-}
 async function loadGroupRecipe(group) {
-  try {
-    await openRecipeForBeanProfile(groupBean(), group.title, group.profile, group.context, groupBatch());
-    goPhoneTab('recipes');
-  } catch (err) {
-    window.NSXCore.emit('toast', t('diary.recipeCreateFailed') + ': ' + err.message);
-  }
+  if (!(await loadRecipeChecked(group.recipe, { batch: openedBag() }))) return;
+  goPhoneTab('recipes');
 }
 async function removeGroupRecipe(recipe) {
   const ok = await openConfirm({
@@ -127,15 +116,12 @@ async function removeGroupRecipe(recipe) {
   if (ok) await deleteRecipe(recipe.id);
 }
 async function openGroupMenu(group) {
-  const saved = savedRecipeForGroup(group);
-  const options = [['load', t('diary.loadRecipe')]];
-  // Pin and Delete need something saved to act on — a pairing that was
-  // brewed but never saved as a recipe has only Load, which is what creates
-  // one (same rule as the tablet).
-  if (saved) {
-    options.push(['pin', saved.pinned ? t('diary.unpin') : t('diary.pin')]);
-    options.push(['delete', t('common.delete')]);
-  }
+  const saved = group.recipe;
+  const options = [
+    ['load', t('diary.loadRecipe')],
+    ['pin', saved.pinned ? t('diary.unpin') : t('diary.pin')],
+    ['delete', t('common.delete')],
+  ];
   const choice = await openChooser({ title: group.title, options });
   if (choice === 'load') await loadGroupRecipe(group);
   else if (choice === 'pin') await togglePinRecipe(saved);
@@ -331,7 +317,7 @@ async function onRecipeCreated() {
           >
             <span class="rmeta bag-inline">
               <span class="bag-title">{{ group.title }}</span>
-              <span class="rsub bag-facts">{{ bagRowFacts(group, savedRecipeForGroup(group)) }}</span>
+              <span class="rsub bag-facts">{{ bagRowFacts(group) }}</span>
             </span>
             <span class="chev" :class="{ open: diaryState.expandedProfile === group.key }">›</span>
           </button>
@@ -358,7 +344,7 @@ async function onRecipeCreated() {
           </div>
         </template>
       </template>
-      <div v-if="!batchProfileGroups.current.length && !batchProfileGroups.earlier.length" class="phone-empty">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</div>
+      <div v-if="!batchProfileGroups.current.length && !batchProfileGroups.earlier.length" class="phone-empty">{{ diaryState.query ? t('diary.noResults') : t('diary.noRecipesForCoffee') }}</div>
     </div>
 
     <PageTransition>

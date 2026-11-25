@@ -438,6 +438,8 @@ export default {
     in: 'in',
     noResults: 'No matches',
     noShotsYet: 'No shots yet',
+    // An opened bag lists the coffee's saved recipes (batchProfileGroups).
+    noRecipesForCoffee: 'No recipes for this coffee yet — create one with +',
     loadMore: 'Load {n} more shots',
     loading: 'Loading…',
     loadRecipe: 'Load Recipe',

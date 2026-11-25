@@ -274,15 +274,17 @@ export async function chooseBagForFinishedCoffee(entry) {
  * guard jump to a recipe of its own choosing mid-load.
  *
  * `onChosen` runs once the bag question is settled, just before loading (the
- * phone opens its detail screen there). Resolves false if cancelled.
+ * phone opens its detail screen there). `batch` names the bag to brew from
+ * (the Diary's opened bag) when the coffee isn't finished; without it the
+ * recipe joins the coffee's open bag. Resolves false if cancelled.
  */
-export async function loadRecipeChecked(entry, { push = true, onChosen } = {}) {
+export async function loadRecipeChecked(entry, { push = true, onChosen, batch = null } = {}) {
   finishedGuardHold.value++;
   try {
     const bag = await chooseBagForFinishedCoffee(entry);
     if (bag === false) return false;
     onChosen?.();
-    await selectRecipe(entry, { push, batch: bag?.batch });
+    await selectRecipe(entry, { push, batch: bag?.batch ?? batch });
     return true;
   } finally {
     finishedGuardHold.value--;

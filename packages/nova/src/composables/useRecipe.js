@@ -894,85 +894,12 @@ export function findRecipeForBeanProfile(bean, profileTitle, grinder = null) {
 }
 
 /**
- * Load the recipe for this bean+profile, creating and persisting one if it
- * doesn't exist yet (the coffee was brewed some other way — another skin, or
- * before this library existed), so "what's on the machine is always a recipe in
- * your library" holds no matter how the workflow got there.
- *
- * ── No library match: best-effort reference from the shot's own snapshot ───
- * The recipe never gets an embedded profile — only a reference (selectedProfileId
- * / profileTitle), same as every other recipe. When no matching recipe exists
- * yet, those are seeded best-effort from the shot's own profile snapshot
- * (`fallbackProfile.id`/`.title` — the id/title the shot was actually brewed
- * with), WITHOUT a round-trip to the bridge to confirm it still resolves.
- * buildGatewayPayload does that resolution for real on the recipe's first push
- * (id, falling back to title, preferring the highest version) — so this
- * usually lands on the still-live profile (or its newest version) exactly like
- * any other recipe. The one case this can't recover from: the shot's profile
- * was fully deleted from the library (not just superseded) — then the created
- * recipe has nothing to resolve, and pushRecipe (called via composeNewRecipe,
- * below) throws. Rare, and the correct outcome under "recipes only reference
- * library profiles": there is nothing left to brew.
- *
- * `fallbackContext` carries the shot's REAL dose/grind/yield, so the recovered
- * recipe reflects what was actually brewed instead of silently inheriting
- * whatever happened to be dialed in on the Espresso screen from an unrelated
- * recipe (composeNewRecipe's default, correct for its OTHER caller — a fresh
- * bean+profile pick, which has nothing else to seed from).
- *
- * `batch`, when given, is the bag to brew from (an open bag the Diary has
- * opened); without it the recipe brews from the bean's open bag.
- */
-export async function loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallbackProfile = null, fallbackContext = null, batch = null) {
-  const log = (...args) => console.log('[Nova/recipe]', ...args);
-  log(`tapped profile "${profileTitle}" for bean "${bean?.roaster} – ${bean?.name}"`);
-  log('  shot-derived profile:', fallbackProfile
-    ? `title="${fallbackProfile.title}", ${(fallbackProfile.steps ?? fallbackProfile.frames ?? []).length} steps`
-    : 'NONE (no shot in this group carries a matching profile object)');
-  log('  shot-derived context:', fallbackContext
-    ? `dose=${fallbackContext.targetDoseWeight}g grind=${fallbackContext.grinderSetting} yield=${fallbackContext.targetYield}g`
-    : 'NONE');
-  log('  (both taken from the MOST RECENT shot brewed with this profile)');
-
-  const existing = findRecipeForBeanProfile(bean, profileTitle, fallbackContext);
-  if (existing) {
-    log(`  -> existing recipe found (id=${existing.id}, profileTitle="${existing.profileTitle}") — loading it`);
-    await selectRecipe(existing, { batch });
-    return existing;
-  }
-  log('  -> no existing recipe for this bean+profile; creating one from the shot snapshot');
-
-  // A shot with no profile steps at all has nothing to reference or recover
-  // from — the one hard requirement before even trying to seed a reference.
-  if (!hasFrames(fallbackProfile)) {
-    log('  -> shot carries no profile steps — cannot build a pushable recipe');
-    throw new Error(`This shot carries no profile steps, so no recipe can be built for "${profileTitle}".`);
-  }
-
-  // composeNewRecipe takes a profile RECORD ({ id, profile }); wrap the raw
-  // snapshot in that shape. id/title are best-effort from the shot (see docstring).
-  const snapshotRecord = { id: fallbackProfile.id ?? fallbackContext?.profileId ?? null, profile: fallbackProfile };
-  await composeNewRecipe({
-    bean,
-    profile: snapshotRecord,
-    seedContext: fallbackContext,
-    batch,
-  });
-  const entry = await createRecipeFromCurrent();
-  log(`  -> recipe created from snapshot: id=${entry.id}, profileTitle="${entry.profileTitle}", `
-    + `selectedProfileId=${entry.selectedProfileId}, dose=${entry.targetDoseWeight}g, `
-    + `grind=${entry.grinderSetting}, yield=${entry.targetYield}g`);
-  return entry;
-}
-
-/**
- * Boot: make the workflow the gateway is already holding a real, saved recipe.
- *
- * Without this, a workflow the user never loaded through the picker (first
- * launch, or a coffee dialled in from another skin) leaves recipe.id null — and
- * then every dial edit persists nowhere, invisibly. Adopting it means "whatever
- * is on the machine is a recipe in your library" is true from the first frame,
- * so edits always land somewhere the user can see.
+ * Boot: if the workflow the gateway is holding matches a saved recipe, adopt
+ * it (restore the fields the gateway doesn't carry). If it matches none, it is
+ * shown as it is but NOT saved — only the user creates recipes ("+ New
+ * recipe"). Until then recipe.id stays null, so dial edits are pushed to the
+ * machine but persisted nowhere; that is the deliberate price of never
+ * creating a recipe behind the user's back.
  *
  * Called from main.js after bootCore() — deliberately NOT from bootCore itself,
  * since useCore.js importing this module would close an import cycle
@@ -1036,10 +963,10 @@ export async function adoptCurrentWorkflowAsRecipe() {
       await selectRecipe(existing);
       return recipe.id;
     }
-  } else {
-    await ensureRecipeBatch();
-    await createRecipeFromCurrent();
   }
+  // No saved recipe for what's on the machine: it stays UNSAVED (recipe.id
+  // null). Recipes are created by the user alone — "+ New recipe" — never
+  // behind their back from whatever workflow another skin left loaded.
 
   // Heal the gateway's copy only if it's actually missing the bag — re-pushing
   // an already-correct workflow on every boot would be pointless churn. Silent:

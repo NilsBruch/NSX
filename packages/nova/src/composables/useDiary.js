@@ -6,7 +6,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { beans, shots, loadShots, shotsFromResponse, boot, grinders, formatGrinderLabel } from './useCore.js';
 import { fmtTemp } from './useUnits.js';
-import { recipe, recipes, refreshRecipes, loadOrCreateRecipeForBeanProfile, selectRecipe, beanForRecipe, recipeParked } from './useRecipe.js';
+import { recipe, recipes, refreshRecipes, selectRecipe, beanForRecipe, recipeParked, recipesUsingBean } from './useRecipe.js';
 
 const { NSXApi, NSXCore } = window;
 
@@ -142,8 +142,6 @@ export function shotMatchesBean(shot, bean) {
   const name = (bean.name || '').trim().toLowerCase();
   return (ctx.coffeeRoaster || '').trim().toLowerCase() === roaster && (ctx.coffeeName || '').trim().toLowerCase() === name;
 }
-const shotProfile = (shot) => shot?.workflow?.profile?.title || shot?.workflow?.profileTitle || '—';
-const byTimestampDesc = (a, b) => (Date.parse(b?.timestamp || 0) || 0) - (Date.parse(a?.timestamp || 0) || 0);
 
 /**
  * Shots for the coffee of the bag opened — fetched from the server scoped
@@ -181,106 +179,6 @@ export async function loadBeanShots(bean, query = '') {
   }
 }
 
-/**
- * One entry per profile in `shotList` (newest first), in the order the
- * profiles were last used — Map preserves insertion order, so that needs no
- * extra ordering logic.
- *
- * Searching is NOT filtered here — the query goes back to the server
- * (loadBeanShots, via the diaryState.query watcher below), which matches
- * profile title among other fields across the coffee's whole history.
- * Filtering client-side instead would only ever see the shots already
- * fetched.
- */
-/**
- * The grinder a shot was pulled on, as a stable group key plus a label.
- * By grinder RECORD (id): one grinder with two burr sets is two records that
- * share a model, and recipe identity is bean + grinder + profile (core's
- * isSameRecipe). An older shot with no id is matched to the configured grinder
- * of that model when exactly one has it, so it joins that grinder's row rather
- * than forming a twin row of its own.
- */
-const normModel = (m) => String(m || '').trim().toLowerCase();
-function shotGrinder(shot) {
-  const ctx = shot?.workflow?.context || {};
-  const model = ctx.grinderModel && ctx.grinderModel !== '—' ? ctx.grinderModel : '';
-  let id = ctx.grinderId || null;
-  if (!id && model) {
-    const same = grinders.value.filter((g) => normModel(g.model) === normModel(model));
-    if (same.length === 1) id = same[0].id;
-  }
-  const record = id ? grinders.value.find((g) => g.id === id) : null;
-  return {
-    key: id ? `id:${id}` : `m:${normModel(model)}`,
-    label: record ? formatGrinderLabel(record) : (model || null),
-  };
-}
-
-/**
- * The one-line settings under a bag row's profile title:
- * "Niche · 10 · 18.0 → 36.0 g (1:2.0) · 93°C" — grinder, grind, dose → yield
- * (ratio), temperature. From the SAVED recipe when the row has one (what you'd
- * brew if you loaded it now), else from the row's newest shot (what was
- * brewed). Parts with nothing to say are left out rather than shown as dashes.
- */
-export function bagRowFacts(group, saved) {
-  const ctx = group?.context || {};
-  const src = saved || {
-    grinderId: ctx.grinderId, grinderModel: ctx.grinderModel, grinderSetting: ctx.grinderSetting,
-    targetDoseWeight: ctx.targetDoseWeight, targetYield: ctx.targetYield,
-    groupTemp: NSXCore.resolveProfileTemp(group?.profile),
-  };
-  const record = src.grinderId ? grinders.value.find((g) => g.id === src.grinderId) : null;
-  const grinder = record ? formatGrinderLabel(record)
-    : (src.grinderModel && src.grinderModel !== '—' ? src.grinderModel : group?.grinderLabel);
-  const grind = src.grinderSetting && src.grinderSetting !== '—' ? String(src.grinderSetting) : null;
-  const dose = Number(src.targetDoseWeight) || 0;
-  const yield_ = Number(src.targetYield) || 0;
-  const inOut = dose > 0 && yield_ > 0
-    ? `${dose.toFixed(1)} → ${yield_.toFixed(1)} g (${NSXCore.calcRatio(dose, yield_)})`
-    : (dose > 0 ? `${dose.toFixed(1)} g` : null);
-  const temp = Number(src.groupTemp) > 0 ? fmtTemp(Number(src.groupTemp)) : null;
-  return [grinder, grind, inOut, temp].filter(Boolean).join(' · ');
-}
-
-function groupShotsByProfile(shotList) {
-  // One row per profile AND grinder: the same profile brewed on two grinders
-  // is two recipes, and must be two rows (see shotGrinder).
-  const byProfile = new Map();
-  const labelOf = new Map();
-  for (const shot of shotList) {
-    const g = shotGrinder(shot);
-    const key = `${shotProfile(shot)}||${g.key}`;
-    if (!byProfile.has(key)) { byProfile.set(key, []); labelOf.set(key, g.label); }
-    byProfile.get(key).push(shot);
-  }
-  // Each group carries the source shot that a recipe is rebuilt from (its
-  // workflow.profile = the real steps actually brewed; its workflow.context =
-  // the real dose/grind/yield) — see loadOrCreateRecipeForBeanProfile.
-  //
-  // The source is the MOST RECENT such shot, picked by timestamp explicitly:
-  //  - not list[0] — that only holds while every caller passes newest-first
-  //    shots, and which shot seeds a recipe must not depend on a caller's order.
-  //  - not any shot in the group — shotProfile() groups a shot under EITHER its
-  //    own profile.title OR the workflow.profileTitle fallback, so a shot can
-  //    land here while its .profile object is something else entirely. Only a
-  //    shot whose OWN profile.title equals the group title is a trustworthy
-  //    snapshot of "this" profile.
-  return [...byProfile.entries()].map(([key, list]) => {
-    const title = shotProfile(list[0]);
-    const source = list
-      .filter((s) => s?.workflow?.profile?.title === title)
-      .sort(byTimestampDesc)[0] ?? null;
-    return {
-      key,
-      title,
-      grinderLabel: labelOf.get(key),
-      shots: list,
-      profile: source?.workflow?.profile ?? null,
-      context: source?.workflow?.context ?? null,
-    };
-  });
-}
 
 /**
  * The Batches view: one row per bag, because a bag (one bean, one roast date)
@@ -336,43 +234,74 @@ export const batchRows = computed(() => {
 });
 
 /**
- * A bag opened: the recipes of its COFFEE, not just of this bag — every
- * profile ever brewed with this bean, so all of a coffee's recipes are in one
- * place. Built from beanShots (server-scoped by beanId, the whole history).
+ * The one-line settings after a bag row's profile title:
+ * "Niche · 10 · 18.0 → 36.0 g (1:2.0) · 93°C" — grinder, grind, dose → yield
+ * (ratio), temperature: the recipe's own settings (what you'd brew if you
+ * loaded it now). Parts with nothing to say are left out, not dashed.
+ */
+export function bagRowFacts(group) {
+  const src = group?.recipe || {};
+  const record = src.grinderId ? grinders.value.find((g) => g.id === src.grinderId) : null;
+  const grinder = record ? formatGrinderLabel(record)
+    : (src.grinderModel && src.grinderModel !== '—' ? src.grinderModel : null);
+  const grind = src.grinderSetting && src.grinderSetting !== '—' ? String(src.grinderSetting) : null;
+  const dose = Number(src.targetDoseWeight) || 0;
+  const yield_ = Number(src.targetYield) || 0;
+  const inOut = dose > 0 && yield_ > 0
+    ? `${dose.toFixed(1)} → ${yield_.toFixed(1)} g (${NSXCore.calcRatio(dose, yield_)})`
+    : (dose > 0 ? `${dose.toFixed(1)} g` : null);
+  const temp = Number(src.groupTemp) > 0 ? fmtTemp(Number(src.groupTemp)) : null;
+  return [grinder, grind, inOut, temp].filter(Boolean).join(' · ');
+}
+
+/**
+ * A bag opened: the RECIPES of its coffee — built from the recipe library, the
+ * one source of truth, not from shot history. A recipe is the coffee's (bean +
+ * grinder + profile), not one bag's, so every recipe of this bean is listed,
+ * most recently brewed first and never-brewed ones last. Shots that match no
+ * saved recipe (brewed in another skin, or a recipe since deleted) are not
+ * shown here; they stay in the Diary's full History. Nothing here creates a
+ * recipe — only the user does.
  *
- * Split in two so the bag on the counter still leads:
- *   current — profiles brewed with THIS bag, most recently used first
- *   earlier — profiles only ever brewed with older bags of the coffee
- * A bean with no bag has nothing to split by, so everything is `current`.
+ * Each recipe's shots (core's findShotsForWorkflow: bean + grinder record +
+ * profile, from beanShots — the bean's whole history, server-scoped) come in
+ * `sections`, one per bag: the opened bag's first, then older bags in the order
+ * they were last brewed. `ordered` is the same shots flattened in display
+ * order — what the shot review pages through.
  *
- * Each group's shots come in `sections`, one per bag: this bag's first, then
- * the older bags in the order they were last brewed. The view draws a divider
- * with the roast date above every section that is not this bag. `ordered` is
- * the same shots flattened in display order — what the shot review pages
- * through, so swiping follows the list on screen.
+ * `{ current, earlier }` keeps the views' shape; `earlier` is always empty now
+ * (no "Earlier bags" split — a recipe belongs to the coffee, not a bag).
+ * With a search, only recipes with a matching shot are listed.
  */
 export const batchProfileGroups = computed(() => {
   const open = diaryState.batch;
   if (!open) return { current: [], earlier: [] };
   const batchId = open.batch?.id ?? null;
   const bagOf = new Map(allBatches.value.map((p) => [p.batch.id, p.batch]));
-  const groups = groupShotsByProfile(beanShots.value.slice().sort(byTimestampDesc)).map((group) => {
+  const groups = recipesUsingBean(open.bean).map((r) => {
+    const list = NSXCore.findShotsForWorkflow(r, beanShots.value); // newest first
     const byBag = new Map();
-    for (const s of group.shots) {
+    for (const s of list) {
       const id = s?.workflow?.context?.beanBatchId ?? null;
       if (!byBag.has(id)) byBag.set(id, []);
       byBag.get(id).push(s);
     }
     const sections = [...byBag.entries()]
-      .map(([id, list]) => ({ id, current: !!batchId && id === batchId, batch: bagOf.get(id) ?? null, shots: list }))
-      // Array sort is stable: past the current bag, the most-recent-first
-      // order the Map was filled in stays.
+      .map(([id, shots]) => ({ id, current: !!batchId && id === batchId, batch: bagOf.get(id) ?? null, shots }))
       .sort((a, b) => Number(b.current) - Number(a.current));
-    return { ...group, sections, ordered: sections.flatMap((s) => s.shots) };
+    return {
+      key: r.id,
+      title: r.profileTitle || '—',
+      recipe: r,
+      shots: list,
+      sections,
+      ordered: sections.flatMap((sec) => sec.shots),
+      lastShot: Date.parse(list[0]?.timestamp || 0) || 0,
+    };
   });
-  if (!batchId) return { current: groups, earlier: [] };
-  const inBag = (g) => g.sections.some((s) => s.current);
-  return { current: groups.filter(inBag), earlier: groups.filter((g) => !inBag(g)) };
+  const shown = diaryState.query ? groups.filter((g) => g.shots.length) : groups;
+  // Stable sort: equal (never-brewed) recipes keep the library's order.
+  return { current: shown.slice().sort((a, b) => b.lastShot - a.lastShot), earlier: [] };
 });
 
 export function enterBatch(row) {
@@ -489,17 +418,6 @@ export function ensureShotMetrics(list) {
     _metricsQueue.push(id);
   }
   _pumpMetrics();
-}
-
-/**
- * Tapping a profile entry (not one of its shots) loads the bean+profile as a
- * recipe on the Espresso screen — an EXISTING recipe if one already matches,
- * or a freshly-created one if this profile was only ever brewed some other way
- * (not through Nova's recipe picker, so no persisted entity exists yet).
- * Navigation itself stays in DiaryView.vue; this only loads/creates+loads.
- */
-export async function openRecipeForBeanProfile(bean, profileTitle, fallbackProfile = null, fallbackContext = null, batch = null) {
-  await loadOrCreateRecipeForBeanProfile(bean, profileTitle, fallbackProfile, fallbackContext, batch);
 }
 
 /**

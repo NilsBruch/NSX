@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router';
 import {
   diaryState, fullHistoryShots,
   goBack, cycleSort, setView, ensureDiaryLoaded,
-  toggleProfileExpanded, openRecipeForBeanProfile,
+  toggleProfileExpanded,
   ensureShotMetrics, hasMoreHistory, loadMoreHistory,
   recipeRows, toggleRecipeExpanded, toggleEditingRecipes,
   batchRows, batchProfileGroups, enterBatch, loadBatchMap, bagRowFacts,
@@ -17,7 +17,7 @@ import { useLongPress } from '../composables/useLongPress.js';
 import { vScrollEdges } from '../composables/useScrollEdges.js';
 import { confirmAndDeleteBean, confirmAndDeleteBatch, toggleArchiveBean, toggleArchiveBatch, loadRecipeChecked } from '../composables/useBeanActions.js';
 import { recipeIdentityParts, recipeCoffeeName, recipeRoasterName, formatLongDate } from '../composables/useCore.js';
-import { RECIPE_RATING, selectRecipe, deleteRecipe, findRecipeForBeanProfile, togglePinRecipe } from '../composables/useRecipe.js';
+import { RECIPE_RATING, selectRecipe, deleteRecipe, togglePinRecipe } from '../composables/useRecipe.js';
 import BeanEditor from '../components/BeanEditor.vue';
 import BagsPanel from '../components/BagsPanel.vue';
 import RecipePicker from '../components/RecipePicker.vue';
@@ -28,28 +28,20 @@ import { fmtTemp } from '../composables/useUnits.js';
 const { t } = useI18n();
 const router = useRouter();
 
-/**
- * The coffee and bag the profile rows of an opened bag belong to. From an OPEN
- * bag the recipe brews from that very bag; from a done one (or a bean with no
- * bag) it joins the coffee's open bag, the way it always has.
- */
-const groupBean = () => diaryState.batch?.bean;
-const groupBatch = () => {
+
+// Every row is a saved recipe now (batchProfileGroups) — loading it is just
+// that: no recipe is ever created from a row. loadRecipeChecked asks for a bag
+// first if the coffee's bags are all done.
+/** The opened bag, when it's still open: a recipe loaded from its rows brews
+ *  from THAT bag (two can be open at once). A done bag gives null, and the
+ *  recipe joins the coffee's open bag — or loadRecipeChecked asks, if none. */
+const openedBag = () => {
   const bag = diaryState.batch?.batch;
   return bag && !bag.archived ? bag : null;
 };
-
 async function goToRecipe(group) {
-  try {
-    // group.profile/context are the shot's own workflow data (real frames +
-    // real dose/grind/temp, not just a title) — used both to recreate the
-    // profile if it's since been deleted AND to seed the recipe with what was
-    // actually brewed instead of stale leftover dial values. See useDiary.js.
-    await openRecipeForBeanProfile(groupBean(), group.title, group.profile, group.context, groupBatch());
-    router.push({ name: 'espresso' });
-  } catch (err) {
-    window.NSXCore.emit('toast', t('diary.recipeCreateFailed') + ': ' + err.message);
-  }
+  if (!(await loadRecipeChecked(group.recipe, { batch: openedBag() }))) return;
+  router.push({ name: 'espresso' });
 }
 
 // "+" creates a RECIPE (choose/add bean -> choose profile), not a bare bean —
@@ -112,9 +104,7 @@ function recipeFacts(r) {
  * there is actually something to delete.
  */
 function savedRecipeForGroup(group) {
-  // The group's newest shot names the grinder too — recipe identity is
-  // bean + grinder + profile (see findRecipeForBeanProfile).
-  return findRecipeForBeanProfile(groupBean(), group.title, group.context);
+  return group.recipe;
 }
 
 /**
@@ -168,14 +158,12 @@ watch(
 );
 
 async function openGroupMenu(group) {
-  const saved = savedRecipeForGroup(group);
-  const options = [['load', t('diary.loadRecipe')]];
-  // Pin and Delete need something saved to act on. A pairing that was brewed
-  // but never saved has only Load, which is what creates the recipe.
-  if (saved) {
-    options.push(['pin', saved.pinned ? t('diary.unpin') : t('diary.pin')]);
-    options.push(['delete', t('common.delete')]);
-  }
+  const saved = group.recipe;
+  const options = [
+    ['load', t('diary.loadRecipe')],
+    ['pin', saved.pinned ? t('diary.unpin') : t('diary.pin')],
+    ['delete', t('common.delete')],
+  ];
   const choice = await openChooser({ title: group.title, options });
   if (choice === 'load') await goToRecipe(group);
   else if (choice === 'pin') await togglePinRecipe(saved);
@@ -495,7 +483,7 @@ watch(
                         </svg>
                         {{ group.title }}
                       </span>
-                      <span class="rsub bag-facts">{{ bagRowFacts(group, savedRecipeForGroup(group)) }}</span>
+                      <span class="rsub bag-facts">{{ bagRowFacts(group) }}</span>
                     </span>
                     <StarRating
                       v-if="RECIPE_RATING && Number(savedRecipeForGroup(group)?.rating) > 0"
@@ -527,7 +515,7 @@ watch(
             <div
               v-if="!batchProfileGroups.current.length && !batchProfileGroups.earlier.length"
               class="list-row"
-            ><span class="rsub">{{ diaryState.query ? t('diary.noResults') : t('diary.noShotsYet') }}</span></div>
+            ><span class="rsub">{{ diaryState.query ? t('diary.noResults') : t('diary.noRecipesForCoffee') }}</span></div>
           </div>
         </div>
       </Transition>
