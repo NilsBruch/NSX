@@ -66,6 +66,12 @@ const props = defineProps({
   showTargets: { type: Boolean, default: false },
   // true = the axes-and-lines rendering described above.
   expert: { type: Boolean, default: false },
+  // Normal mode only: inset the plot and label it — pressure/flow scale on the
+  // left, time along the bottom — without switching to expert's lines-only
+  // encoding. Edge to edge, a static graph is stretched to whatever box it
+  // gets; the axes give it a frame and readable numbers. (The coffee page's
+  // graph layout uses it; the live overlay keeps its edge-to-edge strip.)
+  axes: { type: Boolean, default: false },
   // Scroll mode: the temperature the shot is brewed at (°C), known before the
   // first sample. Fixes the right-hand scale for the whole shot — see
   // tempRange(). Without it a live chart falls back to fitting the data.
@@ -200,10 +206,15 @@ let raf = 0;
  *  mode insets the axis gutters. Shared by draw() and scrubAt() so a held
  *  finger lands on the sample it is actually over in either mode. */
 function geometry(w, h) {
-  const px = props.expert ? 38 : 0;
-  const py = props.expert ? 10 : 0;
-  const pw = Math.max(1, w - px - (props.expert ? 46 : 0));
-  const ph = Math.max(1, h - py - (props.expert ? 22 : 0));
+  const framed = props.expert || props.axes;
+  const px = props.expert ? 38 : (props.axes ? 30 : 0);
+  // Normal mode's legend sits inset at the plot's top right (.glabel-inset),
+  // so with axes the plot starts below it instead of running a gridline
+  // through it.
+  const py = props.expert ? 10 : (props.axes ? 28 : 0);
+  // Right gutter: expert's temperature scale; normal mode has none to label.
+  const pw = Math.max(1, w - px - (props.expert ? 46 : (props.axes ? 8 : 0)));
+  const ph = Math.max(1, h - py - (framed ? 22 : 0));
   const ts = props.series.elapsed, n = ts.length;
   const live = props.mode === 'scroll';
   // `now` = the right edge of the viewport in shot-elapsed seconds. Live:
@@ -392,20 +403,41 @@ function smoothLine(vals, style, windowStart, xFor, yFor, opts = {}) {
 function drawNormal(g, gridColor, windowStart, w, h) {
   const { live, now, span, pps, xFor, yFor } = g;
   const ts = props.series.elapsed, n = ts.length;
+  // The plot's own box: the whole canvas edge to edge, or inset by the axis
+  // gutters (props.axes). Bars stand on its floor.
+  const x0p = g.px, x1p = g.px + g.pw, y0p = g.py, floor = g.py + g.ph;
+  const axisText = props.axes ? themeColor('--muted', 'rgba(233,237,242,0.55)') : null;
 
-  // Grid: horizontal every 3 units; vertical ticks every 5s. Live: ticks
-  // scroll WITH the data, making the constant motion readable even before
-  // bars exist. Static: ticks sit at fixed 0, 5, 10... positions.
+  // Grid: horizontal every quarter of the scale; vertical ticks every 5s (or
+  // a rounder step when labelled). Live: ticks scroll WITH the data, making the
+  // constant motion readable even before bars exist. Static: ticks sit at
+  // fixed 0, 5, 10... positions. With axes, each line gets its number.
   ctx.strokeStyle = gridColor;
   ctx.lineWidth = 1;
-  for (let v = Y_GRID_STEP.value; v < MAX_Y.value; v += Y_GRID_STEP.value) {
-    ctx.beginPath(); ctx.moveTo(0, yFor(v)); ctx.lineTo(w, yFor(v)); ctx.stroke();
+  if (props.axes) {
+    ctx.font = '10px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
   }
-  const tickStart = live ? Math.max(0, Math.ceil((now - span) / 5) * 5) : 0;
-  for (let t = tickStart; t <= now; t += 5) {
+  for (let v = props.axes ? 0 : Y_GRID_STEP.value; v <= MAX_Y.value + 0.001; v += Y_GRID_STEP.value) {
+    if (!props.axes && v >= MAX_Y.value) break;
+    ctx.strokeStyle = gridColor;
+    ctx.beginPath(); ctx.moveTo(x0p, yFor(v)); ctx.lineTo(x1p, yFor(v)); ctx.stroke();
+    if (props.axes) { ctx.fillStyle = axisText; ctx.fillText(String(Math.round(v)), x0p - 6, yFor(v)); }
+  }
+  const step = props.axes ? timeStep(span) : 5;
+  if (props.axes) { ctx.textAlign = 'center'; ctx.textBaseline = 'top'; }
+  const tickStart = live ? Math.max(0, Math.ceil((now - span) / step) * step) : 0;
+  for (let t = tickStart; t <= now + 0.001; t += step) {
     const x = xFor(t);
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    if (props.axes && (x < x0p - 1 || x > x1p + 1)) continue;
+    ctx.strokeStyle = gridColor;
+    ctx.beginPath(); ctx.moveTo(x, y0p); ctx.lineTo(x, floor); ctx.stroke();
+    if (props.axes) { ctx.fillStyle = axisText; ctx.fillText(`${Math.round(t)}s`, x, floor + 5); }
   }
+
+  // With axes, nothing may bleed into the gutters (a live window scrolls).
+  if (props.axes) { ctx.save(); ctx.beginPath(); ctx.rect(x0p, y0p, g.pw, g.ph); ctx.clip(); }
 
   // ── Flow bins: average samples per BIN_S bucket (recomputed per frame — a
   // 35s live window holds ~140 samples at 4Hz and a full shot only somewhat
@@ -430,16 +462,16 @@ function drawNormal(g, gridColor, windowStart, w, h) {
     const flow = b.f / b.c, goal = b.g / b.c, wflow = b.wt / b.c;
     if (flow > 0.02) {
       ctx.fillStyle = COLORS.flow;
-      ctx.fillRect(x0, yFor(flow), bw, h - yFor(flow));
+      ctx.fillRect(x0, yFor(flow), bw, floor - yFor(flow));
     }
     if (wflow > 0.02) {
       ctx.fillStyle = COLORS.weight;
-      ctx.fillRect(x0, yFor(wflow), bw, h - yFor(wflow));
+      ctx.fillRect(x0, yFor(wflow), bw, floor - yFor(wflow));
     }
     if (props.showTargets && goal > 0.02) {
       ctx.strokeStyle = COLORS.flowGoal;
       ctx.lineWidth = 1;
-      ctx.strokeRect(x0 + 0.5, yFor(goal) + 0.5, bw - 1, h - yFor(goal) - 1);
+      ctx.strokeRect(x0 + 0.5, yFor(goal) + 0.5, bw - 1, floor - yFor(goal) - 1);
     }
   }
 
@@ -455,6 +487,7 @@ function drawNormal(g, gridColor, windowStart, w, h) {
     ctx.arc(xFor(ts[n - 1]), yFor(props.series.pressure[n - 1]), 3.5, 0, Math.PI * 2);
     ctx.fill();
   }
+  if (props.axes) ctx.restore();
 }
 
 // ── Expert mode: axes with numbers, one line per series ─────────────────────

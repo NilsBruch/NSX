@@ -294,7 +294,7 @@ const stepperDetail = computed(() => {
       <RecipeSettingsCard part="values" />
 
       <div class="shot-graph">
-        <ShotStripChart :series="graphSeries" mode="static" :show-targets="skinSettings.showTargets" :expert="expertGraph" @scrub="scrub = $event" />
+        <ShotStripChart :series="graphSeries" mode="static" :show-targets="skinSettings.showTargets" :expert="expertGraph" axes @scrub="scrub = $event" />
         <!-- Hold a finger on the graph to fill each label with that point's
              value — same interaction as LiveShotOverlay's own history screen.
              Temperature isn't part of the chart itself (see scrubTemp's own
