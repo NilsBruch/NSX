@@ -616,6 +616,15 @@ export default {
     // yielding an empty string.
     backfillMessage: 'One recipe has no grinder yet. Set it to {grinder}? | {n} recipes have no grinder yet. Set them to {grinder}?',
   },
+  // "Create recipes from past shots" — useRecipeSuggestions.js.
+  recipeSuggest: {
+    title: 'Create recipes from past shots',
+    shots: '{n} shot | {n} shots',
+    none: 'Every coffee you brewed already has a recipe',
+    created: 'Created {n} recipe | Created {n} recipes',
+    settingName: 'Recipes from past shots',
+    settingSub: 'Create recipes for coffees you brewed but never saved',
+  },
   recipeDye: {
     // The button on the coffee page, left of Rate. "Edit": the page is where
     // the whole recipe is edited now — see RecipeDyeModal's own header.

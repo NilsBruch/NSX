@@ -13,6 +13,7 @@ import {
   installedSkins, activeSkinId, loadInstalledSkins, switchSkin,
 } from '../../composables/useSettings.js';
 import { showToast } from '../../composables/useToast.js';
+import { offerRecipesFromShots } from '../../composables/useRecipeSuggestions.js';
 import { isPhone } from '../../composables/useLayout.js';
 
 const emit = defineEmits(['close']);
@@ -260,6 +261,13 @@ async function pickSkin(skin) {
       <button class="setting-row as-btn" @click="pickUiScale">
         <span class="sr-main"><span class="sr-name">{{ t('skinSettings.uiScale') }}</span><span class="sr-sub">{{ t('skinSettings.uiScaleSub') }}</span></span>
         <span class="sr-value">{{ skinSettings.uiScale }}%<span class="sr-chev">›</span></span>
+      </button>
+
+      <!-- The user's own way to turn brewed-but-unsaved coffees into recipes:
+           lists them, creates only what is ticked (useRecipeSuggestions.js). -->
+      <button class="setting-row as-btn" @click="offerRecipesFromShots()">
+        <span class="sr-main"><span class="sr-name">{{ t('recipeSuggest.settingName') }}</span><span class="sr-sub">{{ t('recipeSuggest.settingSub') }}</span></span>
+        <span class="sr-value"><span class="sr-chev">›</span></span>
       </button>
 
       <!-- Last on the page on purpose: it is the one setting here that leaves

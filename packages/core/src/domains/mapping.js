@@ -255,6 +255,8 @@
       // The grinder RECORD, not just its model: two burr sets on one model are
       // two grinder records sharing a model name (see isSameRecipe).
       grinderId: ctx.grinderId || null,
+      // The bag — the reliable link to the bean (see isSameRecipe).
+      beanBatchId: ctx.beanBatchId || null,
       grinderSetting: ctx.grinderSetting || "—",
       targetDoseWeight: dose,
       targetYield: yield_,
@@ -291,18 +293,92 @@
     const ib = b?.grinderId || null;
     return !(ia && ib) || ia === ib;
   }
-  function isSameRecipe(a, b) {
-    return getWorkflowKey(a) === getWorkflowKey(b) && sameGrinder(a, b);
+  /**
+   * The BEAN, by id rather than by name, the same way as the grinder: a recipe
+   * stores beanId; a shot stores only its bag, whose bean core's bean domain
+   * knows (beanIdForBatch, filled by the skin). Names are what a shot recorded
+   * AS BREWED, so renaming a bean ("Brazil" -> "Brazil Gold") cut a recipe
+   * off from its whole history; the id survives the rename. When either side
+   * can't name its bean (an old shot with no bag, NSX's recipes, a bag the
+   * skin hasn't loaded), roaster + name decide, exactly as before.
+   */
+  function beanIdOf(w) {
+    if (w?.beanId) return w.beanId;
+    return NSXCore.beanIdForBatch ? NSXCore.beanIdForBatch(w?.beanBatchId) : null;
   }
-  /** getWorkflowKey plus the grinder id — for "did the recipe's identity
-   *  change" checks (e.g. refetching its shots) that a string must answer. */
+  function isSameRecipe(a, b) {
+    if (!sameGrinder(a, b)) return false;
+    const ba = beanIdOf(a);
+    const bb = beanIdOf(b);
+    if (ba && bb) {
+      return ba === bb
+        && normalizeWorkflowKeyPart(a?.grinderModel) === normalizeWorkflowKeyPart(b?.grinderModel)
+        && normalizeWorkflowKeyPart(a?.profileTitle) === normalizeWorkflowKeyPart(b?.profileTitle);
+    }
+    return getWorkflowKey(a) === getWorkflowKey(b);
+  }
+  /** A string standing for the recipe's identity — for "did it change" checks
+   *  (e.g. refetching its shots): bean id (else names), grinder, profile. */
   function getRecipeIdentityKey(workflow) {
-    return `${getWorkflowKey(workflow)}||${workflow?.grinderId || ""}`;
+    return `${beanIdOf(workflow) || getWorkflowKey(workflow)}||${getWorkflowKey(workflow)}||${workflow?.grinderId || ""}`;
   }
   /** The library recipe with this identity (isSameRecipe), or null.
    *  `exceptId` skips one entry — the recipe being edited itself. */
   function findMatchingRecipe(recipes, workflow, exceptId = null) {
     return (recipes || []).find((r) => r && (exceptId == null || r.id !== exceptId) && isSameRecipe(r, workflow)) ?? null;
+  }
+
+  /**
+   * The bean + grinder + profile combinations that were brewed but have no
+   * saved recipe: one shot per combination — its NEWEST — newest first.
+   * Only suggests; the skin asks the user which to create (recipes are never
+   * created behind the user's back). Shots naming no coffee or no profile
+   * can't become a recipe and are skipped.
+   */
+  function recipeCandidatesFromShots(shots, recipes) {
+    const ts = (s) => Date.parse(s?.timestamp || 0) || 0;
+    const known = [...(recipes || [])];
+    const out = [];
+    for (const shot of (shots || []).slice().sort((a, b) => ts(b) - ts(a))) {
+      const wf = mapShotToWorkflow(shot);
+      if ([wf.coffeeRoaster, wf.coffeeName, wf.profileTitle].some((v) => !v || v === "—")) continue;
+      if (findMatchingRecipe(known, wf)) continue;
+      known.push(wf);
+      out.push(shot);
+    }
+    return out;
+  }
+
+  /**
+   * A library recipe entry built from a shot — the settings it was actually
+   * brewed with. `id`, the bean's id and the library profile's id come from
+   * the caller (they need the skin's caches). Same field set the skins save.
+   */
+  function recipeEntryFromShot(shot, { id, beanId = null, profileId = null } = {}) {
+    const ctx = shot?.workflow?.context || {};
+    const wf = mapShotToWorkflow(shot);
+    const targetYield = Number(ctx.targetYield) || 0;
+    return {
+      id,
+      coffeeRoaster: wf.coffeeRoaster,
+      coffeeName: wf.coffeeName,
+      grinderModel: wf.grinderModel,
+      grinderId: wf.grinderId,
+      grinderSetting: wf.grinderSetting,
+      targetDoseWeight: Number(ctx.targetDoseWeight) || 0,
+      targetYield,
+      groupTemp: resolveProfileTemp(shot?.workflow?.profile) ?? 0,
+      profileTitle: wf.profileTitle,
+      selectedProfileId: profileId,
+      // A pushed workflow carries targetYield 0 exactly when stop-at-weight
+      // was off (buildGatewayPayload), so that is the one thing it says here.
+      stopAtWeight: targetYield > 0,
+      beanId,
+      beanBatchId: ctx.beanBatchId ?? null,
+      pinned: false,
+      rating: 0,
+      lastUsed: Date.parse(shot?.timestamp || 0) || Date.now(),
+    };
   }
 
   function normalizeShotData(shot) {
@@ -947,10 +1023,8 @@
       return [];
     }
 
-    const key = getWorkflowKey(workflow);
-
     return source
-      .filter((shot) => getWorkflowKey(mapShotToWorkflow(shot)) === key && sameGrinder(workflow, mapShotToWorkflow(shot)))
+      .filter((shot) => isSameRecipe(workflow, mapShotToWorkflow(shot)))
       .sort((a, b) => {
         const tsA = Date.parse(a?.timestamp || 0);
         const tsB = Date.parse(b?.timestamp || 0);
@@ -1051,8 +1125,17 @@
   // shot to date it, so it keeps its original relative order at the end of the
   // list rather than being dated 0 and interleaved with genuinely old ones.
   function sortRecipesByLastUsed(recipes, shots) {
-    const index = buildLastUsedIndex(shots);
-    const list = (recipes || []).map((recipe, i) => ({ recipe, i, at: index.get(getWorkflowKey(recipe)) ?? null }));
+    // Each recipe's newest shot by the same rule its history uses
+    // (isSameRecipe — bean and grinder by id where known), so a renamed bean
+    // keeps its place instead of sorting as never brewed.
+    const mapped = (shots || []).map((shot) => ({ wf: mapShotToWorkflow(shot), ts: Date.parse(shot?.timestamp || 0) }))
+      .filter((x) => Number.isFinite(x.ts));
+    const newest = (recipe) => {
+      let at = null;
+      for (const x of mapped) if ((at === null || x.ts > at) && isSameRecipe(recipe, x.wf)) at = x.ts;
+      return at;
+    };
+    const list = (recipes || []).map((recipe, i) => ({ recipe, i, at: newest(recipe) }));
     list.sort((a, b) => {
       if (a.at === b.at) return a.i - b.i;
       if (a.at === null) return 1;
@@ -1084,6 +1167,8 @@
     isSameRecipe,
     getRecipeIdentityKey,
     findMatchingRecipe,
+    recipeCandidatesFromShots,
+    recipeEntryFromShot,
     normalizeShotData,
     getShotDurationSeconds,
     buildShotSparkline,

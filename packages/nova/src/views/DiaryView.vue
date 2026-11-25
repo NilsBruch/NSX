@@ -1,4 +1,5 @@
 <script setup>
+import { offerRecipesFromShotsOnce } from '../composables/useRecipeSuggestions.js';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -74,7 +75,9 @@ async function onBagOpened({ bean, batch }) {
   enterBatch({ key: batch.id, batch, bean, lastShot: 0 });
 }
 
-onMounted(ensureDiaryLoaded);
+// Opening the Diary is where Nova offers — once — to turn past shots into
+// recipes (useRecipeSuggestions.js); after that it lives in Settings.
+onMounted(() => { ensureDiaryLoaded(); offerRecipesFromShotsOnce(); });
 
 // Recipes view: load it and go brew — same destination as an opened bag's
 // profile rows, but straight from the library entry rather than rebuilding

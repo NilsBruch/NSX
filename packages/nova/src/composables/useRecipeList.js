@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { recipe, recipes, beanForRecipe, justCreatedRecipeId, selectRecipe, recipeParked } from './useRecipe.js';
-import { shots } from './useCore.js';
+import { shots, batchBeanVersion } from './useCore.js';
 import { finishedBeanIds } from './useDiary.js';
 import { openTextField } from './useModals.js';
 
@@ -30,6 +30,7 @@ export function useRecipeList() {
   const sortLabel = computed(() => t(sortMode.value === 'rating' ? 'recipePicker.sortRating' : 'recipePicker.sortUse'));
 
   const sortedRecipes = computed(() => {
+    void batchBeanVersion.value; // recency matching reads core's bag -> bean map
     const byRecency = window.NSXCore.sortRecipesByLastUsed(recipes.value, shots.value);
     // A never-brewed recipe has no shot to date it, so the recency sort above
     // leaves it in its original order at the end (see its own comment). For a

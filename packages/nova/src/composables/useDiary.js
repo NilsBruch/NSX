@@ -4,7 +4,7 @@
  * the real bean cache and shot list — no mock data here.
  */
 import { computed, reactive, ref, watch } from 'vue';
-import { beans, shots, loadShots, shotsFromResponse, boot, grinders, formatGrinderLabel } from './useCore.js';
+import { beans, shots, loadShots, shotsFromResponse, boot, grinders, formatGrinderLabel, batchBeanVersion } from './useCore.js';
 import { fmtTemp } from './useUnits.js';
 import { recipe, recipes, refreshRecipes, selectRecipe, beanForRecipe, recipeParked, recipesUsingBean } from './useRecipe.js';
 
@@ -48,11 +48,18 @@ const batchMapLoaded = ref(false);
 export async function loadBatchMap() {
   const map = new Map();
   const pairs = [];
-  await Promise.all(activeBeans.value.map(async (bean) => {
+  // Every bean's bags, archived beans included: the bag -> bean map is how a
+  // shot finds its bean when the bean was renamed (core's isSameRecipe), and an
+  // archived coffee's history should resolve too. Only ACTIVE beans' bags go
+  // into allBatches, which is what the Batches view lists.
+  await Promise.all(beans.value.map(async (bean) => {
     try {
       const res = await NSXApi.fetchBatches(bean.id, true);
       const list = Array.isArray(res) ? res : (res?.items ?? []);
-      for (const batch of list) { map.set(batch.id, bean.id); pairs.push({ batch, bean }); }
+      for (const batch of list) {
+        map.set(batch.id, bean.id);
+        if (!bean.archived) pairs.push({ batch, bean });
+      }
     } catch {
       // one bean's batches failing to load shouldn't block the others —
       // shots for it just fall back to fuzzy matching below.
@@ -60,6 +67,8 @@ export async function loadBatchMap() {
   }));
   batchToBean.value = map;
   allBatches.value = pairs;
+  NSXCore.setBatchBeanMap(map);
+  batchBeanVersion.value++;
   batchMapLoaded.value = true;
 }
 watch(beans, loadBatchMap, { immediate: true });
@@ -278,6 +287,7 @@ export const batchProfileGroups = computed(() => {
   if (!open) return { current: [], earlier: [] };
   const batchId = open.batch?.id ?? null;
   const bagOf = new Map(allBatches.value.map((p) => [p.batch.id, p.batch]));
+  void batchBeanVersion.value; // shot matching reads core's bag -> bean map
   const groups = recipesUsingBean(open.bean).map((r) => {
     const list = NSXCore.findShotsForWorkflow(r, beanShots.value); // newest first
     const byBag = new Map();

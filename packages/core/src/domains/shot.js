@@ -74,8 +74,15 @@
       const text = String(value ?? "").trim();
       if (text && text !== "—") filters[key] = text;
     };
-    addFilter("coffeeRoaster", workflow.coffeeRoaster);
-    addFilter("coffeeName", workflow.coffeeName);
+    // By bean id when the recipe has one: the gateway resolves the bean through
+    // every bag, so shots brewed under a bean's OLD name are found too (names
+    // only match the name as brewed). Names otherwise, as before.
+    if (workflow.beanId) {
+      filters.beanId = workflow.beanId;
+    } else {
+      addFilter("coffeeRoaster", workflow.coffeeRoaster);
+      addFilter("coffeeName", workflow.coffeeName);
+    }
     addFilter("grinderModel", workflow.grinderModel);
     addFilter("profileTitle", workflow.profileTitle);
 

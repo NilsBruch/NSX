@@ -53,6 +53,18 @@
 
   function getBeans() { return _cache; }
 
+  /**
+   * Which bean each bag belongs to (batch.id -> batch.beanId). A shot records
+   * only its BAG (context.beanBatchId) and the coffee's NAME as brewed — so a
+   * renamed bean no longer matches its old shots by name, but still does
+   * through the bag. The skin fills this from the bags it loads (one fetch per
+   * bean); mapping.js's isSameRecipe reads it. Empty until filled, and a bag
+   * not in it simply falls back to name matching.
+   */
+  let _beanOfBatch = new Map();
+  function setBatchBeanMap(map) { _beanOfBatch = map instanceof Map ? map : new Map(); }
+  function beanIdForBatch(batchId) { return (batchId && _beanOfBatch.get(batchId)) || null; }
+
   function setBeansCache(list) {
     _cache = Array.isArray(list) ? list : [];
   }
@@ -259,6 +271,8 @@
 
   NSXCore.register({
     getBeans,
+    setBatchBeanMap,
+    beanIdForBatch,
     setBeansCache,
     loadBeans,
     createBean,

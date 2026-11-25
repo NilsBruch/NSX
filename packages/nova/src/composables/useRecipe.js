@@ -32,7 +32,7 @@
  * on that bag reports. The bean itself is managed in the Diary.
  */
 import { reactive, computed, ref, watch } from 'vue';
-import { currentWorkflow, machine, grinders, beans, shots, recipeRoasterName, recipeCoffeeName, recipeProfileTitle } from './useCore.js';
+import { currentWorkflow, machine, grinders, beans, shots, recipeRoasterName, recipeCoffeeName, recipeProfileTitle, batchBeanVersion } from './useCore.js';
 import { reportSilentFailure } from './useErrorReporting.js';
 // Nova's OWN strings, not core's NSXI18n table. These four are Nova-only and
 // the skin is English-only (main.js pins setLang('en')), so core's de/en table
@@ -171,6 +171,7 @@ export async function loadRecipeShots() {
  * degrade to the old behavior if the fetch failed or hasn't run yet.
  */
 export const currentRecipeShots = computed(() => {
+  void batchBeanVersion.value; // matching reads core's bag -> bean map
   const local = NSXCore.findShotsForWorkflow(recipe, shots.value);
   if (recipeShotsKey.value !== NSXCore.getRecipeIdentityKey(recipe)) return local;
   const byId = new Map();

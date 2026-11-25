@@ -9,6 +9,7 @@
  * active (see the comment there) — this file toggles between 'batches' and
  * 'full'.
  */
+import { offerRecipesFromShotsOnce } from '../../../composables/useRecipeSuggestions.js';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
@@ -31,7 +32,9 @@ import BagsPanel from '../../BagsPanel.vue';
 
 const { t } = useI18n();
 
-onMounted(ensureDiaryLoaded);
+// Opening the Diary is where Nova offers — once — to turn past shots into
+// recipes (useRecipeSuggestions.js); after that it lives in Settings.
+onMounted(() => { ensureDiaryLoaded(); offerRecipesFromShotsOnce(); });
 
 /**
  * The header keeps a SHORT, fixed title; where you are in the drill-down goes

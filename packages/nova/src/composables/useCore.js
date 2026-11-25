@@ -31,6 +31,14 @@ export const machine = reactive({
 export const boot = reactive({ done: false, error: null });
 
 /**
+ * Bumped whenever core's bag -> bean map changes (useDiary.js's loadBatchMap).
+ * That map lives in core and isn't reactive, but shot <-> recipe matching reads
+ * it (core's isSameRecipe), so a computed that matches shots touches this to
+ * re-run once the bags are known.
+ */
+export const batchBeanVersion = ref(0);
+
+/**
  * The raw gateway workflow object (as fetched via NSXApi.fetchCurrentWorkflow /
  * pushed back via NSXCore.buildGatewayPayload) — the shape workflow.js and
  * mapping.js operate on. useRecipe.js derives its editable view from this;
